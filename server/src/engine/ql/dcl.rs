@@ -29,7 +29,7 @@ use crate::engine::{
         tag::{DataTag, TagClass},
         DictGeneric,
     },
-    error::{Error, QueryResult},
+    error::{QueryError, QueryResult},
     ql::{
         ast::{traits, QueryData, State},
         ddl::syn,
@@ -43,7 +43,7 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
         7 tokens
     */
     if state.remaining() < 7 {
-        return Err(Error::QLInvalidSyntax);
+        return Err(QueryError::QLInvalidSyntax);
     }
     let token_buffer = state.current();
     // initial sig
@@ -54,7 +54,7 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
     state.poison_if_not(signature_okay);
     state.cursor_ahead_by(2);
     let Some(dict) = syn::parse_dict(state) else {
-        return Err(Error::QLInvalidCollectionSyntax);
+        return Err(QueryError::QLInvalidCollectionSyntax);
     };
     let maybe_username = unsafe {
         // UNSAFE(@ohsayan): the dict parse ensures state correctness
@@ -63,7 +63,7 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
     state.poison_if_not(maybe_username.kind().tag_class() == TagClass::Str);
     if state.not_exhausted() & !state.okay() {
         // we shouldn't have more tokens
-        return Err(Error::QLInvalidSyntax);
+        return Err(QueryError::QLInvalidSyntax);
     }
     Ok(UserMeta {
         username: unsafe {
@@ -129,7 +129,7 @@ impl<'a> UserDel<'a> {
                 }));
             }
         }
-        Err(Error::QLInvalidSyntax)
+        Err(QueryError::QLInvalidSyntax)
     }
 }
 

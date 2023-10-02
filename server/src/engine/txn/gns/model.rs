@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{GNSEvent, TransactionResult},
+    super::GNSEvent,
     crate::{
         engine::{
             core::{
@@ -34,14 +34,12 @@ use {
                 GlobalNS,
             },
             data::uuid::Uuid,
+            error::TransactionError,
+            error::{RuntimeResult, StorageError},
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
             mem::BufferedScanner,
             ql::lex::Ident,
-            storage::v1::{
-                inf::{self, map, obj, PersistObject},
-                SDSSErrorKind, SDSSResult,
-            },
-            txn::TransactionError,
+            storage::v1::inf::{self, map, obj, PersistObject},
         },
         util::EndianQW,
     },
@@ -130,7 +128,7 @@ impl<'a> PersistObject for ModelID<'a> {
         buf.extend(data.model_version.to_le_bytes());
         buf.extend(data.model_uuid.to_le_bytes());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(ModelIDMD {
             space_id: <super::SpaceID as PersistObject>::meta_dec(scanner)?,
             model_name_l: scanner.next_u64_le(),
@@ -142,7 +140,10 @@ impl<'a> PersistObject for ModelID<'a> {
         <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         buf.extend(data.model_name.as_bytes());
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         Ok(ModelIDRes {
             space_id: <super::SpaceID as PersistObject>::obj_dec(s, md.space_id)?,
             model_name: inf::dec::utils::decode_string(s, md.model_name_l as usize)?
@@ -156,14 +157,14 @@ impl<'a> PersistObject for ModelID<'a> {
 fn with_space<T>(
     gns: &GlobalNS,
     space_id: &super::SpaceIDRes,
-    mut f: impl FnMut(&Space) -> TransactionResult<T>,
-) -> TransactionResult<T> {
+    mut f: impl FnMut(&Space) -> RuntimeResult<T>,
+) -> RuntimeResult<T> {
     let spaces = gns.spaces().read();
     let Some(space) = spaces.st_get(&space_id.name) else {
-        return Err(TransactionError::OnRestoreDataMissing);
+        return Err(TransactionError::OnRestoreDataMissing.into());
     };
     if space.get_uuid() != space_id.uuid {
-        return Err(TransactionError::OnRestoreDataConflictMismatch);
+        return Err(TransactionError::OnRestoreDataConflictMismatch.into());
     }
     f(space)
 }
@@ -172,16 +173,16 @@ fn with_model<T>(
     gns: &GlobalNS,
     space_id: &super::SpaceIDRes,
     model_id: &ModelIDRes,
-    mut f: impl FnMut(&Model) -> TransactionResult<T>,
-) -> TransactionResult<T> {
+    mut f: impl FnMut(&Model) -> RuntimeResult<T>,
+) -> RuntimeResult<T> {
     with_space(gns, space_id, |space| {
         let models = space.models().read();
         let Some(model) = models.st_get(&model_id.model_name) else {
-            return Err(TransactionError::OnRestoreDataMissing);
+            return Err(TransactionError::OnRestoreDataMissing.into());
         };
         if model.get_uuid() != model_id.model_uuid {
             // this should have been handled by an earlier transaction
-            return Err(TransactionError::OnRestoreDataConflictMismatch);
+            return Err(TransactionError::OnRestoreDataConflictMismatch.into());
         }
         f(model)
     })
@@ -251,7 +252,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
             obj::ModelLayoutRef::from((data.model, data.model_read)),
         )
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let space_id = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
         let model_name_l = scanner.next_u64_le();
         let model_meta = <obj::ModelLayoutRef as PersistObject>::meta_dec(scanner)?;
@@ -272,7 +273,10 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
             obj::ModelLayoutRef::from((data.model, data.model_read)),
         )
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let model_name =
             inf::dec::utils::decode_string(s, md.model_name_l as usize)?.into_boxed_str();
@@ -296,7 +300,7 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
             model,
         }: Self::RestoreType,
         gns: &GlobalNS,
-    ) -> crate::engine::txn::TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         let rgns = gns.spaces().read();
         /*
             NOTE(@ohsayan):
@@ -311,11 +315,11 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
                 if space._create_model(&model_name, model).is_ok() {
                     Ok(())
                 } else {
-                    Err(TransactionError::OnRestoreDataConflictAlreadyExists)
+                    Err(TransactionError::OnRestoreDataConflictAlreadyExists.into())
                 }
             }
-            Some(_) => return Err(TransactionError::OnRestoreDataConflictMismatch),
-            None => return Err(TransactionError::OnRestoreDataMissing),
+            Some(_) => return Err(TransactionError::OnRestoreDataConflictMismatch.into()),
+            None => return Err(TransactionError::OnRestoreDataMissing.into()),
         }
     }
 }
@@ -366,7 +370,7 @@ impl<'a> PersistObject for AlterModelAddTxn<'a> {
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
         buf.extend(data.new_fields.st_len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let model_id_meta = <ModelID as PersistObject>::meta_dec(scanner)?;
         let new_field_c = scanner.next_u64_le();
         Ok(AlterModelAddTxnMD {
@@ -378,7 +382,10 @@ impl<'a> PersistObject for AlterModelAddTxn<'a> {
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
         <map::PersistMapImpl<map::FieldMapSpec> as PersistObject>::obj_enc(buf, data.new_fields);
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_meta)?;
         let new_fields = <map::PersistMapImpl<map::FieldMapSpec> as PersistObject>::obj_dec(
             s,
@@ -401,7 +408,7 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
             new_fields,
         }: Self::RestoreType,
         gns: &GlobalNS,
-    ) -> crate::engine::txn::TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         with_model(gns, &model_id.space_id, &model_id, |model| {
             let mut wmodel = model.intent_write_model();
             for (i, (field_name, field)) in new_fields.stseq_ord_kv().enumerate() {
@@ -413,7 +420,7 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
                     new_fields.stseq_ord_key().take(i).for_each(|field_id| {
                         let _ = wmodel.fields_mut().st_delete(field_id);
                     });
-                    return Err(TransactionError::OnRestoreDataConflictMismatch);
+                    return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
             }
             // TODO(@ohsayan): avoid double iteration
@@ -470,7 +477,7 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
         buf.extend(data.removed_fields.len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let model_id_meta = <ModelID as PersistObject>::meta_dec(scanner)?;
         Ok(AlterModelRemoveTxnMD {
             model_id_meta,
@@ -484,7 +491,10 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
             buf.extend(field.as_bytes());
         }
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_meta)?;
         let mut removed_fields = Vec::with_capacity(md.remove_field_c as usize);
         while !s.eof()
@@ -498,7 +508,7 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
             removed_fields.push(inf::dec::utils::decode_string(s, len)?.into_boxed_str());
         }
         if removed_fields.len() as u64 != md.remove_field_c {
-            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
+            return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
         }
         Ok(AlterModelRemoveTxnRestorePL {
             model_id,
@@ -517,7 +527,7 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
             removed_fields,
         }: Self::RestoreType,
         gns: &GlobalNS,
-    ) -> crate::engine::txn::TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         with_model(gns, &model_id.space_id, &model_id, |model| {
             let mut iwm = model.intent_write_model();
             let mut removed_fields_rb = vec![];
@@ -531,7 +541,7 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
                         removed_fields_rb.into_iter().for_each(|(field_id, field)| {
                             let _ = iwm.fields_mut().st_insert(field_id.into(), field);
                         });
-                        return Err(TransactionError::OnRestoreDataConflictMismatch);
+                        return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                     }
                 }
             }
@@ -593,7 +603,7 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
         buf.extend(data.updated_fields.st_len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let model_id_md = <ModelID as PersistObject>::meta_dec(scanner)?;
         Ok(AlterModelUpdateTxnMD {
             model_id_md,
@@ -607,7 +617,10 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
             data.updated_fields,
         );
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_md)?;
         let updated_fields = <map::PersistMapImpl<map::FieldMapSpecST> as PersistObject>::obj_dec(
             s,
@@ -630,7 +643,7 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
             updated_fields,
         }: Self::RestoreType,
         gns: &GlobalNS,
-    ) -> TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         with_model(gns, &model_id.space_id, &model_id, |model| {
             let mut iwm = model.intent_write_model();
             let mut fields_rb = vec![];
@@ -642,7 +655,7 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
                         fields_rb.into_iter().for_each(|(field_id, field)| {
                             let _ = iwm.fields_mut().st_update(field_id, field);
                         });
-                        return Err(TransactionError::OnRestoreDataConflictMismatch);
+                        return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                     }
                 }
             }
@@ -682,14 +695,17 @@ impl<'a> PersistObject for DropModelTxn<'a> {
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let model_id_md = <ModelID as PersistObject>::meta_dec(scanner)?;
         Ok(DropModelTxnMD { model_id_md })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         <ModelID as PersistObject>::obj_dec(s, md.model_id_md)
     }
 }
@@ -706,13 +722,13 @@ impl<'a> GNSEvent for DropModelTxn<'a> {
             model_version: _,
         }: Self::RestoreType,
         gns: &GlobalNS,
-    ) -> TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         with_space(gns, &space_id, |space| {
             let mut wgns = space.models().write();
             match wgns.st_delete_if(&model_name, |mdl| mdl.get_uuid() == model_uuid) {
                 Some(true) => Ok(()),
-                Some(false) => return Err(TransactionError::OnRestoreDataConflictMismatch),
-                None => Err(TransactionError::OnRestoreDataMissing),
+                Some(false) => return Err(TransactionError::OnRestoreDataConflictMismatch.into()),
+                None => Err(TransactionError::OnRestoreDataMissing.into()),
             }
         })
     }

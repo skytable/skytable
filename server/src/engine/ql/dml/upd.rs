@@ -32,7 +32,7 @@ use {
         engine::{
             core::query_meta::AssignmentOperator,
             data::lit::Lit,
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::Ident,
@@ -180,7 +180,7 @@ impl<'a> UpdateStatement<'a> {
                    ^1    ^2  ^3 ^4 ^5^6    ^7^8^9
         */
         if compiler::unlikely(state.remaining() < 9) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         // parse entity
         let mut entity = MaybeInit::uninit();
@@ -218,7 +218,7 @@ impl<'a> UpdateStatement<'a> {
                 wc: WhereClause::new(clauses),
             })
         } else {
-            compiler::cold_rerr(Error::QLInvalidSyntax)
+            compiler::cold_rerr(QueryError::QLInvalidSyntax)
         }
     }
 }

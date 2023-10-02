@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    error::{Error, QueryResult},
+    error::{QueryError, QueryResult},
     ql::{
         ast::{Entity, QueryData, State, Statement},
         lex::{Ident, Token},
@@ -62,7 +62,7 @@ impl<'a> DropSpace<'a> {
                 ));
             }
         }
-        Err(Error::QLInvalidSyntax)
+        Err(QueryError::QLInvalidSyntax)
     }
 }
 
@@ -84,7 +84,7 @@ impl<'a> DropModel<'a> {
         if state.exhausted() {
             return Ok(DropModel::new(e, force));
         } else {
-            Err(Error::QLInvalidSyntax)
+            Err(QueryError::QLInvalidSyntax)
         }
     }
 }
@@ -97,7 +97,7 @@ pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResu
     match state.fw_read() {
         Token![model] => DropModel::parse(state).map(Statement::DropModel),
         Token![space] => return DropSpace::parse(state).map(Statement::DropSpace),
-        _ => Err(Error::QPUnknownStatement),
+        _ => Err(QueryError::QPUnknownStatement),
     }
 }
 

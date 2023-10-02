@@ -125,7 +125,7 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> storage::v1::SDSSResult<()> {
+    ) -> crate::engine::error::RuntimeResult<()> {
         // create model dir
         Fs::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
             space_name, space_uuid, model_name, model_uuid,

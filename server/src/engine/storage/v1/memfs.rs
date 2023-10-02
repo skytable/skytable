@@ -26,12 +26,10 @@
 
 use {
     crate::engine::{
-        storage::v1::{
-            rw::{
-                FileOpen, RawFSInterface, RawFileInterface, RawFileInterfaceExt,
-                RawFileInterfaceRead, RawFileInterfaceWrite, RawFileInterfaceWriteExt,
-            },
-            SDSSResult,
+        error::RuntimeResult,
+        storage::v1::rw::{
+            FileOpen, RawFSInterface, RawFileInterface, RawFileInterfaceExt, RawFileInterfaceRead,
+            RawFileInterfaceWrite, RawFileInterfaceWriteExt,
         },
         sync::cell::Lazy,
     },
@@ -81,16 +79,16 @@ impl VNode {
     errors
 */
 
-fn err_item_is_not_file<T>() -> super::SDSSResult<T> {
+fn err_item_is_not_file<T>() -> RuntimeResult<T> {
     Err(Error::new(ErrorKind::InvalidInput, "found directory, not a file").into())
 }
-fn err_file_in_dir_path<T>() -> super::SDSSResult<T> {
+fn err_file_in_dir_path<T>() -> RuntimeResult<T> {
     Err(Error::new(ErrorKind::InvalidInput, "found file in directory path").into())
 }
-fn err_dir_missing_in_path<T>() -> super::SDSSResult<T> {
+fn err_dir_missing_in_path<T>() -> RuntimeResult<T> {
     Err(Error::new(ErrorKind::InvalidInput, "could not find directory in path").into())
 }
-fn err_could_not_find_item<T>() -> super::SDSSResult<T> {
+fn err_could_not_find_item<T>() -> RuntimeResult<T> {
     Err(Error::new(ErrorKind::NotFound, "could not find item").into())
 }
 
@@ -117,7 +115,7 @@ pub struct VirtualFS;
 
 impl RawFSInterface for VirtualFS {
     type File = VFileDescriptor;
-    fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()> {
+    fn fs_rename_file(from: &str, to: &str) -> RuntimeResult<()> {
         // get file data
         let data = with_file(from, |f| Ok(f.data.clone()))?;
         // create new file
@@ -134,7 +132,7 @@ impl RawFSInterface for VirtualFS {
         // delete old file
         Self::fs_remove_file(from)
     }
-    fn fs_remove_file(fpath: &str) -> SDSSResult<()> {
+    fn fs_remove_file(fpath: &str) -> RuntimeResult<()> {
         handle_item_mut(fpath, |e| match e.get() {
             VNode::File(_) => {
                 e.remove();
@@ -143,7 +141,7 @@ impl RawFSInterface for VirtualFS {
             _ => return err_item_is_not_file(),
         })
     }
-    fn fs_create_dir(fpath: &str) -> super::SDSSResult<()> {
+    fn fs_create_dir(fpath: &str) -> RuntimeResult<()> {
         // get vfs
         let mut vfs = VFS.write();
         // get root dir
@@ -167,12 +165,12 @@ impl RawFSInterface for VirtualFS {
             }
         }
     }
-    fn fs_create_dir_all(fpath: &str) -> super::SDSSResult<()> {
+    fn fs_create_dir_all(fpath: &str) -> RuntimeResult<()> {
         let mut vfs = VFS.write();
         fn create_ahead(
             mut ahead: &[&str],
             current: &mut HashMap<Box<str>, VNode>,
-        ) -> SDSSResult<()> {
+        ) -> RuntimeResult<()> {
             if ahead.is_empty() {
                 return Ok(());
             }
@@ -197,13 +195,13 @@ impl RawFSInterface for VirtualFS {
         let pieces = split_parts(fpath);
         create_ahead(&pieces, &mut *vfs)
     }
-    fn fs_delete_dir(fpath: &str) -> super::SDSSResult<()> {
+    fn fs_delete_dir(fpath: &str) -> RuntimeResult<()> {
         delete_dir(fpath, false)
     }
-    fn fs_delete_dir_all(fpath: &str) -> super::SDSSResult<()> {
+    fn fs_delete_dir_all(fpath: &str) -> RuntimeResult<()> {
         delete_dir(fpath, true)
     }
-    fn fs_fopen_or_create_rw(fpath: &str) -> super::SDSSResult<super::rw::FileOpen<Self::File>> {
+    fn fs_fopen_or_create_rw(fpath: &str) -> RuntimeResult<super::rw::FileOpen<Self::File>> {
         let mut vfs = VFS.write();
         // components
         let (target_file, components) = split_target_and_components(fpath);
@@ -223,7 +221,7 @@ impl RawFSInterface for VirtualFS {
             }
         }
     }
-    fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File> {
+    fn fs_fcreate_rw(fpath: &str) -> RuntimeResult<Self::File> {
         let mut vfs = VFS.write();
         let (target_file, components) = split_target_and_components(fpath);
         let target_dir = find_target_dir_mut(components, &mut vfs)?;
@@ -254,7 +252,7 @@ impl RawFSInterface for VirtualFS {
             }
         }
     }
-    fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File> {
+    fn fs_fopen_rw(fpath: &str) -> RuntimeResult<Self::File> {
         with_file_mut(fpath, |f| {
             f.read = true;
             f.write = true;
@@ -266,7 +264,7 @@ impl RawFSInterface for VirtualFS {
 fn find_target_dir_mut<'a>(
     components: ComponentIter,
     mut current: &'a mut HashMap<Box<str>, VNode>,
-) -> Result<&'a mut HashMap<Box<str>, VNode>, super::SDSSError> {
+) -> RuntimeResult<&'a mut HashMap<Box<str>, VNode>> {
     for component in components {
         match current.get_mut(component) {
             Some(VNode::Dir(d)) => current = d,
@@ -280,7 +278,7 @@ fn find_target_dir_mut<'a>(
 fn find_target_dir<'a>(
     components: ComponentIter,
     mut current: &'a HashMap<Box<str>, VNode>,
-) -> Result<&'a HashMap<Box<str>, VNode>, super::SDSSError> {
+) -> RuntimeResult<&'a HashMap<Box<str>, VNode>> {
     for component in components {
         match current.get(component) {
             Some(VNode::Dir(d)) => current = d,
@@ -293,8 +291,8 @@ fn find_target_dir<'a>(
 
 fn handle_item_mut<T>(
     fpath: &str,
-    f: impl Fn(OccupiedEntry<Box<str>, VNode>) -> super::SDSSResult<T>,
-) -> super::SDSSResult<T> {
+    f: impl Fn(OccupiedEntry<Box<str>, VNode>) -> RuntimeResult<T>,
+) -> RuntimeResult<T> {
     let mut vfs = VFS.write();
     let mut current = &mut *vfs;
     // process components
@@ -313,7 +311,7 @@ fn handle_item_mut<T>(
         Entry::Vacant(_) => return err_could_not_find_item(),
     }
 }
-fn handle_item<T>(fpath: &str, f: impl Fn(&VNode) -> super::SDSSResult<T>) -> super::SDSSResult<T> {
+fn handle_item<T>(fpath: &str, f: impl Fn(&VNode) -> RuntimeResult<T>) -> RuntimeResult<T> {
     let vfs = VFS.read();
     let mut current = &*vfs;
     // process components
@@ -332,7 +330,7 @@ fn handle_item<T>(fpath: &str, f: impl Fn(&VNode) -> super::SDSSResult<T>) -> su
         None => return err_could_not_find_item(),
     }
 }
-fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> Result<(), super::SDSSError> {
+fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> RuntimeResult<()> {
     handle_item_mut(fpath, |node| match node.get() {
         VNode::Dir(d) => {
             if allow_if_non_empty || d.is_empty() {
@@ -387,7 +385,10 @@ impl Drop for VFileDescriptor {
     }
 }
 
-fn with_file_mut<T>(fpath: &str, mut f: impl FnMut(&mut VFile) -> SDSSResult<T>) -> SDSSResult<T> {
+fn with_file_mut<T>(
+    fpath: &str,
+    mut f: impl FnMut(&mut VFile) -> RuntimeResult<T>,
+) -> RuntimeResult<T> {
     let mut vfs = VFS.write();
     let (target_file, components) = split_target_and_components(fpath);
     let target_dir = find_target_dir_mut(components, &mut vfs)?;
@@ -398,7 +399,7 @@ fn with_file_mut<T>(fpath: &str, mut f: impl FnMut(&mut VFile) -> SDSSResult<T>)
     }
 }
 
-fn with_file<T>(fpath: &str, mut f: impl FnMut(&VFile) -> SDSSResult<T>) -> SDSSResult<T> {
+fn with_file<T>(fpath: &str, mut f: impl FnMut(&VFile) -> RuntimeResult<T>) -> RuntimeResult<T> {
     let vfs = VFS.read();
     let (target_file, components) = split_target_and_components(fpath);
     let target_dir = find_target_dir(components, &vfs)?;
@@ -412,16 +413,16 @@ fn with_file<T>(fpath: &str, mut f: impl FnMut(&VFile) -> SDSSResult<T>) -> SDSS
 impl RawFileInterface for VFileDescriptor {
     type Reader = Self;
     type Writer = Self;
-    fn into_buffered_reader(self) -> super::SDSSResult<Self::Reader> {
+    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader> {
         Ok(self)
     }
-    fn into_buffered_writer(self) -> super::SDSSResult<Self::Writer> {
+    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer> {
         Ok(self)
     }
 }
 
 impl RawFileInterfaceRead for VFileDescriptor {
-    fn fr_read_exact(&mut self, buf: &mut [u8]) -> super::SDSSResult<()> {
+    fn fr_read_exact(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         with_file_mut(&self.0, |file| {
             if !file.read {
                 return Err(
@@ -440,7 +441,7 @@ impl RawFileInterfaceRead for VFileDescriptor {
 }
 
 impl RawFileInterfaceWrite for VFileDescriptor {
-    fn fw_write_all(&mut self, bytes: &[u8]) -> super::SDSSResult<()> {
+    fn fw_write_all(&mut self, bytes: &[u8]) -> RuntimeResult<()> {
         with_file_mut(&self.0, |file| {
             if !file.write {
                 return Err(
@@ -458,10 +459,10 @@ impl RawFileInterfaceWrite for VFileDescriptor {
 }
 
 impl RawFileInterfaceWriteExt for VFileDescriptor {
-    fn fw_fsync_all(&mut self) -> super::SDSSResult<()> {
+    fn fw_fsync_all(&mut self) -> RuntimeResult<()> {
         with_file(&self.0, |_| Ok(()))
     }
-    fn fw_truncate_to(&mut self, to: u64) -> super::SDSSResult<()> {
+    fn fw_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
         with_file_mut(&self.0, |file| {
             if !file.write {
                 return Err(
@@ -482,13 +483,13 @@ impl RawFileInterfaceWriteExt for VFileDescriptor {
 }
 
 impl RawFileInterfaceExt for VFileDescriptor {
-    fn fext_file_length(&self) -> super::SDSSResult<u64> {
+    fn fext_file_length(&self) -> RuntimeResult<u64> {
         with_file(&self.0, |f| Ok(f.data.len() as u64))
     }
-    fn fext_cursor(&mut self) -> super::SDSSResult<u64> {
+    fn fext_cursor(&mut self) -> RuntimeResult<u64> {
         with_file(&self.0, |f| Ok(f.pos as u64))
     }
-    fn fext_seek_ahead_from_start_by(&mut self, by: u64) -> super::SDSSResult<()> {
+    fn fext_seek_ahead_from_start_by(&mut self, by: u64) -> RuntimeResult<()> {
         with_file_mut(&self.0, |file| {
             if by > file.data.len() as u64 {
                 return Err(
@@ -517,72 +518,72 @@ pub struct NullFile;
 impl RawFSInterface for NullFS {
     const NOT_NULL: bool = false;
     type File = NullFile;
-    fn fs_rename_file(_: &str, _: &str) -> SDSSResult<()> {
+    fn fs_rename_file(_: &str, _: &str) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fs_remove_file(_: &str) -> SDSSResult<()> {
+    fn fs_remove_file(_: &str) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fs_create_dir(_: &str) -> SDSSResult<()> {
+    fn fs_create_dir(_: &str) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fs_create_dir_all(_: &str) -> SDSSResult<()> {
+    fn fs_create_dir_all(_: &str) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fs_delete_dir(_: &str) -> SDSSResult<()> {
+    fn fs_delete_dir(_: &str) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fs_delete_dir_all(_: &str) -> SDSSResult<()> {
+    fn fs_delete_dir_all(_: &str) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fs_fopen_or_create_rw(_: &str) -> SDSSResult<FileOpen<Self::File>> {
+    fn fs_fopen_or_create_rw(_: &str) -> RuntimeResult<FileOpen<Self::File>> {
         Ok(FileOpen::Created(NullFile))
     }
-    fn fs_fopen_rw(_: &str) -> SDSSResult<Self::File> {
+    fn fs_fopen_rw(_: &str) -> RuntimeResult<Self::File> {
         Ok(NullFile)
     }
-    fn fs_fcreate_rw(_: &str) -> SDSSResult<Self::File> {
+    fn fs_fcreate_rw(_: &str) -> RuntimeResult<Self::File> {
         Ok(NullFile)
     }
 }
 impl RawFileInterfaceRead for NullFile {
-    fn fr_read_exact(&mut self, _: &mut [u8]) -> SDSSResult<()> {
+    fn fr_read_exact(&mut self, _: &mut [u8]) -> RuntimeResult<()> {
         Ok(())
     }
 }
 impl RawFileInterfaceWrite for NullFile {
-    fn fw_write_all(&mut self, _: &[u8]) -> SDSSResult<()> {
+    fn fw_write_all(&mut self, _: &[u8]) -> RuntimeResult<()> {
         Ok(())
     }
 }
 impl RawFileInterfaceWriteExt for NullFile {
-    fn fw_fsync_all(&mut self) -> SDSSResult<()> {
+    fn fw_fsync_all(&mut self) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fw_truncate_to(&mut self, _: u64) -> SDSSResult<()> {
+    fn fw_truncate_to(&mut self, _: u64) -> RuntimeResult<()> {
         Ok(())
     }
 }
 impl RawFileInterfaceExt for NullFile {
-    fn fext_file_length(&self) -> SDSSResult<u64> {
+    fn fext_file_length(&self) -> RuntimeResult<u64> {
         Ok(0)
     }
 
-    fn fext_cursor(&mut self) -> SDSSResult<u64> {
+    fn fext_cursor(&mut self) -> RuntimeResult<u64> {
         Ok(0)
     }
 
-    fn fext_seek_ahead_from_start_by(&mut self, _: u64) -> SDSSResult<()> {
+    fn fext_seek_ahead_from_start_by(&mut self, _: u64) -> RuntimeResult<()> {
         Ok(())
     }
 }
 impl RawFileInterface for NullFile {
     type Reader = Self;
     type Writer = Self;
-    fn into_buffered_reader(self) -> SDSSResult<Self::Reader> {
+    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader> {
         Ok(self)
     }
-    fn into_buffered_writer(self) -> SDSSResult<Self::Writer> {
+    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer> {
         Ok(self)
     }
 }

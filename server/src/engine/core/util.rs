@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    error::{Error, QueryResult},
+    error::{QueryError, QueryResult},
     ql::ast::Entity,
 };
 
@@ -46,6 +46,6 @@ impl<'a> EntityLocator<'a> for Entity<'a> {
     where
         Self: 'a,
     {
-        self.into_full_str().ok_or(Error::QPExpectedEntity)
+        self.into_full_str().ok_or(QueryError::QPExpectedEntity)
     }
 }

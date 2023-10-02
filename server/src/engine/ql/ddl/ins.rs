@@ -26,7 +26,7 @@
 
 use crate::{
     engine::{
-        error::{Error, QueryResult},
+        error::{QueryError, QueryResult},
         ql::{
             ast::{Entity, QueryData, State, Statement},
             lex::Token,
@@ -47,7 +47,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
     */
 
     if compiler::unlikely(state.remaining() < 1) {
-        return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+        return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
     }
 
     match state.fw_read() {
@@ -65,7 +65,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
         }
         _ => {
             state.cursor_back();
-            Err(Error::QPExpectedStatement)
+            Err(QueryError::QPExpectedStatement)
         }
     }
 }

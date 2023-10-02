@@ -30,7 +30,7 @@ use crate::engine::{
         index::{DcFieldIndex, PrimaryIndexKey, Row},
         model::{delta::DataDeltaKind, Fields, Model},
     },
-    error::{Error, QueryResult},
+    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{IndexBaseSpec, MTIndex, STIndex, STIndexSeq},
     ql::dml::ins::{InsertData, InsertStatement},
@@ -57,7 +57,7 @@ pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> Quer
             );
             Ok(())
         } else {
-            Err(Error::QPDmlDuplicate)
+            Err(QueryError::QPDmlDuplicate)
         }
     })
 }
@@ -113,6 +113,6 @@ fn prepare_insert(
         };
         Ok((primary_key, prepared_data))
     } else {
-        Err(Error::QPDmlValidationError)
+        Err(QueryError::QPDmlValidationError)
     }
 }

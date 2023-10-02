@@ -25,12 +25,13 @@
 */
 
 use {
-    super::{rw::FileOpen, SDSSErrorKind},
+    super::rw::FileOpen,
     crate::engine::{
         config::ConfigAuth,
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
+        error::{RuntimeResult, StorageError},
         fractal::config::{SysAuth, SysAuthUser, SysConfig, SysHostData},
-        storage::v1::{inf, spec, RawFSInterface, SDSSFileIO, SDSSResult},
+        storage::v1::{inf, spec, RawFSInterface, SDSSFileIO},
     },
     parking_lot::RwLock,
     std::collections::HashMap,
@@ -73,7 +74,9 @@ impl SystemStoreInit {
 ///
 /// - If it doesn't exist, create it
 /// - If it exists, look for config changes and sync them
-pub fn open_system_database<Fs: RawFSInterface>(auth: ConfigAuth) -> SDSSResult<SystemStoreInit> {
+pub fn open_system_database<Fs: RawFSInterface>(
+    auth: ConfigAuth,
+) -> RuntimeResult<SystemStoreInit> {
     open_or_reinit_system_database::<Fs>(auth, SYSDB_PATH, SYSDB_COW_PATH)
 }
 
@@ -82,7 +85,7 @@ pub fn open_or_reinit_system_database<Fs: RawFSInterface>(
     auth: ConfigAuth,
     sysdb_path: &str,
     sysdb_path_cow: &str,
-) -> SDSSResult<SystemStoreInit> {
+) -> RuntimeResult<SystemStoreInit> {
     let sysdb_file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<spec::SysDBV1>(sysdb_path)? {
         FileOpen::Created(new) => {
             // init new syscfg
@@ -130,7 +133,7 @@ pub fn open_or_reinit_system_database<Fs: RawFSInterface>(
 pub fn sync_system_database_to<Fs: RawFSInterface>(
     cfg: &SysConfig,
     mut f: SDSSFileIO<Fs>,
-) -> SDSSResult<()> {
+) -> RuntimeResult<()> {
     // prepare our flat file
     let mut map: DictGeneric = into_dict!(
         SYS_KEY_SYS => DictEntryGeneric::Map(into_dict!(
@@ -172,15 +175,17 @@ fn rkey<T>(
     d: &mut DictGeneric,
     key: &str,
     transform: impl Fn(DictEntryGeneric) -> Option<T>,
-) -> SDSSResult<T> {
+) -> RuntimeResult<T> {
     match d.remove(key).map(transform) {
         Some(Some(k)) => Ok(k),
-        _ => Err(SDSSErrorKind::SysDBCorrupted.into()),
+        _ => Err(StorageError::SysDBCorrupted.into()),
     }
 }
 
 /// Decode the system database
-pub fn decode_system_database<Fs: RawFSInterface>(mut f: SDSSFileIO<Fs>) -> SDSSResult<SysConfig> {
+pub fn decode_system_database<Fs: RawFSInterface>(
+    mut f: SDSSFileIO<Fs>,
+) -> RuntimeResult<SysConfig> {
     let mut sysdb_data =
         inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.load_remaining_into_buffer()?)?;
     // get our auth and sys stores
@@ -201,14 +206,14 @@ pub fn decode_system_database<Fs: RawFSInterface>(mut f: SDSSFileIO<Fs>) -> SDSS
         let mut userdata = userdata
             .into_data()
             .and_then(Datacell::into_list)
-            .ok_or(SDSSErrorKind::SysDBCorrupted)?;
+            .ok_or(StorageError::SysDBCorrupted)?;
         if userdata.len() != 1 {
-            return Err(SDSSErrorKind::SysDBCorrupted.into());
+            return Err(StorageError::SysDBCorrupted.into());
         }
         let user_password = userdata
             .remove(0)
             .into_bin()
-            .ok_or(SDSSErrorKind::SysDBCorrupted)?;
+            .ok_or(StorageError::SysDBCorrupted)?;
         loaded_users.insert(username, SysAuthUser::new(user_password.into_boxed_slice()));
     }
     let sys_auth = SysAuth::new(root_key.into_boxed_slice(), loaded_users);
@@ -220,7 +225,7 @@ pub fn decode_system_database<Fs: RawFSInterface>(mut f: SDSSFileIO<Fs>) -> SDSS
         d.into_data()?.into_uint()
     })?;
     if !(sysdb_data.is_empty() & auth_store.is_empty() & sys_store.is_empty()) {
-        return Err(SDSSErrorKind::SysDBCorrupted.into());
+        return Err(StorageError::SysDBCorrupted.into());
     }
     Ok(SysConfig::new(
         RwLock::new(sys_auth),

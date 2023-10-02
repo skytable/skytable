@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             data::DictGeneric,
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
@@ -57,7 +57,7 @@ impl<'a> AlterSpace<'a> {
     /// Parse alter space from tokens
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() <= 3) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         let space_name = state.fw_read();
         state.poison_if_not(space_name.is_ident());
@@ -67,7 +67,7 @@ impl<'a> AlterSpace<'a> {
         state.cursor_ahead(); // ignore errors
 
         if compiler::unlikely(!state.okay()) {
-            return Err(Error::QLInvalidSyntax);
+            return Err(QueryError::QLInvalidSyntax);
         }
 
         let space_name = unsafe {
@@ -82,7 +82,7 @@ impl<'a> AlterSpace<'a> {
                 updated_props: d,
             })
         } else {
-            Err(Error::QLInvalidCollectionSyntax)
+            Err(QueryError::QLInvalidCollectionSyntax)
         }
     }
 }
@@ -114,7 +114,7 @@ impl<'a> AlterModel<'a> {
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         // alter model mymodel remove x
         if state.remaining() <= 2 || !state.cursor_has_ident_rounded() {
-            return compiler::cold_rerr(Error::QLInvalidSyntax);
+            return compiler::cold_rerr(QueryError::QLInvalidSyntax);
             // FIXME(@ohsayan): bad because no specificity
         }
         let model_name = Entity::parse_from_state_rounded_result(state)?;
@@ -122,7 +122,7 @@ impl<'a> AlterModel<'a> {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),
             Token![update] => AlterKind::alter_update(state),
-            _ => Err(Error::QPExpectedStatement),
+            _ => Err(QueryError::QPExpectedStatement),
         };
         kind.map(|kind| AlterModel::new(model_name, kind))
     }
@@ -148,7 +148,7 @@ impl<'a> AlterKind<'a> {
             <remove> ::= <ident> | <openparen> (<ident> <comma>)*<closeparen>
         */
         if compiler::unlikely(state.exhausted()) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
 
         let r = match state.fw_read() {
@@ -177,10 +177,10 @@ impl<'a> AlterKind<'a> {
                 if state.okay() {
                     cols.into_boxed_slice()
                 } else {
-                    return Err(Error::QLInvalidSyntax);
+                    return Err(QueryError::QLInvalidSyntax);
                 }
             }
-            _ => return Err(Error::QLInvalidSyntax),
+            _ => return Err(QueryError::QLInvalidSyntax),
         };
         Ok(Self::Remove(r))
     }

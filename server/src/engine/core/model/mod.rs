@@ -39,7 +39,7 @@ use {
             tag::{DataTag, FullTag, TagClass, TagSelector},
             uuid::Uuid,
         },
-        error::{Error, QueryResult},
+        error::{QueryError, QueryResult},
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,
@@ -134,7 +134,7 @@ impl Model {
     }
     fn guard_pk(&self, new: &str) -> QueryResult<()> {
         if self.is_pk(new) {
-            Err(Error::QPDdlModelAlterIllegal)
+            Err(QueryError::QPDdlModelAlterIllegal)
         } else {
             Ok(())
         }
@@ -199,7 +199,7 @@ impl Model {
                 return Ok(Self::new_restore(Uuid::new(), last_pk.into(), tag, fields));
             }
         }
-        Err(Error::QPDdlModelBadDefinition)
+        Err(QueryError::QPDdlModelBadDefinition)
     }
 }
 
@@ -213,7 +213,7 @@ impl Model {
         global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             if w_space.st_contains(model_name) {
-                return Err(Error::QPDdlObjectAlreadyExists);
+                return Err(QueryError::QPDdlObjectAlreadyExists);
             }
             if G::FS_IS_NON_NULL {
                 let irm = model.intent_read_model();
@@ -262,7 +262,7 @@ impl Model {
         global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             let Some(model) = w_space.get(model_name) else {
-                return Err(Error::QPObjectNotFound);
+                return Err(QueryError::QPObjectNotFound);
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -361,7 +361,7 @@ impl Field {
                 nullable,
             })
         } else {
-            Err(Error::QPDdlInvalidTypeDefinition)
+            Err(QueryError::QPDdlInvalidTypeDefinition)
         }
     }
     #[inline(always)]

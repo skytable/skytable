@@ -25,7 +25,7 @@
 */
 
 use {
-    crate::util::os::SysIOError,
+    crate::engine::error::RuntimeResult,
     core::fmt,
     serde::Deserialize,
     std::{collections::HashMap, fs},
@@ -294,9 +294,6 @@ impl DecodedEPInsecureConfig {
     errors and misc
 */
 
-/// Configuration result
-pub type ConfigResult<T> = Result<T, ConfigError>;
-
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 /// A configuration error (with an optional error origin source)
@@ -332,10 +329,6 @@ impl fmt::Display for ConfigError {
                 "conflicting settings. please choose either CLI or ENV or configuration file"
             ),
             ConfigErrorKind::ErrorString(e) => write!(f, "{e}"),
-            ConfigErrorKind::IoError(e) => write!(
-                f,
-                "an I/O error occurred while reading a configuration related file: `{e}`",
-            ),
         }
     }
 }
@@ -369,20 +362,6 @@ pub enum ConfigErrorKind {
     Conflict,
     /// A custom error output
     ErrorString(String),
-    /// An I/O error related to configuration
-    IoError(SysIOError),
-}
-
-direct_from! {
-    ConfigErrorKind => {
-        SysIOError as IoError,
-    }
-}
-
-impl From<std::io::Error> for ConfigError {
-    fn from(value: std::io::Error) -> Self {
-        Self::new(ConfigErrorKind::IoError(value.into()))
-    }
 }
 
 /// A configuration source implementation
@@ -420,9 +399,9 @@ pub(super) trait ConfigurationSource {
 fn argck_duplicate_values<CS: ConfigurationSource>(
     v: &[String],
     key: &'static str,
-) -> ConfigResult<()> {
+) -> RuntimeResult<()> {
     if v.len() != 1 {
-        return Err(CS::err_too_many_values_for(key));
+        return Err(CS::err_too_many_values_for(key).into());
     }
     Ok(())
 }
@@ -438,14 +417,15 @@ enum ConnectionProtocol {
 }
 
 /// Parse an endpoint (`protocol@host:port`)
-fn parse_endpoint(source: ConfigSource, s: &str) -> ConfigResult<(ConnectionProtocol, &str, u16)> {
+fn parse_endpoint(source: ConfigSource, s: &str) -> RuntimeResult<(ConnectionProtocol, &str, u16)> {
     let err = || {
         Err(ConfigError::with_src(
             source,
             ConfigErrorKind::ErrorString(format!(
                 "invalid endpoint syntax. should be `protocol@hostname:port`"
             )),
-        ))
+        )
+        .into())
     };
     let x = s.split("@").collect::<Vec<&str>>();
     if x.len() != 2 {
@@ -475,7 +455,7 @@ fn decode_tls_ep(
     pkey_pass: &str,
     host: &str,
     port: u16,
-) -> ConfigResult<DecodedEPSecureConfig> {
+) -> RuntimeResult<DecodedEPSecureConfig> {
     let tls_key = fs::read_to_string(key_path)?;
     let tls_cert = fs::read_to_string(cert_path)?;
     let tls_priv_key_passphrase = fs::read_to_string(pkey_pass)?;
@@ -493,7 +473,7 @@ fn arg_decode_tls_endpoint<CS: ConfigurationSource>(
     args: &mut ParsedRawArgs,
     host: &str,
     port: u16,
-) -> ConfigResult<DecodedEPSecureConfig> {
+) -> RuntimeResult<DecodedEPSecureConfig> {
     let _cert = args.remove(CS::KEY_TLS_CERT);
     let _key = args.remove(CS::KEY_TLS_KEY);
     let _passphrase = args.remove(CS::KEY_TLS_PKEY_PASS);
@@ -508,7 +488,8 @@ fn arg_decode_tls_endpoint<CS: ConfigurationSource>(
                     CS::KEY_TLS_KEY,
                     CS::KEY_TLS_PKEY_PASS,
                 )),
-            ));
+            )
+            .into());
         }
     };
     argck_duplicate_values::<CS>(&tls_cert, CS::KEY_TLS_CERT)?;
@@ -530,7 +511,7 @@ fn arg_decode_tls_endpoint<CS: ConfigurationSource>(
 fn arg_decode_auth<CS: ConfigurationSource>(
     src_args: &mut ParsedRawArgs,
     config: &mut ModifyGuard<DecodedConfiguration>,
-) -> ConfigResult<()> {
+) -> RuntimeResult<()> {
     let (Some(auth_driver), Some(mut root_key)) = (
         src_args.remove(CS::KEY_AUTH_DRIVER),
         src_args.remove(CS::KEY_AUTH_ROOT_PASSWORD),
@@ -542,13 +523,14 @@ fn arg_decode_auth<CS: ConfigurationSource>(
                 CS::KEY_AUTH_DRIVER,
                 CS::KEY_AUTH_ROOT_PASSWORD
             )),
-        ));
+        )
+        .into());
     };
     argck_duplicate_values::<CS>(&auth_driver, CS::KEY_AUTH_DRIVER)?;
     argck_duplicate_values::<CS>(&root_key, CS::KEY_AUTH_DRIVER)?;
     let auth_plugin = match auth_driver[0].as_str() {
         "pwd" => AuthDriver::Pwd,
-        _ => return Err(CS::err_invalid_value_for(CS::KEY_AUTH_DRIVER)),
+        _ => return Err(CS::err_invalid_value_for(CS::KEY_AUTH_DRIVER).into()),
     };
     config.auth = Some(DecodedAuth {
         plugin: auth_plugin,
@@ -561,14 +543,14 @@ fn arg_decode_auth<CS: ConfigurationSource>(
 fn arg_decode_endpoints<CS: ConfigurationSource>(
     args: &mut ParsedRawArgs,
     config: &mut ModifyGuard<DecodedConfiguration>,
-) -> ConfigResult<()> {
+) -> RuntimeResult<()> {
     let mut insecure = None;
     let mut secure = None;
     let Some(endpoints) = args.remove(CS::KEY_ENDPOINTS) else {
         return Ok(());
     };
     if endpoints.len() > 2 {
-        return Err(CS::err_too_many_values_for(CS::KEY_ENDPOINTS));
+        return Err(CS::err_too_many_values_for(CS::KEY_ENDPOINTS).into());
     }
     for ep in endpoints {
         let (proto, host, port) = parse_endpoint(CS::SOURCE, &ep)?;
@@ -583,7 +565,8 @@ fn arg_decode_endpoints<CS: ConfigurationSource>(
                 return Err(CS::custom_err(format!(
                     "duplicate endpoints specified in `{}`",
                     CS::KEY_ENDPOINTS
-                )));
+                ))
+                .into());
             }
         }
     }
@@ -599,12 +582,12 @@ fn arg_decode_endpoints<CS: ConfigurationSource>(
 fn arg_decode_mode<CS: ConfigurationSource>(
     mode: &[String],
     config: &mut ModifyGuard<DecodedConfiguration>,
-) -> ConfigResult<()> {
+) -> RuntimeResult<()> {
     argck_duplicate_values::<CS>(&mode, CS::KEY_RUN_MODE)?;
     let mode = match mode[0].as_str() {
         "dev" => ConfigMode::Dev,
         "prod" => ConfigMode::Prod,
-        _ => return Err(CS::err_invalid_value_for(CS::KEY_RUN_MODE)),
+        _ => return Err(CS::err_invalid_value_for(CS::KEY_RUN_MODE).into()),
     };
     match config.system.as_mut() {
         Some(s) => s.mode = Some(mode),
@@ -622,7 +605,7 @@ fn arg_decode_mode<CS: ConfigurationSource>(
 fn arg_decode_rs_window<CS: ConfigurationSource>(
     mode: &[String],
     config: &mut ModifyGuard<DecodedConfiguration>,
-) -> ConfigResult<()> {
+) -> RuntimeResult<()> {
     argck_duplicate_values::<CS>(&mode, CS::KEY_SERVICE_WINDOW)?;
     match mode[0].parse::<u64>() {
         Ok(n) => match config.system.as_mut() {
@@ -634,7 +617,7 @@ fn arg_decode_rs_window<CS: ConfigurationSource>(
                 })
             }
         },
-        Err(_) => return Err(CS::err_invalid_value_for(CS::KEY_SERVICE_WINDOW)),
+        Err(_) => return Err(CS::err_invalid_value_for(CS::KEY_SERVICE_WINDOW).into()),
     }
     Ok(())
 }
@@ -703,7 +686,7 @@ impl<T> CLIConfigParseReturn<T> {
 /// - `--{option}={value}`
 pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
     src: impl Iterator<Item = T>,
-) -> ConfigResult<CLIConfigParseReturn<ParsedRawArgs>> {
+) -> RuntimeResult<CLIConfigParseReturn<ParsedRawArgs>> {
     let mut args_iter = src.into_iter().skip(1);
     let mut cli_args: ParsedRawArgs = HashMap::new();
     while let Some(arg) = args_iter.next() {
@@ -718,7 +701,8 @@ pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
             return Err(ConfigError::with_src(
                 ConfigSource::Cli,
                 ConfigErrorKind::ErrorString(format!("unexpected argument `{arg}`")),
-            ));
+            )
+            .into());
         }
         // x=1
         let arg_key;
@@ -734,13 +718,15 @@ pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
             return Err(ConfigError::with_src(
                 ConfigSource::Cli,
                 ConfigErrorKind::ErrorString(format!("incorrectly formatted argument `{arg}`")),
-            ));
+            )
+            .into());
         } else {
             let Some(value) = args_iter.next() else {
                 return Err(ConfigError::with_src(
                     ConfigSource::Cli,
                     ConfigErrorKind::ErrorString(format!("missing value for option `{arg}`")),
-                ));
+                )
+                .into());
             };
             arg_key = arg;
             arg_val = value.as_ref().to_string();
@@ -767,7 +753,7 @@ pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
 */
 
 /// Parse environment variables
-pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
+pub fn parse_env_args() -> RuntimeResult<Option<ParsedRawArgs>> {
     const KEYS: [&str; 8] = [
         CSEnvArgs::KEY_AUTH_DRIVER,
         CSEnvArgs::KEY_AUTH_ROOT_PASSWORD,
@@ -788,7 +774,8 @@ pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
                     return Err(ConfigError::with_src(
                         ConfigSource::Env,
                         ConfigErrorKind::ErrorString(format!("invalid value for `{key}`")),
-                    ))
+                    )
+                    .into())
                 }
             },
         };
@@ -809,15 +796,15 @@ pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
 /// Apply the configuration changes to the given mutable config
 fn apply_config_changes<CS: ConfigurationSource>(
     args: &mut ParsedRawArgs,
-) -> ConfigResult<ModifyGuard<DecodedConfiguration>> {
+) -> RuntimeResult<ModifyGuard<DecodedConfiguration>> {
     let mut config = ModifyGuard::new(DecodedConfiguration::default());
     enum DecodeKind {
         Simple {
             key: &'static str,
-            f: fn(&[String], &mut ModifyGuard<DecodedConfiguration>) -> ConfigResult<()>,
+            f: fn(&[String], &mut ModifyGuard<DecodedConfiguration>) -> RuntimeResult<()>,
         },
         Complex {
-            f: fn(&mut ParsedRawArgs, &mut ModifyGuard<DecodedConfiguration>) -> ConfigResult<()>,
+            f: fn(&mut ParsedRawArgs, &mut ModifyGuard<DecodedConfiguration>) -> RuntimeResult<()>,
         },
     }
     let decode_tasks = [
@@ -856,7 +843,8 @@ fn apply_config_changes<CS: ConfigurationSource>(
         Err(ConfigError::with_src(
             CS::SOURCE,
             ConfigErrorKind::ErrorString("found unknown arguments".into()),
-        ))
+        )
+        .into())
     } else {
         Ok(config)
     }
@@ -933,7 +921,7 @@ fn validate_configuration<CS: ConfigurationSource>(
         endpoints,
         auth,
     }: DecodedConfiguration,
-) -> ConfigResult<Configuration> {
+) -> RuntimeResult<Configuration> {
     let Some(auth) = auth else {
         return Err(ConfigError::with_src(
             CS::SOURCE,
@@ -941,7 +929,8 @@ fn validate_configuration<CS: ConfigurationSource>(
                 "root account must be configured with {}",
                 CS::KEY_AUTH_ROOT_PASSWORD
             )),
-        ));
+        )
+        .into());
     };
     // initialize our default configuration
     let mut config = Configuration::default_dev_mode(auth);
@@ -986,11 +975,11 @@ fn validate_configuration<CS: ConfigurationSource>(
         if config.system.reliability_system_window == 0 => ConfigError::with_src(
             CS::SOURCE,
             ConfigErrorKind::ErrorString("invalid value for service window. must be nonzero".into()),
-        ),
+        ).into(),
         if config.auth.root_key.len() < ROOT_PASSWORD_MIN_LEN => ConfigError::with_src(
             CS::SOURCE,
             ConfigErrorKind::ErrorString("the root password must have at least 16 characters".into()),
-        ),
+        ).into(),
     );
     Ok(config)
 }
@@ -1023,7 +1012,7 @@ impl ConfigReturn {
 /// Apply the changes and validate the configuration
 pub(super) fn apply_and_validate<CS: ConfigurationSource>(
     mut args: ParsedRawArgs,
-) -> ConfigResult<ConfigReturn> {
+) -> RuntimeResult<ConfigReturn> {
     let cfg = apply_config_changes::<CS>(&mut args)?;
     if ModifyGuard::modified(&cfg) {
         validate_configuration::<CS>(cfg.val).map(ConfigReturn::Config)
@@ -1067,7 +1056,7 @@ pub(super) fn set_file_src(src: &str) {
         s.borrow_mut().replace(src.to_string());
     })
 }
-fn get_file_from_store(filename: &str) -> ConfigResult<String> {
+fn get_file_from_store(filename: &str) -> RuntimeResult<String> {
     let _f = filename;
     let f;
     #[cfg(test)]
@@ -1122,7 +1111,7 @@ fn get_cli_from_store() -> Vec<String> {
 /// - CLI args
 /// - ENV variables
 /// - Config file (if any)
-pub fn check_configuration() -> ConfigResult<ConfigReturn> {
+pub fn check_configuration() -> RuntimeResult<ConfigReturn> {
     // read in our environment variables
     let env_args = parse_env_args()?;
     // read in our CLI args (since that can tell us whether we need a configuration file)
@@ -1154,7 +1143,8 @@ pub fn check_configuration() -> ConfigResult<ConfigReturn> {
                         return Err(ConfigError::with_src(
                             ConfigSource::Cli,
                             ConfigErrorKind::Conflict,
-                        ));
+                        )
+                        .into());
                     }
                     return apply_and_validate::<CSCommandLine>(cfg_from_cli);
                 }
@@ -1180,7 +1170,7 @@ fn check_config_file(
     cfg_from_cli: &ParsedRawArgs,
     env_args: &Option<ParsedRawArgs>,
     cfg_file: &Vec<String>,
-) -> ConfigResult<ConfigReturn> {
+) -> RuntimeResult<ConfigReturn> {
     if cfg_from_cli.len() == 1 && env_args.is_none() {
         // yes, we only have the config file
         argck_duplicate_values::<CSCommandLine>(&cfg_file, CSCommandLine::ARG_CONFIG_FILE)?;
@@ -1214,9 +1204,6 @@ fn check_config_file(
         return validate_configuration::<CSConfigFile>(config_from_file).map(ConfigReturn::Config);
     } else {
         // so there are more configuration options + a config file? (and maybe even env?)
-        return Err(ConfigError::with_src(
-            ConfigSource::Cli,
-            ConfigErrorKind::Conflict,
-        ));
+        return Err(ConfigError::with_src(ConfigSource::Cli, ConfigErrorKind::Conflict).into());
     }
 }

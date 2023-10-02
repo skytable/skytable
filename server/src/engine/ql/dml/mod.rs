@@ -168,7 +168,7 @@ mod impls {
     use {
         super::{RelationalExpr, WhereClause},
         crate::engine::{
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
@@ -182,7 +182,7 @@ mod impls {
     }
     impl<'a> ASTNode<'a> for RelationalExpr<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-            Self::try_parse(state).ok_or(Error::QLIllegalRelExp)
+            Self::try_parse(state).ok_or(QueryError::QLIllegalRelExp)
         }
     }
 }

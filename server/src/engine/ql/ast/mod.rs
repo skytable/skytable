@@ -37,7 +37,7 @@ use {
     crate::{
         engine::{
             data::{cell::Datacell, lit::Lit},
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
         },
         util::{compiler, MaybeInit},
     },
@@ -421,7 +421,7 @@ impl<'a> Entity<'a> {
                 *c += 1;
                 Self::parse_uck_tokens_single(tok)
             },
-            _ => return Err(Error::QPExpectedEntity),
+            _ => return Err(QueryError::QPExpectedEntity),
         };
         Ok(r)
     }
@@ -437,7 +437,7 @@ impl<'a> Entity<'a> {
                 Ok(e.assume_init())
             }
         } else {
-            Err(Error::QPExpectedEntity)
+            Err(QueryError::QPExpectedEntity)
         }
     }
     #[inline(always)]
@@ -531,7 +531,7 @@ pub fn compile_test<'a>(tok: &'a [Token<'a>]) -> QueryResult<Statement<'a>> {
 #[inline(always)]
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResult<Statement<'a>> {
     if compiler::unlikely(tok.len() < 2) {
-        return Err(Error::QLUnexpectedEndOfStatement);
+        return Err(QueryError::QLUnexpectedEndOfStatement);
     }
     let mut state = State::new(tok, d);
     match state.fw_read() {
@@ -540,12 +540,12 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResul
         Token![create] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::CreateModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::CreateSpace),
-            _ => compiler::cold_rerr(Error::QPUnknownStatement),
+            _ => compiler::cold_rerr(QueryError::QPUnknownStatement),
         },
         Token![alter] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::AlterModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::AlterSpace),
-            _ => compiler::cold_rerr(Error::QPUnknownStatement),
+            _ => compiler::cold_rerr(QueryError::QPUnknownStatement),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
         Token::Ident(id) if id.eq_ignore_ascii_case("inspect") => {
@@ -556,6 +556,6 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResul
         Token![select] => ASTNode::from_state(&mut state).map(Statement::Select),
         Token![update] => ASTNode::from_state(&mut state).map(Statement::Update),
         Token![delete] => ASTNode::from_state(&mut state).map(Statement::Delete),
-        _ => compiler::cold_rerr(Error::QPUnknownStatement),
+        _ => compiler::cold_rerr(QueryError::QPUnknownStatement),
     }
 }

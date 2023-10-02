@@ -38,8 +38,9 @@ use {
                 uuid::Uuid,
                 DictGeneric,
             },
+            error::{RuntimeResult, StorageError},
             mem::{BufferedScanner, VInline},
-            storage::v1::{inf, SDSSErrorKind, SDSSResult},
+            storage::v1::inf,
         },
         util::EndianQW,
     },
@@ -113,13 +114,16 @@ impl<'a> PersistObject for LayerRef<'a> {
         buf.extend(layer.tag().tag_selector().value_qword().to_le_bytes());
         buf.extend(0u64.to_le_bytes());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(LayerMD::new(scanner.next_u64_le(), scanner.next_u64_le()))
     }
     fn obj_enc(_: &mut VecU8, _: Self::InputType) {}
-    unsafe fn obj_dec(_: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        _: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         if (md.type_selector > TagSelector::List.value_qword()) | (md.prop_set_arity != 0) {
-            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
+            return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
         }
         Ok(Layer::new_empty_props(
             TagSelector::from_raw(md.type_selector as u8).into_full(),
@@ -167,7 +171,7 @@ impl<'a> PersistObject for FieldRef<'a> {
         buf.extend(slf.layers().len().u64_bytes_le());
         buf.push(slf.is_nullable() as u8);
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(FieldMD::new(
             scanner.next_u64_le(),
             scanner.next_u64_le(),
@@ -182,7 +186,7 @@ impl<'a> PersistObject for FieldRef<'a> {
     unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
-    ) -> SDSSResult<Self::OutputType> {
+    ) -> RuntimeResult<Self::OutputType> {
         let mut layers = VInline::new();
         let mut fin = false;
         while (!scanner.eof())
@@ -202,7 +206,7 @@ impl<'a> PersistObject for FieldRef<'a> {
         if (field.layers().len() as u64 == md.layer_c) & (md.null <= 1) & (md.prop_c == 0) & fin {
             Ok(field)
         } else {
-            Err(SDSSErrorKind::InternalDecodeStructureCorrupted.into())
+            Err(StorageError::InternalDecodeStructureCorrupted.into())
         }
     }
 }
@@ -255,7 +259,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         buf.extend(v.p_tag().tag_selector().value_qword().to_le_bytes());
         buf.extend(irm.fields().len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(ModelLayoutMD::new(
             Uuid::from_bytes(scanner.next_chunk()),
             scanner.next_u64_le(),
@@ -273,7 +277,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
     unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
-    ) -> SDSSResult<Self::OutputType> {
+    ) -> RuntimeResult<Self::OutputType> {
         let key = inf::dec::utils::decode_string(scanner, md.p_key_len as usize)?;
         let fieldmap =
             <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_dec(
@@ -281,7 +285,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
                 super::map::MapIndexSizeMD(md.field_c as usize),
             )?;
         let ptag = if md.p_key_tag > TagSelector::MAX as u64 {
-            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
+            return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
         } else {
             TagSelector::from_raw(md.p_key_tag as u8)
         };
@@ -326,7 +330,7 @@ impl<'a> PersistObject for SpaceLayoutRef<'a> {
         buf.extend(space.get_uuid().to_le_bytes());
         buf.extend(space_meta.len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(SpaceLayoutMD::new(
             Uuid::from_bytes(scanner.next_chunk()),
             scanner.next_u64_le() as usize,
@@ -340,7 +344,7 @@ impl<'a> PersistObject for SpaceLayoutRef<'a> {
     unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
-    ) -> SDSSResult<Self::OutputType> {
+    ) -> RuntimeResult<Self::OutputType> {
         let space_meta =
             <super::map::PersistMapImpl<super::map::GenericDictSpec> as PersistObject>::obj_dec(
                 scanner,

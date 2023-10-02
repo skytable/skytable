@@ -44,9 +44,12 @@
 use {
     super::{
         rw::{FileOpen, RawFSInterface, SDSSFileIO},
-        spec, SDSSErrorKind, SDSSResult,
+        spec,
     },
-    crate::util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
+    crate::{
+        engine::error::{RuntimeResult, StorageError},
+        util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
+    },
     std::marker::PhantomData,
 };
 
@@ -55,7 +58,7 @@ const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     log_file_name: &str,
     gs: &TA::GlobalState,
-) -> SDSSResult<FileOpen<JournalWriter<Fs, TA>>> {
+) -> RuntimeResult<FileOpen<JournalWriter<Fs, TA>>> {
     let file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<F>(log_file_name)? {
         FileOpen::Created(f) => return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?)),
         FileOpen::Existing((file, _header)) => file,
@@ -188,7 +191,7 @@ pub struct JournalReader<TA, Fs: RawFSInterface> {
 }
 
 impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
-    pub fn new(log_file: SDSSFileIO<Fs>) -> SDSSResult<Self> {
+    pub fn new(log_file: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()? - spec::SDSSStaticHeaderV1Compact::SIZE as u64;
         Ok(Self {
             log_file,
@@ -200,7 +203,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         })
     }
     /// Read the next event and apply it to the global state
-    pub fn rapply_next_event(&mut self, gs: &TA::GlobalState) -> SDSSResult<()> {
+    pub fn rapply_next_event(&mut self, gs: &TA::GlobalState) -> RuntimeResult<()> {
         // read metadata
         let mut en_jrnl_md = [0u8; JournalEntryMetadata::SIZE];
         self.logfile_read_into_buffer(&mut en_jrnl_md)?; // FIXME(@ohsayan): increase tolerance to not just payload
@@ -222,7 +225,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         }
         match entry_metadata
             .event_source_marker()
-            .ok_or(SDSSErrorKind::JournalLogEntryCorrupted)?
+            .ok_or(StorageError::JournalLogEntryCorrupted)?
         {
             EventSourceMarker::ServerStandard => {}
             EventSourceMarker::DriverClosed => {
@@ -237,7 +240,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
             EventSourceMarker::DriverReopened | EventSourceMarker::RecoveryReverseLastJournal => {
                 // these two are only taken in close and error paths (respectively) so we shouldn't see them here; this is bad
                 // two special directives in the middle of nowhere? incredible
-                return Err(SDSSErrorKind::JournalCorrupted.into());
+                return Err(StorageError::JournalCorrupted.into());
             }
         }
         // read payload
@@ -256,7 +259,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         Ok(())
     }
     /// handle a driver reopen (IMPORTANT: every event is unique so this must be called BEFORE the ID is incremented)
-    fn handle_driver_reopen(&mut self) -> SDSSResult<()> {
+    fn handle_driver_reopen(&mut self) -> RuntimeResult<()> {
         if self.has_remaining_bytes(JournalEntryMetadata::SIZE as _) {
             let mut reopen_block = [0u8; JournalEntryMetadata::SIZE];
             self.logfile_read_into_buffer(&mut reopen_block)?; // exit jump -> not our business since we have checked flen and if it changes due to user intervention, that's a you problem
@@ -270,10 +273,10 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
                 Ok(())
             } else {
                 // FIXME(@ohsayan): tolerate loss in this directive too
-                Err(SDSSErrorKind::JournalCorrupted.into())
+                Err(StorageError::JournalCorrupted.into())
             }
         } else {
-            Err(SDSSErrorKind::JournalCorrupted.into())
+            Err(StorageError::JournalCorrupted.into())
         }
     }
     #[cold] // FIXME(@ohsayan): how bad can prod systems be? (clue: pretty bad, so look for possible changes)
@@ -281,12 +284,12 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     /// attempt to recover the journal using the reverse directive (simple strategy)
     /// IMPORTANT: every event is unique so this must be called BEFORE the ID is incremented (remember that we only increment
     /// once we **sucessfully** finish processing a normal (aka server event origin) event and not a non-normal branch)
-    fn try_recover_journal_strategy_simple_reverse(&mut self) -> SDSSResult<()> {
+    fn try_recover_journal_strategy_simple_reverse(&mut self) -> RuntimeResult<()> {
         debug_assert!(TA::RECOVERY_PLUGIN, "recovery plugin not enabled");
         self.__record_read_bytes(JournalEntryMetadata::SIZE); // FIXME(@ohsayan): don't assume read length?
         let mut entry_buf = [0u8; JournalEntryMetadata::SIZE];
         if self.log_file.read_to_buffer(&mut entry_buf).is_err() {
-            return Err(SDSSErrorKind::JournalCorrupted.into());
+            return Err(StorageError::JournalCorrupted.into());
         }
         let entry = JournalEntryMetadata::decode(entry_buf);
         let okay = (entry.event_id == self.evid as u128)
@@ -297,11 +300,14 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         if okay {
             return Ok(());
         } else {
-            Err(SDSSErrorKind::JournalCorrupted.into())
+            Err(StorageError::JournalCorrupted.into())
         }
     }
     /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
-    pub fn scroll(file: SDSSFileIO<Fs>, gs: &TA::GlobalState) -> SDSSResult<(SDSSFileIO<Fs>, u64)> {
+    pub fn scroll(
+        file: SDSSFileIO<Fs>,
+        gs: &TA::GlobalState,
+    ) -> RuntimeResult<(SDSSFileIO<Fs>, u64)> {
         let mut slf = Self::new(file)?;
         while !slf.end_of_file() {
             slf.rapply_next_event(gs)?;
@@ -309,7 +315,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         if slf.closed {
             Ok((slf.log_file, slf.evid))
         } else {
-            Err(SDSSErrorKind::JournalCorrupted.into())
+            Err(StorageError::JournalCorrupted.into())
         }
     }
 }
@@ -330,7 +336,7 @@ impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
 }
 
 impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
-    fn logfile_read_into_buffer(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
+    fn logfile_read_into_buffer(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         if !self.has_remaining_bytes(buf.len() as _) {
             // do this right here to avoid another syscall
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
@@ -351,7 +357,7 @@ pub struct JournalWriter<Fs: RawFSInterface, TA> {
 }
 
 impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
-    pub fn new(mut log_file: SDSSFileIO<Fs>, last_txn_id: u64, new: bool) -> SDSSResult<Self> {
+    pub fn new(mut log_file: SDSSFileIO<Fs>, last_txn_id: u64, new: bool) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()?;
         log_file.seek_from_start(log_size)?; // avoid jumbling with headers
         let mut slf = Self {
@@ -366,7 +372,7 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         }
         Ok(slf)
     }
-    pub fn append_event(&mut self, event: TA::JournalEvent) -> SDSSResult<()> {
+    pub fn append_event(&mut self, event: TA::JournalEvent) -> RuntimeResult<()> {
         let encoded = TA::encode(event);
         let md = JournalEntryMetadata::new(
             self._incr_id() as u128,
@@ -380,7 +386,10 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         self.log_file.fsync_all()?;
         Ok(())
     }
-    pub fn append_event_with_recovery_plugin(&mut self, event: TA::JournalEvent) -> SDSSResult<()> {
+    pub fn append_event_with_recovery_plugin(
+        &mut self,
+        event: TA::JournalEvent,
+    ) -> RuntimeResult<()> {
         debug_assert!(TA::RECOVERY_PLUGIN);
         match self.append_event(event) {
             Ok(()) => Ok(()),
@@ -390,22 +399,22 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
 }
 
 impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
-    pub fn appendrec_journal_reverse_entry(&mut self) -> SDSSResult<()> {
+    pub fn appendrec_journal_reverse_entry(&mut self) -> RuntimeResult<()> {
         let mut entry =
             JournalEntryMetadata::new(0, EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL, 0, 0);
         entry.event_id = self._incr_id() as u128;
         if self.log_file.fsynced_write(&entry.encoded()).is_ok() {
             return Ok(());
         }
-        Err(SDSSErrorKind::JournalWRecoveryStageOneFailCritical.into())
+        Err(StorageError::JournalWRecoveryStageOneFailCritical.into())
     }
-    pub fn append_journal_reopen(&mut self) -> SDSSResult<()> {
+    pub fn append_journal_reopen(&mut self) -> RuntimeResult<()> {
         let id = self._incr_id() as u128;
         self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_REOPENED, 0, 0).encoded(),
         )
     }
-    pub fn __append_journal_close_and_close(&mut self) -> SDSSResult<()> {
+    pub fn __append_journal_close_and_close(&mut self) -> RuntimeResult<()> {
         self.closed = true;
         let id = self._incr_id() as u128;
         self.log_file.fsynced_write(
@@ -413,7 +422,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
         )?;
         Ok(())
     }
-    pub fn append_journal_close_and_close(mut self) -> SDSSResult<()> {
+    pub fn append_journal_close_and_close(mut self) -> RuntimeResult<()> {
         self.__append_journal_close_and_close()
     }
 }

@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::{data::cell::Datacell, error::Error, fractal::test_utils::TestGlobal};
+use crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal};
 
 #[test]
 fn simple_select_wildcard() {
@@ -97,6 +97,6 @@ fn select_nonexisting() {
             "select username, password from myspace.mymodel where username = 'notsayan'",
         )
         .unwrap_err(),
-        Error::QPDmlRowNotFound
+        QueryError::QPDmlRowNotFound
     );
 }

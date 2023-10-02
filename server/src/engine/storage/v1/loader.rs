@@ -27,12 +27,14 @@
 use crate::engine::{
     core::GlobalNS,
     data::uuid::Uuid,
+    error::RuntimeResult,
+    fractal::error::ErrorContext,
     fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
     storage::v1::{
         batch_jrnl,
         journal::{self, JournalWriter},
         rw::{FileOpen, RawFSInterface},
-        spec, LocalFS, SDSSResult,
+        spec, LocalFS,
     },
     txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
@@ -61,7 +63,7 @@ impl SEInitState {
             gns,
         }
     }
-    pub fn try_init() -> SDSSResult<Self> {
+    pub fn try_init() -> RuntimeResult<Self> {
         let gns = GlobalNS::empty();
         let gns_txn_driver = open_gns_driver(GNS_FILE_PATH, &gns)?;
         let new_instance = gns_txn_driver.is_created();
@@ -73,11 +75,9 @@ impl SEInitState {
                 for (model_name, model) in space.models().read().iter() {
                     let path =
                         Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                    let persist_driver = batch_jrnl::reinit(&path, model).map_err(|e| {
-                        e.add_ctx(format!(
-                            "failed to restore model data from journal in `{path}`"
-                        ))
-                    })?;
+                    let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(
+                        format!("failed to restore model data from journal in `{path}`"),
+                    )?;
                     let _ = model_drivers.insert(
                         ModelUniqueID::new(space_name, model_name, model.get_uuid()),
                         FractalModelDriver::init(persist_driver),
@@ -119,6 +119,6 @@ impl SEInitState {
 pub fn open_gns_driver<Fs: RawFSInterface>(
     path: &str,
     gns: &GlobalNS,
-) -> SDSSResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {
+) -> RuntimeResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {
     journal::open_journal::<GNSAdapter, Fs, spec::GNSTransactionLogV1>(path, gns)
 }

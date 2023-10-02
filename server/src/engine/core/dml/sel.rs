@@ -27,7 +27,7 @@
 use crate::engine::{
     core::index::DcFieldIndex,
     data::cell::{Datacell, VirtualDatacell},
-    error::{Error, QueryResult},
+    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{STIndex, STIndexSeq},
     ql::dml::sel::SelectStatement,
@@ -51,7 +51,7 @@ where
             match fields.st_get(key) {
                 Some(dc) => cellfn(dc),
                 None if key == mdl.p_key() => cellfn(&pkdc),
-                None => return Err(Error::QPUnknownField),
+                None => return Err(QueryError::QPUnknownField),
             }
             Ok(())
         };
@@ -68,7 +68,7 @@ where
                     }
                 }
             }
-            None => return Err(Error::QPDmlRowNotFound),
+            None => return Err(QueryError::QPDmlRowNotFound),
         }
         Ok(())
     })

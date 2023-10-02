@@ -30,7 +30,7 @@ use {
     super::WhereClause,
     crate::{
         engine::{
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             ql::ast::{Entity, QueryData, State},
         },
         util::{compiler, MaybeInit},
@@ -81,7 +81,7 @@ impl<'a> DeleteStatement<'a> {
                    ^1   ^2    ^3    ^4  ^5
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         // from + entity
         state.poison_if_not(state.cursor_eq(Token![from]));
@@ -101,7 +101,7 @@ impl<'a> DeleteStatement<'a> {
                 wc,
             })
         } else {
-            compiler::cold_rerr(Error::QLInvalidSyntax)
+            compiler::cold_rerr(QueryError::QLInvalidSyntax)
         }
     }
 }

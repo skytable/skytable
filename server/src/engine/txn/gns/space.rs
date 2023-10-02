@@ -30,13 +30,10 @@ use {
         engine::{
             core::{space::Space, GlobalNS},
             data::DictGeneric,
+            error::{RuntimeResult, TransactionError},
             idx::STIndex,
             mem::BufferedScanner,
-            storage::v1::{
-                inf::{self, map, obj, PersistObject},
-                SDSSResult,
-            },
-            txn::{TransactionError, TransactionResult},
+            storage::v1::inf::{self, map, obj, PersistObject},
         },
         util::EndianQW,
     },
@@ -92,7 +89,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
             obj::SpaceLayoutRef::from((data.space, data.space_meta)),
         );
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let space_name_l = scanner.next_u64_le();
         let space_meta = <obj::SpaceLayoutRef as PersistObject>::meta_dec(scanner)?;
         Ok(CreateSpaceTxnMD {
@@ -104,7 +101,10 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
         buf.extend(data.space_name.as_bytes());
         <obj::SpaceLayoutRef as PersistObject>::obj_enc(buf, (data.space, data.space_meta).into());
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let space_name =
             inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
         let space = <obj::SpaceLayoutRef as PersistObject>::obj_dec(s, md.space_meta)?;
@@ -119,12 +119,12 @@ impl<'a> GNSEvent for CreateSpaceTxn<'a> {
     fn update_global_state(
         CreateSpaceTxnRestorePL { space_name, space }: CreateSpaceTxnRestorePL,
         gns: &crate::engine::core::GlobalNS,
-    ) -> crate::engine::txn::TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         let mut wgns = gns.spaces().write();
         if wgns.st_insert(space_name, space) {
             Ok(())
         } else {
-            Err(TransactionError::OnRestoreDataConflictAlreadyExists)
+            Err(TransactionError::OnRestoreDataConflictAlreadyExists.into())
         }
     }
 }
@@ -174,7 +174,7 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
         <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         buf.extend(data.updated_props.len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(AlterSpaceTxnMD {
             space_id_meta: <super::SpaceID as PersistObject>::meta_dec(scanner)?,
             dict_len: scanner.next_u64_le(),
@@ -187,7 +187,10 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
             data.updated_props,
         );
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let space_meta = <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_dec(
             s,
@@ -211,16 +214,16 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
             space_meta,
         }: Self::RestoreType,
         gns: &crate::engine::core::GlobalNS,
-    ) -> TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         let gns = gns.spaces().read();
         match gns.st_get(&space_id.name) {
             Some(space) => {
                 let mut wmeta = space.metadata().dict().write();
                 if !crate::engine::data::dict::rmerge_metadata(&mut wmeta, space_meta) {
-                    return Err(TransactionError::OnRestoreDataConflictMismatch);
+                    return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
             }
-            None => return Err(TransactionError::OnRestoreDataMissing),
+            None => return Err(TransactionError::OnRestoreDataMissing.into()),
         }
         Ok(())
     }
@@ -253,13 +256,16 @@ impl<'a> PersistObject for DropSpaceTxn<'a> {
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         <super::SpaceID as PersistObject>::meta_dec(scanner)
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id)
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         <super::SpaceID as PersistObject>::obj_dec(s, md)
     }
 }
@@ -271,7 +277,7 @@ impl<'a> GNSEvent for DropSpaceTxn<'a> {
     fn update_global_state(
         super::SpaceIDRes { uuid, name }: Self::RestoreType,
         gns: &GlobalNS,
-    ) -> TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         let mut wgns = gns.spaces().write();
         match wgns.entry(name) {
             std::collections::hash_map::Entry::Occupied(oe) => {
@@ -279,11 +285,11 @@ impl<'a> GNSEvent for DropSpaceTxn<'a> {
                     oe.remove_entry();
                     Ok(())
                 } else {
-                    return Err(TransactionError::OnRestoreDataConflictMismatch);
+                    return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
             }
             std::collections::hash_map::Entry::Vacant(_) => {
-                return Err(TransactionError::OnRestoreDataMissing)
+                return Err(TransactionError::OnRestoreDataMissing.into())
             }
         }
     }

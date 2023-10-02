@@ -27,15 +27,15 @@
 #[cfg(test)]
 use crate::engine::storage::v1::memfs::VirtualFS;
 use {
-    super::{TransactionError, TransactionResult},
     crate::{
         engine::{
             core::{space::Space, GlobalNS},
             data::uuid::Uuid,
+            error::{RuntimeResult, TransactionError},
             mem::BufferedScanner,
             storage::v1::{
                 inf::{self, PersistObject},
-                JournalAdapter, JournalWriter, LocalFS, RawFSInterface, SDSSResult,
+                JournalAdapter, JournalWriter, LocalFS, RawFSInterface,
             },
         },
         util::EndianQW,
@@ -77,7 +77,7 @@ impl<Fs: RawFSInterface> GNSTransactionDriverAnyFS<Fs> {
     }
     /// Attempts to commit the given event into the journal, handling any possible recovery triggers and returning
     /// errors (if any)
-    pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE) -> TransactionResult<()> {
+    pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE) -> RuntimeResult<()> {
         let mut buf = vec![];
         buf.extend(GE::OPC.to_le_bytes());
         GE::encode_super_event(gns_event, &mut buf);
@@ -99,20 +99,20 @@ impl JournalAdapter for GNSAdapter {
     const RECOVERY_PLUGIN: bool = true;
     type JournalEvent = GNSSuperEvent;
     type GlobalState = GlobalNS;
-    type Error = TransactionError;
+    type Error = crate::engine::fractal::error::Error;
     fn encode(GNSSuperEvent(b): Self::JournalEvent) -> Box<[u8]> {
         b
     }
-    fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> TransactionResult<()> {
+    fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> RuntimeResult<()> {
         if payload.len() < 2 {
-            return Err(TransactionError::DecodedUnexpectedEof);
+            return Err(TransactionError::DecodedUnexpectedEof.into());
         }
         macro_rules! dispatch {
             ($($item:ty),* $(,)?) => {
-                [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::DecodeUnknownTxnOp)]
+                [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::DecodeUnknownTxnOp.into())]
             };
         }
-        static DISPATCH: [fn(&mut BufferedScanner, &GlobalNS) -> TransactionResult<()>; 9] = dispatch!(
+        static DISPATCH: [fn(&mut BufferedScanner, &GlobalNS) -> RuntimeResult<()>; 9] = dispatch!(
             CreateSpaceTxn,
             AlterSpaceTxn,
             DropSpaceTxn,
@@ -129,7 +129,7 @@ impl JournalAdapter for GNSAdapter {
         };
         match DISPATCH[(opc as usize).min(DISPATCH.len())](&mut scanner, gs) {
             Ok(()) if scanner.eof() => return Ok(()),
-            Ok(_) => Err(TransactionError::DecodeCorruptedPayloadMoreBytes),
+            Ok(_) => Err(TransactionError::DecodeCorruptedPayloadMoreBytes.into()),
             Err(e) => Err(e),
         }
     }
@@ -165,15 +165,15 @@ where
     fn decode_and_update_global_state(
         scanner: &mut BufferedScanner,
         gns: &GlobalNS,
-    ) -> TransactionResult<()> {
+    ) -> RuntimeResult<()> {
         Self::update_global_state(Self::decode(scanner)?, gns)
     }
     /// Attempts to decode the event using the given scanner
-    fn decode(scanner: &mut BufferedScanner) -> TransactionResult<Self::RestoreType> {
+    fn decode(scanner: &mut BufferedScanner) -> RuntimeResult<Self::RestoreType> {
         inf::dec::dec_full_from_scanner::<Self>(scanner).map_err(|e| e.into())
     }
     /// Update the global state from the restored event
-    fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> TransactionResult<()>;
+    fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> RuntimeResult<()>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -220,7 +220,7 @@ impl<'a> PersistObject for SpaceID<'a> {
         buf.extend(data.uuid.to_le_bytes());
         buf.extend(data.name.len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(SpaceIDMD {
             uuid: Uuid::from_bytes(scanner.next_chunk()),
             space_name_l: scanner.next_u64_le(),
@@ -229,7 +229,10 @@ impl<'a> PersistObject for SpaceID<'a> {
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         buf.extend(data.name.as_bytes());
     }
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType> {
         let str = inf::dec::utils::decode_string(s, md.space_name_l as usize)?;
         Ok(SpaceIDRes {
             uuid: md.uuid,

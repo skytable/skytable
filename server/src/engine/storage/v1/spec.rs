@@ -33,15 +33,14 @@
 */
 
 use {
-    super::{
-        rw::{RawFSInterface, SDSSFileIO},
-        SDSSResult,
-    },
+    super::rw::{RawFSInterface, SDSSFileIO},
     crate::{
-        engine::storage::{
-            header::{HostArch, HostEndian, HostOS, HostPointerWidth},
-            v1::SDSSErrorKind,
-            versions::{self, DriverVersion, HeaderVersion, ServerVersion},
+        engine::{
+            error::{RuntimeResult, StorageError},
+            storage::{
+                header::{HostArch, HostEndian, HostOS, HostPointerWidth},
+                versions::{self, DriverVersion, HeaderVersion, ServerVersion},
+            },
         },
         util::os,
     },
@@ -202,21 +201,23 @@ pub trait Header: Sized {
     /// Decode verify arguments
     type DecodeVerifyArgs;
     /// Encode the header
-    fn encode<Fs: RawFSInterface>(f: &mut SDSSFileIO<Fs>, args: Self::EncodeArgs)
-        -> SDSSResult<()>;
+    fn encode<Fs: RawFSInterface>(
+        f: &mut SDSSFileIO<Fs>,
+        args: Self::EncodeArgs,
+    ) -> RuntimeResult<()>;
     /// Decode the header
     fn decode<Fs: RawFSInterface>(
         f: &mut SDSSFileIO<Fs>,
         args: Self::DecodeArgs,
-    ) -> SDSSResult<Self>;
+    ) -> RuntimeResult<Self>;
     /// Verify the header
-    fn verify(&self, args: Self::DecodeVerifyArgs) -> SDSSResult<()>;
+    fn verify(&self, args: Self::DecodeVerifyArgs) -> RuntimeResult<()>;
     /// Decode and verify the header
     fn decode_verify<Fs: RawFSInterface>(
         f: &mut SDSSFileIO<Fs>,
         d_args: Self::DecodeArgs,
         v_args: Self::DecodeVerifyArgs,
-    ) -> SDSSResult<Self> {
+    ) -> RuntimeResult<Self> {
         let h = Self::decode(f, d_args)?;
         h.verify(v_args)?;
         Ok(h)
@@ -295,7 +296,7 @@ impl SDSSStaticHeaderV1Compact {
     /// - If padding block was not zeroed, handle
     /// - No file metadata and is verified. Check!
     ///
-    fn _decode(block: [u8; 64]) -> SDSSResult<Self> {
+    fn _decode(block: [u8; 64]) -> RuntimeResult<Self> {
         var!(let raw_magic, raw_header_version, raw_server_version, raw_driver_version, raw_host_os, raw_host_arch,
             raw_host_ptr_width, raw_host_endian, raw_file_class, raw_file_specifier, raw_file_specifier_version,
             raw_runtime_epoch_time, raw_paddding_block,
@@ -375,8 +376,8 @@ impl SDSSStaticHeaderV1Compact {
         } else {
             let version_okay = okay_header_version & okay_server_version & okay_driver_version;
             let md = ManuallyDrop::new([
-                SDSSErrorKind::HeaderDecodeCorruptedHeader,
-                SDSSErrorKind::HeaderDecodeVersionMismatch,
+                StorageError::HeaderDecodeCorruptedHeader,
+                StorageError::HeaderDecodeVersionMismatch,
             ]);
             Err(unsafe {
                 // UNSAFE(@ohsayan): while not needed, md for drop safety + correct index
@@ -495,23 +496,26 @@ impl Header for SDSSStaticHeaderV1Compact {
     fn encode<Fs: RawFSInterface>(
         f: &mut SDSSFileIO<Fs>,
         (scope, spec, spec_v): Self::EncodeArgs,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         let b = Self::_encode_auto(scope, spec, spec_v);
         f.fsynced_write(&b)
     }
-    fn decode<Fs: RawFSInterface>(f: &mut SDSSFileIO<Fs>, _: Self::DecodeArgs) -> SDSSResult<Self> {
+    fn decode<Fs: RawFSInterface>(
+        f: &mut SDSSFileIO<Fs>,
+        _: Self::DecodeArgs,
+    ) -> RuntimeResult<Self> {
         let mut buf = [0u8; 64];
         f.read_to_buffer(&mut buf)?;
         Self::_decode(buf)
     }
-    fn verify(&self, (scope, spec, spec_v): Self::DecodeVerifyArgs) -> SDSSResult<()> {
+    fn verify(&self, (scope, spec, spec_v): Self::DecodeVerifyArgs) -> RuntimeResult<()> {
         if (self.file_class() == scope)
             & (self.file_specifier() == spec)
             & (self.file_specifier_version() == spec_v)
         {
             Ok(())
         } else {
-            Err(SDSSErrorKind::HeaderDecodeDataMismatch.into())
+            Err(StorageError::HeaderDecodeDataMismatch.into())
         }
     }
 }

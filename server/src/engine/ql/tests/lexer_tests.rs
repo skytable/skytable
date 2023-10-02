@@ -29,7 +29,7 @@ use {
         super::lex::{Ident, Token},
         lex_insecure, lex_secure,
     },
-    crate::engine::{data::lit::Lit, error::Error},
+    crate::engine::{data::lit::Lit, error::QueryError},
 };
 
 macro_rules! v(
@@ -143,14 +143,23 @@ fn lex_string_escape_bs() {
 #[test]
 fn lex_string_bad_escape() {
     let wth = br#" '\a should be an alert on windows apparently' "#;
-    assert_eq!(lex_insecure(wth).unwrap_err(), Error::LexInvalidLiteral);
+    assert_eq!(
+        lex_insecure(wth).unwrap_err(),
+        QueryError::LexInvalidLiteral
+    );
 }
 #[test]
 fn lex_string_unclosed() {
     let wth = br#" 'omg where did the end go "#;
-    assert_eq!(lex_insecure(wth).unwrap_err(), Error::LexInvalidLiteral);
+    assert_eq!(
+        lex_insecure(wth).unwrap_err(),
+        QueryError::LexInvalidLiteral
+    );
     let wth = br#" 'see, we escaped the end\' "#;
-    assert_eq!(lex_insecure(wth).unwrap_err(), Error::LexInvalidLiteral);
+    assert_eq!(
+        lex_insecure(wth).unwrap_err(),
+        QueryError::LexInvalidLiteral
+    );
 }
 #[test]
 fn lex_unsafe_literal_mini() {

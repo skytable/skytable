@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::{data::cell::Datacell, error::Error, fractal::test_utils::TestGlobal};
+use crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal};
 
 #[derive(sky_macros::Wrapper, Debug)]
 struct Tuple(Vec<(Box<str>, Datacell)>);
@@ -83,6 +83,6 @@ fn insert_duplicate() {
     assert_eq!(
         super::exec_insert_only(&global, "insert into myspace.mymodel('sayan', 'pass123')")
             .unwrap_err(),
-        Error::QPDmlDuplicate
+        QueryError::QPDmlDuplicate
     );
 }

@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::{error::Error, fractal::test_utils::TestGlobal};
+use crate::engine::{error::QueryError, fractal::test_utils::TestGlobal};
 
 #[test]
 fn simple_delete() {
@@ -51,6 +51,6 @@ fn delete_nonexisting() {
             "sayan",
         )
         .unwrap_err(),
-        Error::QPDmlRowNotFound
+        QueryError::QPDmlRowNotFound
     );
 }

@@ -24,27 +24,17 @@
  *
 */
 
-use {
-    super::{
-        storage::v1::{SDSSError, SDSSErrorKind},
-        txn::TransactionError,
-    },
-    crate::util::os::SysIOError,
-    std::fmt,
-};
+use {super::config::ConfigError, crate::util::os::SysIOError, std::fmt};
 
-pub type QueryResult<T> = Result<T, Error>;
-// stack
-pub type CtxResult<T, E> = Result<T, CtxError<E>>;
-pub type RuntimeResult<T> = CtxResult<T, RuntimeErrorKind>;
-pub type RuntimeError = CtxError<RuntimeErrorKind>;
+pub type RuntimeResult<T> = Result<T, super::fractal::error::Error>;
+pub type QueryResult<T> = Result<T, QueryError>;
 
 /// an enumeration of 'flat' errors that the server actually responds to the client with, since we do not want to send specific information
 /// about anything (as that will be a security hole). The variants correspond with their actual response codes
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Error {
+pub enum QueryError {
     /// I/O error
-    SysIOError,
+    SysServerError,
     /// out of memory
     SysOutOfMemory,
     /// unknown server error
@@ -108,125 +98,131 @@ pub enum Error {
     SysAuthError,
 }
 
-direct_from! {
-    Error[_] => {
-        SDSSError as StorageSubsystemError,
-        TransactionError as TransactionalError,
-    }
-}
-
-/*
-    contextual errors
-*/
-
-/// An error context
-pub enum CtxErrorDescription {
-    A(&'static str),
-    B(Box<str>),
-}
-
-impl CtxErrorDescription {
-    fn inner(&self) -> &str {
-        match self {
-            Self::A(a) => a,
-            Self::B(b) => &b,
+impl From<super::fractal::error::Error> for QueryError {
+    fn from(e: super::fractal::error::Error) -> Self {
+        match e.kind() {
+            ErrorKind::IoError(_) | ErrorKind::Storage(_) => QueryError::SysServerError,
+            ErrorKind::Txn(_) => QueryError::TransactionalError,
+            ErrorKind::Other(_) => QueryError::SysUnknownError,
+            ErrorKind::Config(_) => unreachable!("config error cannot propagate here"),
         }
     }
 }
 
-impl PartialEq for CtxErrorDescription {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner() == other.inner()
-    }
-}
-
-impl fmt::Display for CtxErrorDescription {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.inner())
-    }
-}
-
-impl fmt::Debug for CtxErrorDescription {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.inner())
-    }
-}
-
-direct_from! {
-    CtxErrorDescription => {
-        &'static str as A,
-        String as B,
-        Box<str> as B,
+macro_rules! enumerate_err {
+    ($(#[$attr:meta])* $vis:vis enum $errname:ident { $($(#[$varattr:meta])* $variant:ident = $errstring:expr),* $(,)? }) => {
+        $(#[$attr])*
+        $vis enum $errname { $($(#[$varattr])* $variant),* }
+        impl core::fmt::Display for $errname {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self {$( Self::$variant => write!(f, "{}", $errstring),)*}
+            }
+        }
+        impl std::error::Error for $errname {}
     }
 }
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-/// A contextual error
-pub struct CtxError<E> {
-    kind: E,
-    ctx: Option<CtxErrorDescription>,
-}
-
-impl<E> CtxError<E> {
-    fn _new(kind: E, ctx: Option<CtxErrorDescription>) -> Self {
-        Self { kind, ctx }
-    }
-    pub fn new(kind: E) -> Self {
-        Self::_new(kind, None)
-    }
-    pub fn with_ctx(kind: E, ctx: impl Into<CtxErrorDescription>) -> Self {
-        Self::_new(kind, Some(ctx.into()))
-    }
-    pub fn add_ctx(self, ctx: impl Into<CtxErrorDescription>) -> Self {
-        Self::with_ctx(self.kind, ctx)
-    }
-    pub fn into_result<T>(self) -> CtxResult<T, E> {
-        Err(self)
-    }
-    pub fn result<T, F>(result: Result<T, F>) -> CtxResult<T, E>
-    where
-        E: From<F>,
-    {
-        result.map_err(|e| CtxError::new(e.into()))
-    }
-    pub fn result_ctx<T, F>(
-        result: Result<T, F>,
-        ctx: impl Into<CtxErrorDescription>,
-    ) -> CtxResult<T, E>
-    where
-        E: From<F>,
-    {
-        result.map_err(|e| CtxError::with_ctx(e.into(), ctx))
-    }
-}
-
-macro_rules! impl_from_hack {
-    ($($ty:ty),*) => {
-        $(impl<E> From<E> for CtxError<$ty> where E: Into<$ty> {fn from(e: E) -> Self { CtxError::new(e.into()) }})*
-    }
-}
-
-/*
-    Contextual error impls
-*/
-
-impl_from_hack!(RuntimeErrorKind, SDSSErrorKind);
-
-#[derive(Debug)]
-pub enum RuntimeErrorKind {
-    StorageSubsytem(SDSSError),
+/// A "master" error kind enumeration for all kinds of runtime errors
+pub enum ErrorKind {
+    /// An I/O error
     IoError(SysIOError),
-    OSSLErrorMulti(openssl::error::ErrorStack),
-    OSSLError(openssl::ssl::Error),
+    /// An SDSS error
+    Storage(StorageError),
+    /// A transactional error
+    Txn(TransactionError),
+    /// other errors
+    Other(String),
+    /// configuration errors
+    Config(ConfigError),
 }
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IoError(io) => write!(f, "io error: {io}"),
+            Self::Storage(se) => write!(f, "storage error: {se}"),
+            Self::Txn(txe) => write!(f, "txn error: {txe}"),
+            Self::Other(oe) => write!(f, "error: {oe}"),
+            Self::Config(cfg) => write!(f, "config error: {cfg}"),
+        }
+    }
+}
+
+impl std::error::Error for ErrorKind {}
 
 direct_from! {
-    RuntimeErrorKind => {
-        SDSSError as StorageSubsytem,
+    ErrorKind => {
         std::io::Error as IoError,
         SysIOError as IoError,
-        openssl::error::ErrorStack as OSSLErrorMulti,
-        openssl::ssl::Error as OSSLError,
+    }
+}
+
+enumerate_err! {
+    #[derive(Debug, PartialEq)]
+    /// Errors that occur when restoring transactional data
+    pub enum TransactionError {
+        /// corrupted txn payload. has more bytes than expected
+        DecodeCorruptedPayloadMoreBytes = "txn-payload-unexpected-content",
+        /// transaction payload is corrupted. has lesser bytes than expected
+        DecodedUnexpectedEof = "txn-payload-unexpected-eof",
+        /// unknown transaction operation. usually indicates a corrupted payload
+        DecodeUnknownTxnOp = "txn-payload-unknown-payload",
+        /// While restoring a certain item, a non-resolvable conflict was encountered in the global state, because the item was
+        /// already present (when it was expected to not be present)
+        OnRestoreDataConflictAlreadyExists = "txn-payload-conflict-already-exists",
+        /// On restore, a certain item that was expected to be present was missing in the global state
+        OnRestoreDataMissing = "txn-payload-conflict-missing",
+        /// On restore, a certain item that was expected to match a certain value, has a different value
+        OnRestoreDataConflictMismatch = "txn-payload-conflict-mismatch",
+        /// out of memory
+        OutOfMemory = "txn-error-oom",
+    }
+}
+
+enumerate_err! {
+    #[derive(Debug, PartialEq)]
+    /// SDSS based storage engine errors
+    pub enum StorageError {
+        // header
+        /// version mismatch
+        HeaderDecodeVersionMismatch = "header-version-mismatch",
+        /// The entire header is corrupted
+        HeaderDecodeCorruptedHeader = "header-corrupted",
+        /// Expected header values were not matched with the current header
+        HeaderDecodeDataMismatch = "header-data-mismatch",
+        /// The time in the [header/dynrec/rtsig] is in the future
+        HeaderTimeConflict = "header-invalid-time",
+        // journal
+        /// While attempting to handle a basic failure (such as adding a journal entry), the recovery engine ran into an exceptional
+        /// situation where it failed to make a necessary repair the log
+        JournalWRecoveryStageOneFailCritical = "journal-recovery-failure",
+        /// An entry in the journal is corrupted
+        JournalLogEntryCorrupted = "journal-entry-corrupted",
+        /// The structure of the journal is corrupted
+        JournalCorrupted = "journal-corrupted",
+        /// when restoring the journal, a transactional error (i.e constraint violation) occurred
+        JournalRestoreTxnError = "journal-illegal-data",
+        // internal file structures
+        /// While attempting to decode a structure in an internal segment of a file, the storage engine ran into a possibly irrecoverable error
+        InternalDecodeStructureCorrupted = "structure-decode-corrupted",
+        /// the payload (non-static) part of a structure in an internal segment of a file is corrupted
+        InternalDecodeStructureCorruptedPayload = "structure-decode-corrupted-payload",
+        /// the data for an internal structure was decoded but is logically invalid
+        InternalDecodeStructureIllegalData = "structure-decode-illegal-data",
+        /// when attempting to flush a data batch, the batch journal crashed and a recovery event was triggered. But even then,
+        /// the data batch journal could not be fixed
+        DataBatchRecoveryFailStageOne = "batch-recovery-failure",
+        /// when attempting to restore a data batch from disk, the batch journal crashed and had a corruption, but it is irrecoverable
+        DataBatchRestoreCorruptedBatch = "batch-corrupted-batch",
+        /// when attempting to restore a data batch from disk, the driver encountered a corrupted entry
+        DataBatchRestoreCorruptedEntry = "batch-corrupted-entry",
+        /// we failed to close the data batch
+        DataBatchCloseError = "batch-persist-close-failed",
+        /// the data batch file is corrupted
+        DataBatchRestoreCorruptedBatchFile = "batch-corrupted-file",
+        /// the system database is corrupted
+        SysDBCorrupted = "sysdb-corrupted",
     }
 }

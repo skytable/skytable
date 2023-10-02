@@ -40,9 +40,9 @@ use {
             dict::DictEntryGeneric,
             tag::{DataTag, TagClass},
         },
+        error::{RuntimeResult, StorageError},
         idx::{AsKey, AsValue},
         mem::BufferedScanner,
-        storage::v1::{SDSSErrorKind, SDSSResult},
     },
     std::mem,
 };
@@ -138,7 +138,7 @@ pub trait PersistObject {
     /// ## Safety
     ///
     /// Must pass the [`PersistObject::pretest_can_dec_metadata`] assertion
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata>;
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata>;
     // obj
     /// obj enc
     fn obj_enc(buf: &mut VecU8, data: Self::InputType);
@@ -147,7 +147,10 @@ pub trait PersistObject {
     /// ## Safety
     ///
     /// Must pass the [`PersistObject::pretest_can_dec_object`] assertion
-    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType>;
+    unsafe fn obj_dec(
+        s: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> RuntimeResult<Self::OutputType>;
     // default
     /// Default routine to encode an object + its metadata
     fn default_full_enc(buf: &mut VecU8, data: Self::InputType) {
@@ -155,16 +158,16 @@ pub trait PersistObject {
         Self::obj_enc(buf, data);
     }
     /// Default routine to decode an object + its metadata (however, the metadata is used and not returned)
-    fn default_full_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::OutputType> {
+    fn default_full_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::OutputType> {
         if !Self::pretest_can_dec_metadata(scanner) {
-            return Err(SDSSErrorKind::InternalDecodeStructureCorrupted.into());
+            return Err(StorageError::InternalDecodeStructureCorrupted.into());
         }
         let md = unsafe {
             // UNSAFE(@ohsayan): +pretest
             Self::meta_dec(scanner)?
         };
         if !Self::pretest_can_dec_object(scanner, &md) {
-            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
+            return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
         }
         unsafe {
             // UNSAFE(@ohsayan): +obj pretest
@@ -262,39 +265,39 @@ pub mod enc {
 pub mod dec {
     use {
         super::{map, PersistMapSpec, PersistObject},
-        crate::engine::{mem::BufferedScanner, storage::v1::SDSSResult},
+        crate::engine::{error::RuntimeResult, mem::BufferedScanner},
     };
     // obj
-    pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> SDSSResult<Obj::OutputType> {
+    pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> RuntimeResult<Obj::OutputType> {
         let mut scanner = BufferedScanner::new(data);
         dec_full_from_scanner::<Obj>(&mut scanner)
     }
     pub fn dec_full_from_scanner<Obj: PersistObject>(
         scanner: &mut BufferedScanner,
-    ) -> SDSSResult<Obj::OutputType> {
+    ) -> RuntimeResult<Obj::OutputType> {
         Obj::default_full_dec(scanner)
     }
-    pub fn dec_full_self<Obj: PersistObject<OutputType = Obj>>(data: &[u8]) -> SDSSResult<Obj> {
+    pub fn dec_full_self<Obj: PersistObject<OutputType = Obj>>(data: &[u8]) -> RuntimeResult<Obj> {
         dec_full::<Obj>(data)
     }
     // dec
-    pub fn dec_dict_full<PM: PersistMapSpec>(data: &[u8]) -> SDSSResult<PM::MapType> {
+    pub fn dec_dict_full<PM: PersistMapSpec>(data: &[u8]) -> RuntimeResult<PM::MapType> {
         let mut scanner = BufferedScanner::new(data);
         dec_dict_full_from_scanner::<PM>(&mut scanner)
     }
     fn dec_dict_full_from_scanner<PM: PersistMapSpec>(
         scanner: &mut BufferedScanner,
-    ) -> SDSSResult<PM::MapType> {
+    ) -> RuntimeResult<PM::MapType> {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_dec(scanner)
     }
     pub mod utils {
         use crate::engine::{
+            error::{RuntimeResult, StorageError},
             mem::BufferedScanner,
-            storage::v1::{SDSSErrorKind, SDSSResult},
         };
-        pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> SDSSResult<String> {
+        pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> RuntimeResult<String> {
             String::from_utf8(s.next_chunk_variable(len).to_owned())
-                .map_err(|_| SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into())
+                .map_err(|_| StorageError::InternalDecodeStructureCorruptedPayload.into())
         }
     }
 }

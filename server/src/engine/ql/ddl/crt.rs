@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             data::DictGeneric,
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::Ident,
@@ -54,7 +54,7 @@ impl<'a> CreateSpace<'a> {
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         // smallest declaration: `create space myspace` -> >= 1 token
         if compiler::unlikely(state.remaining() < 1) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         let space_name = state.fw_read();
         state.poison_if_not(space_name.is_ident());
@@ -76,7 +76,7 @@ impl<'a> CreateSpace<'a> {
                 props: d,
             })
         } else {
-            Err(Error::QLInvalidSyntax)
+            Err(QueryError::QLInvalidSyntax)
         }
     }
 }
@@ -110,7 +110,7 @@ impl<'a> CreateModel<'a> {
 
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 10) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         // model name; ignore errors
         let mut model_uninit = MaybeInit::uninit();
@@ -147,7 +147,7 @@ impl<'a> CreateModel<'a> {
                 props,
             })
         } else {
-            Err(Error::QLInvalidSyntax)
+            Err(QueryError::QLInvalidSyntax)
         }
     }
 }

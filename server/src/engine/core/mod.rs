@@ -38,7 +38,7 @@ use {
     self::{model::Model, util::EntityLocator},
     crate::engine::{
         core::space::Space,
-        error::{Error, QueryResult},
+        error::{QueryError, QueryResult},
         fractal::GlobalInstanceLike,
         idx::{IndexST, STIndex},
     },
@@ -100,7 +100,7 @@ impl GlobalNS {
     ) -> QueryResult<T> {
         let sread = self.index_space.read();
         let Some(space) = sread.st_get(space) else {
-            return Err(Error::QPObjectNotFound);
+            return Err(QueryError::QPObjectNotFound);
         };
         f(space)
     }

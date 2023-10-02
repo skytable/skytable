@@ -28,7 +28,7 @@ use {
     crate::engine::{
         core::{model::Model, RWLIdx},
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
-        error::{Error, QueryResult},
+        error::{QueryError, QueryResult},
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
@@ -108,7 +108,7 @@ impl Space {
         {
             Ok(())
         } else {
-            Err(Error::QPDdlObjectAlreadyExists)
+            Err(QueryError::QPDdlObjectAlreadyExists)
         }
     }
     pub fn get_uuid(&self) -> Uuid {
@@ -127,7 +127,7 @@ impl Space {
     ) -> QueryResult<T> {
         let mread = self.mns.read();
         let Some(model) = mread.st_get(model) else {
-            return Err(Error::QPObjectNotFound);
+            return Err(QueryError::QPObjectNotFound);
         };
         f(model)
     }
@@ -174,7 +174,7 @@ impl Space {
             None if props.is_empty() => IndexST::default(),
             _ => {
                 // unknown properties
-                return Err(Error::QPDdlInvalidProperties);
+                return Err(QueryError::QPDdlInvalidProperties);
             }
         };
         Ok(ProcedureCreate {
@@ -200,7 +200,7 @@ impl Space {
         // acquire access
         let mut wl = global.namespace().spaces().write();
         if wl.st_contains(&space_name) {
-            return Err(Error::QPDdlObjectAlreadyExists);
+            return Err(QueryError::QPDdlObjectAlreadyExists);
         }
         // commit txn
         if G::FS_IS_NON_NULL {
@@ -240,13 +240,13 @@ impl Space {
                 Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
                 Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
                 None if updated_props.is_empty() => return Ok(()),
-                _ => return Err(Error::QPDdlInvalidProperties),
+                _ => return Err(QueryError::QPDdlInvalidProperties),
             }
             let mut space_props = space.meta.dict().write();
             // create patch
             let patch = match dict::rprepare_metadata_patch(&space_props, updated_props) {
                 Some(patch) => patch,
-                None => return Err(Error::QPDdlInvalidProperties),
+                None => return Err(QueryError::QPDdlInvalidProperties),
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -276,11 +276,11 @@ impl Space {
         let mut wgns = global.namespace().spaces().write();
         let space = match wgns.get(space_name.as_str()) {
             Some(space) => space,
-            None => return Err(Error::QPObjectNotFound),
+            None => return Err(QueryError::QPObjectNotFound),
         };
         let space_w = space.mns.write();
         if space_w.st_len() != 0 {
-            return Err(Error::QPDdlNotEmpty);
+            return Err(QueryError::QPDdlNotEmpty);
         }
         // we can remove this
         if G::FS_IS_NON_NULL {

@@ -77,7 +77,7 @@ mod plan {
     use crate::{
         engine::{
             core::model::{self, alt::AlterAction, Field, Layer},
-            error::Error,
+            error::QueryError,
         },
         vecfuse,
     };
@@ -164,7 +164,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            Error::QPUnknownField
+            QueryError::QPUnknownField
         );
     }
     #[test]
@@ -176,7 +176,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            Error::QPDdlModelAlterIllegal
+            QueryError::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -188,7 +188,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            Error::QPDdlModelAlterIllegal
+            QueryError::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -200,7 +200,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            Error::QPDdlModelAlterIllegal
+            QueryError::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -212,7 +212,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            Error::QPDdlModelAlterIllegal
+            QueryError::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -224,7 +224,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            Error::QPUnknownField
+            QueryError::QPUnknownField
         );
     }
     fn bad_type_cast(orig_ty: &str, new_ty: &str) {
@@ -235,7 +235,7 @@ mod plan {
             super::with_plan(&create, &alter, |_| {}).expect_err(&format!(
                 "found no error in transformation: {orig_ty} -> {new_ty}"
             )),
-            Error::QPDdlInvalidTypeDefinition,
+            QueryError::QPDdlInvalidTypeDefinition,
             "failed to match error in transformation: {orig_ty} -> {new_ty}",
         )
     }
@@ -353,7 +353,7 @@ mod plan {
 mod exec {
     use crate::engine::{
         core::model::{DeltaVersion, Field, Layer},
-        error::Error,
+        error::QueryError,
         fractal::test_utils::TestGlobal,
         idx::{STIndex, STIndexSeq},
     };
@@ -445,7 +445,7 @@ mod exec {
                 |_| {},
             )
             .unwrap_err(),
-            Error::QPNeedLock
+            QueryError::QPNeedLock
         );
     }
 }

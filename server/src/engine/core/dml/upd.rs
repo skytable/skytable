@@ -36,7 +36,7 @@ use {
                 lit::Lit,
                 tag::{DataTag, TagClass},
             },
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             fractal::GlobalInstanceLike,
             idx::STIndex,
             ql::dml::upd::{AssignmentExpression, UpdateStatement},
@@ -242,7 +242,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
         // fetch row
         let g = sync::atm::cpin();
         let Some(row) = mdl.primary_index().select(key, &g) else {
-            return Err(Error::QPDmlRowNotFound);
+            return Err(QueryError::QPDmlRowNotFound);
         };
         // lock row
         let mut row_data_wl = row.d_data().write();
@@ -279,7 +279,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
                 _ => {
                     input_trace("fieldnotfound");
                     rollback_now = true;
-                    ret = Err(Error::QPUnknownField);
+                    ret = Err(QueryError::QPUnknownField);
                     break;
                 }
             }
@@ -313,20 +313,20 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
                                 list.push(rhs.into());
                             } else {
                                 rollback_now = true;
-                                ret = Err(Error::SysOutOfMemory);
+                                ret = Err(QueryError::SysOutOfMemory);
                                 break;
                             }
                         }
                     } else {
                         input_trace("list;badtag");
                         rollback_now = true;
-                        ret = Err(Error::QPDmlValidationError);
+                        ret = Err(QueryError::QPDmlValidationError);
                         break;
                     }
                 }
                 _ => {
                     input_trace("unknown_reason;exitmainloop");
-                    ret = Err(Error::QPDmlValidationError);
+                    ret = Err(QueryError::QPDmlValidationError);
                     rollback_now = true;
                     break;
                 }

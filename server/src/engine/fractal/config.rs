@@ -27,7 +27,7 @@
 use crate::engine::config::ConfigAuth;
 
 use {
-    crate::engine::error::{Error, QueryResult},
+    crate::engine::error::{QueryError, QueryResult},
     parking_lot::RwLock,
     std::collections::{hash_map::Entry, HashMap},
 };
@@ -151,7 +151,7 @@ impl SysAuth {
                 ));
                 Ok(())
             }
-            Entry::Occupied(_) => Err(Error::SysAuthError),
+            Entry::Occupied(_) => Err(QueryError::SysAuthError),
         }
     }
     /// Verify the user with the given details
@@ -160,12 +160,12 @@ impl SysAuth {
             if rcrypt::verify(password, self.root_key()).unwrap() {
                 return Ok(());
             } else {
-                return Err(Error::SysAuthError);
+                return Err(QueryError::SysAuthError);
             }
         }
         match self.users.get(username) {
             Some(user) if rcrypt::verify(password, user.key()).unwrap() => Ok(()),
-            Some(_) | None => Err(Error::SysAuthError),
+            Some(_) | None => Err(QueryError::SysAuthError),
         }
     }
     pub fn root_key(&self) -> &[u8] {

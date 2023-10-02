@@ -30,17 +30,20 @@ use {
         data::uuid::Uuid,
         storage::{
             self,
-            v1::{LocalFS, RawFSInterface, SDSSResult},
+            v1::{LocalFS, RawFSInterface},
         },
         txn::gns::GNSTransactionDriverAnyFS,
     },
+    crate::engine::error::RuntimeResult,
     parking_lot::{Mutex, RwLock},
     std::{collections::HashMap, mem::MaybeUninit},
     tokio::sync::mpsc::unbounded_channel,
 };
 
 pub mod config;
+pub mod context;
 mod drivers;
+pub mod error;
 mod mgr;
 #[cfg(test)]
 pub mod test_utils;
@@ -115,7 +118,7 @@ pub trait GlobalInstanceLike {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> SDSSResult<()>;
+    ) -> RuntimeResult<()>;
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>);
@@ -167,7 +170,7 @@ impl GlobalInstanceLike for Global {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         // create dir
         LocalFS::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
             space_name, space_uuid, model_name, model_uuid,

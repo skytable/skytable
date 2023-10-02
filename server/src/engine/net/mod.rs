@@ -27,10 +27,7 @@
 mod protocol;
 
 use {
-    crate::engine::{
-        error::{RuntimeError, RuntimeResult},
-        fractal::Global,
-    },
+    crate::engine::{error::RuntimeResult, fractal::error::ErrorContext, fractal::Global},
     bytes::BytesMut,
     openssl::{
         pkey::PKey,
@@ -149,10 +146,9 @@ impl Listener {
         sig_shutdown: broadcast::Sender<()>,
     ) -> RuntimeResult<Self> {
         let (sig_inflight, sig_inflight_wait) = mpsc::channel(1);
-        let listener = RuntimeError::result_ctx(
-            TcpListener::bind(binaddr).await,
-            format!("failed to bind to port `{binaddr}`"),
-        )?;
+        let listener = TcpListener::bind(binaddr)
+            .await
+            .set_dmsg(format!("failed to bind to port `{binaddr}`"))?;
         Ok(Self {
             global,
             listener,
@@ -234,8 +230,7 @@ impl Listener {
             builder.check_private_key()?;
             Ok::<_, openssl::error::ErrorStack>(builder.build())
         };
-        let acceptor =
-            RuntimeError::result_ctx(build_acceptor(), "failed to initialize TLS socket")?;
+        let acceptor = build_acceptor().set_dmsg("failed to initialize TLS socket")?;
         loop {
             let stream = async {
                 let (stream, _) = self.accept().await?;

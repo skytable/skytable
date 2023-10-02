@@ -36,6 +36,7 @@ jobs:
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
+          rustup update
           rustup default ${{ matrix.rust }}
         if: env.BUILD == 'true'
       - name: Install perl modules

@@ -25,11 +25,11 @@
 */
 
 use {
-    super::{
-        spec::{FileSpec, Header},
-        SDSSResult,
+    super::spec::{FileSpec, Header},
+    crate::{
+        engine::{error::RuntimeResult, storage::SCrc},
+        util::os::SysIOError,
     },
-    crate::{engine::storage::SCrc, util::os::SysIOError},
     std::{
         fs::{self, File},
         io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
@@ -81,27 +81,27 @@ pub trait RawFSInterface {
     /// the file descriptor that is returned by the file system when a file is opened
     type File: RawFileInterface;
     /// Remove a file
-    fn fs_remove_file(fpath: &str) -> SDSSResult<()>;
+    fn fs_remove_file(fpath: &str) -> RuntimeResult<()>;
     /// Rename a file
-    fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()>;
+    fn fs_rename_file(from: &str, to: &str) -> RuntimeResult<()>;
     /// Create a directory
-    fn fs_create_dir(fpath: &str) -> SDSSResult<()>;
+    fn fs_create_dir(fpath: &str) -> RuntimeResult<()>;
     /// Create a directory and all corresponding path components
-    fn fs_create_dir_all(fpath: &str) -> SDSSResult<()>;
+    fn fs_create_dir_all(fpath: &str) -> RuntimeResult<()>;
     /// Delete a directory
-    fn fs_delete_dir(fpath: &str) -> SDSSResult<()>;
+    fn fs_delete_dir(fpath: &str) -> RuntimeResult<()>;
     /// Delete a directory and recursively remove all (if any) children
-    fn fs_delete_dir_all(fpath: &str) -> SDSSResult<()>;
+    fn fs_delete_dir_all(fpath: &str) -> RuntimeResult<()>;
     /// Open or create a file in R/W mode
     ///
     /// This will:
     /// - Create a file if it doesn't exist
     /// - Open a file it it does exist
-    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<FileOpen<Self::File>>;
+    fn fs_fopen_or_create_rw(fpath: &str) -> RuntimeResult<FileOpen<Self::File>>;
     /// Open an existing file
-    fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File>;
+    fn fs_fopen_rw(fpath: &str) -> RuntimeResult<Self::File>;
     /// Create a new file
-    fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File>;
+    fn fs_fcreate_rw(fpath: &str) -> RuntimeResult<Self::File>;
 }
 
 /// A file (well, probably) that can be used for RW operations along with advanced write and extended operations (such as seeking)
@@ -114,46 +114,46 @@ where
 {
     type Reader: RawFileInterfaceRead + RawFileInterfaceExt;
     type Writer: RawFileInterfaceWrite + RawFileInterfaceExt;
-    fn into_buffered_reader(self) -> SDSSResult<Self::Reader>;
-    fn into_buffered_writer(self) -> SDSSResult<Self::Writer>;
+    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader>;
+    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer>;
 }
 
 /// A file interface that supports read operations
 pub trait RawFileInterfaceRead {
-    fn fr_read_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
+    fn fr_read_exact(&mut self, buf: &mut [u8]) -> RuntimeResult<()>;
 }
 
 impl<R: Read> RawFileInterfaceRead for R {
-    fn fr_read_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
+    fn fr_read_exact(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         self.read_exact(buf).map_err(From::from)
     }
 }
 
 /// A file interface that supports write operations
 pub trait RawFileInterfaceWrite {
-    fn fw_write_all(&mut self, buf: &[u8]) -> SDSSResult<()>;
+    fn fw_write_all(&mut self, buf: &[u8]) -> RuntimeResult<()>;
 }
 
 impl<W: Write> RawFileInterfaceWrite for W {
-    fn fw_write_all(&mut self, buf: &[u8]) -> SDSSResult<()> {
+    fn fw_write_all(&mut self, buf: &[u8]) -> RuntimeResult<()> {
         self.write_all(buf).map_err(From::from)
     }
 }
 
 /// A file interface that supports advanced write operations
 pub trait RawFileInterfaceWriteExt {
-    fn fw_fsync_all(&mut self) -> SDSSResult<()>;
-    fn fw_truncate_to(&mut self, to: u64) -> SDSSResult<()>;
+    fn fw_fsync_all(&mut self) -> RuntimeResult<()>;
+    fn fw_truncate_to(&mut self, to: u64) -> RuntimeResult<()>;
 }
 
 /// A file interface that supports advanced file operations
 pub trait RawFileInterfaceExt {
-    fn fext_file_length(&self) -> SDSSResult<u64>;
-    fn fext_cursor(&mut self) -> SDSSResult<u64>;
-    fn fext_seek_ahead_from_start_by(&mut self, ahead_by: u64) -> SDSSResult<()>;
+    fn fext_file_length(&self) -> RuntimeResult<u64>;
+    fn fext_cursor(&mut self) -> RuntimeResult<u64>;
+    fn fext_seek_ahead_from_start_by(&mut self, ahead_by: u64) -> RuntimeResult<()>;
 }
 
-fn cvt<T>(v: std::io::Result<T>) -> SDSSResult<T> {
+fn cvt<T>(v: std::io::Result<T>) -> RuntimeResult<T> {
     let r = v?;
     Ok(r)
 }
@@ -164,25 +164,25 @@ pub struct LocalFS;
 
 impl RawFSInterface for LocalFS {
     type File = File;
-    fn fs_remove_file(fpath: &str) -> SDSSResult<()> {
+    fn fs_remove_file(fpath: &str) -> RuntimeResult<()> {
         cvt(fs::remove_file(fpath))
     }
-    fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()> {
+    fn fs_rename_file(from: &str, to: &str) -> RuntimeResult<()> {
         cvt(fs::rename(from, to))
     }
-    fn fs_create_dir(fpath: &str) -> SDSSResult<()> {
+    fn fs_create_dir(fpath: &str) -> RuntimeResult<()> {
         cvt(fs::create_dir(fpath))
     }
-    fn fs_create_dir_all(fpath: &str) -> SDSSResult<()> {
+    fn fs_create_dir_all(fpath: &str) -> RuntimeResult<()> {
         cvt(fs::create_dir_all(fpath))
     }
-    fn fs_delete_dir(fpath: &str) -> SDSSResult<()> {
+    fn fs_delete_dir(fpath: &str) -> RuntimeResult<()> {
         cvt(fs::remove_dir(fpath))
     }
-    fn fs_delete_dir_all(fpath: &str) -> SDSSResult<()> {
+    fn fs_delete_dir_all(fpath: &str) -> RuntimeResult<()> {
         cvt(fs::remove_dir_all(fpath))
     }
-    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<FileOpen<Self::File>> {
+    fn fs_fopen_or_create_rw(fpath: &str) -> RuntimeResult<FileOpen<Self::File>> {
         let f = File::options()
             .create(true)
             .read(true)
@@ -195,7 +195,7 @@ impl RawFSInterface for LocalFS {
             Ok(FileOpen::Existing(f))
         }
     }
-    fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File> {
+    fn fs_fcreate_rw(fpath: &str) -> RuntimeResult<Self::File> {
         let f = File::options()
             .create_new(true)
             .read(true)
@@ -203,7 +203,7 @@ impl RawFSInterface for LocalFS {
             .open(fpath)?;
         Ok(f)
     }
-    fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File> {
+    fn fs_fopen_rw(fpath: &str) -> RuntimeResult<Self::File> {
         let f = File::options().read(true).write(true).open(fpath)?;
         Ok(f)
     }
@@ -212,19 +212,19 @@ impl RawFSInterface for LocalFS {
 impl RawFileInterface for File {
     type Reader = BufReader<Self>;
     type Writer = BufWriter<Self>;
-    fn into_buffered_reader(self) -> SDSSResult<Self::Reader> {
+    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader> {
         Ok(BufReader::new(self))
     }
-    fn into_buffered_writer(self) -> SDSSResult<Self::Writer> {
+    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer> {
         Ok(BufWriter::new(self))
     }
 }
 
 impl RawFileInterfaceWriteExt for File {
-    fn fw_fsync_all(&mut self) -> SDSSResult<()> {
+    fn fw_fsync_all(&mut self) -> RuntimeResult<()> {
         cvt(self.sync_all())
     }
-    fn fw_truncate_to(&mut self, to: u64) -> SDSSResult<()> {
+    fn fw_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
         cvt(self.set_len(to))
     }
 }
@@ -262,13 +262,13 @@ impl LocalFSFile for BufWriter<File> {
 }
 
 impl<F: LocalFSFile> RawFileInterfaceExt for F {
-    fn fext_file_length(&self) -> SDSSResult<u64> {
+    fn fext_file_length(&self) -> RuntimeResult<u64> {
         Ok(self.file().metadata()?.len())
     }
-    fn fext_cursor(&mut self) -> SDSSResult<u64> {
+    fn fext_cursor(&mut self) -> RuntimeResult<u64> {
         cvt(self.file_mut().stream_position())
     }
-    fn fext_seek_ahead_from_start_by(&mut self, by: u64) -> SDSSResult<()> {
+    fn fext_seek_ahead_from_start_by(&mut self, by: u64) -> RuntimeResult<()> {
         cvt(self.file_mut().seek(SeekFrom::Start(by)).map(|_| ()))
     }
 }
@@ -282,7 +282,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedWriter<Fs> {
     pub fn new(f: SDSSFileIO<Fs>) -> Self {
         Self { f, cs: SCrc::new() }
     }
-    pub fn unfsynced_write(&mut self, block: &[u8]) -> SDSSResult<()> {
+    pub fn unfsynced_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
         match self.f.unfsynced_write(block) {
             Ok(()) => {
                 self.cs.recompute_with_new_var_block(block);
@@ -291,7 +291,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedWriter<Fs> {
             e => e,
         }
     }
-    pub fn fsync_all(&mut self) -> SDSSResult<()> {
+    pub fn fsync_all(&mut self) -> RuntimeResult<()> {
         self.f.fsync_all()
     }
     pub fn reset_and_finish_checksum(&mut self) -> u64 {
@@ -315,7 +315,7 @@ pub struct SDSSFileTrackedReader<Fs: RawFSInterface> {
 
 impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
     /// Important: this will only look at the data post the current cursor!
-    pub fn new(mut f: SDSSFileIO<Fs>) -> SDSSResult<Self> {
+    pub fn new(mut f: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
         let len = f.file_length()?;
         let pos = f.retrieve_cursor()?;
         Ok(Self {
@@ -334,7 +334,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
     pub fn has_left(&self, v: u64) -> bool {
         self.remaining() >= v
     }
-    pub fn read_into_buffer(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
+    pub fn read_into_buffer(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         if self.remaining() >= buf.len() as u64 {
             match self.f.read_to_buffer(buf) {
                 Ok(()) => {
@@ -348,7 +348,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
             Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into())
         }
     }
-    pub fn read_byte(&mut self) -> SDSSResult<u8> {
+    pub fn read_byte(&mut self) -> RuntimeResult<u8> {
         let mut buf = [0u8; 1];
         self.read_into_buffer(&mut buf).map(|_| buf[0])
     }
@@ -366,7 +366,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
     pub fn __cursor_ahead_by(&mut self, sizeof: usize) {
         self.pos += sizeof as u64;
     }
-    pub fn read_block<const N: usize>(&mut self) -> SDSSResult<[u8; N]> {
+    pub fn read_block<const N: usize>(&mut self) -> RuntimeResult<[u8; N]> {
         if !self.has_left(N as _) {
             return Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into());
         }
@@ -374,7 +374,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
         self.read_into_buffer(&mut buf)?;
         Ok(buf)
     }
-    pub fn read_u64_le(&mut self) -> SDSSResult<u64> {
+    pub fn read_u64_le(&mut self) -> RuntimeResult<u64> {
         Ok(u64::from_le_bytes(self.read_block()?))
     }
 }
@@ -386,19 +386,19 @@ pub struct SDSSFileIO<Fs: RawFSInterface> {
 }
 
 impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
-    pub fn open<F: FileSpec>(fpath: &str) -> SDSSResult<(Self, F::Header)> {
+    pub fn open<F: FileSpec>(fpath: &str) -> RuntimeResult<(Self, F::Header)> {
         let mut f = Self::_new(Fs::fs_fopen_rw(fpath)?);
         let header = F::Header::decode_verify(&mut f, F::DECODE_DATA, F::VERIFY_DATA)?;
         Ok((f, header))
     }
-    pub fn create<F: FileSpec>(fpath: &str) -> SDSSResult<Self> {
+    pub fn create<F: FileSpec>(fpath: &str) -> RuntimeResult<Self> {
         let mut f = Self::_new(Fs::fs_fcreate_rw(fpath)?);
         F::Header::encode(&mut f, F::ENCODE_DATA)?;
         Ok(f)
     }
     pub fn open_or_create_perm_rw<F: FileSpec>(
         fpath: &str,
-    ) -> SDSSResult<FileOpen<Self, (Self, F::Header)>> {
+    ) -> RuntimeResult<FileOpen<Self, (Self, F::Header)>> {
         match Fs::fs_fopen_or_create_rw(fpath)? {
             FileOpen::Created(c) => {
                 let mut f = Self::_new(c);
@@ -421,37 +421,37 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
             _fs: PhantomData,
         }
     }
-    pub fn unfsynced_write(&mut self, data: &[u8]) -> SDSSResult<()> {
+    pub fn unfsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
         self.f.fw_write_all(data)
     }
-    pub fn fsync_all(&mut self) -> SDSSResult<()> {
+    pub fn fsync_all(&mut self) -> RuntimeResult<()> {
         self.f.fw_fsync_all()?;
         Ok(())
     }
-    pub fn fsynced_write(&mut self, data: &[u8]) -> SDSSResult<()> {
+    pub fn fsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
         self.f.fw_write_all(data)?;
         self.f.fw_fsync_all()
     }
-    pub fn read_to_buffer(&mut self, buffer: &mut [u8]) -> SDSSResult<()> {
+    pub fn read_to_buffer(&mut self, buffer: &mut [u8]) -> RuntimeResult<()> {
         self.f.fr_read_exact(buffer)
     }
-    pub fn file_length(&self) -> SDSSResult<u64> {
+    pub fn file_length(&self) -> RuntimeResult<u64> {
         self.f.fext_file_length()
     }
-    pub fn seek_from_start(&mut self, by: u64) -> SDSSResult<()> {
+    pub fn seek_from_start(&mut self, by: u64) -> RuntimeResult<()> {
         self.f.fext_seek_ahead_from_start_by(by)
     }
-    pub fn trim_file_to(&mut self, to: u64) -> SDSSResult<()> {
+    pub fn trim_file_to(&mut self, to: u64) -> RuntimeResult<()> {
         self.f.fw_truncate_to(to)
     }
-    pub fn retrieve_cursor(&mut self) -> SDSSResult<u64> {
+    pub fn retrieve_cursor(&mut self) -> RuntimeResult<u64> {
         self.f.fext_cursor()
     }
-    pub fn read_byte(&mut self) -> SDSSResult<u8> {
+    pub fn read_byte(&mut self) -> RuntimeResult<u8> {
         let mut r = [0; 1];
         self.read_to_buffer(&mut r).map(|_| r[0])
     }
-    pub fn load_remaining_into_buffer(&mut self) -> SDSSResult<Vec<u8>> {
+    pub fn load_remaining_into_buffer(&mut self) -> RuntimeResult<Vec<u8>> {
         let len = self.file_length()? - self.retrieve_cursor()?;
         let mut buf = vec![0; len as usize];
         self.read_to_buffer(&mut buf)?;

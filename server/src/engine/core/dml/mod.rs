@@ -33,7 +33,7 @@ use crate::{
     engine::{
         core::model::Model,
         data::{lit::Lit, tag::DataTag},
-        error::{Error, QueryResult},
+        error::{QueryError, QueryResult},
         ql::dml::WhereClause,
     },
     util::compiler,
@@ -55,7 +55,7 @@ impl Model {
             {
                 Ok(clause.rhs())
             }
-            _ => compiler::cold_rerr(Error::QPDmlWhereHasUnindexedColumn),
+            _ => compiler::cold_rerr(QueryError::QPDmlWhereHasUnindexedColumn),
         }
     }
 }

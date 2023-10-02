@@ -38,9 +38,10 @@ use {
                 tag::{CUTag, TagUnique},
                 DictGeneric,
             },
+            error::{RuntimeResult, StorageError},
             idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
             mem::BufferedScanner,
-            storage::v1::{inf, SDSSError, SDSSErrorKind, SDSSResult},
+            storage::v1::inf,
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
@@ -70,7 +71,7 @@ where
     fn meta_enc(buf: &mut VecU8, data: Self::InputType) {
         buf.extend(data.st_len().u64_bytes_le());
     }
-    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(MapIndexSizeMD(scanner.next_u64_le() as usize))
     }
     fn obj_enc(buf: &mut VecU8, map: Self::InputType) {
@@ -87,17 +88,17 @@ where
     unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         MapIndexSizeMD(dict_size): Self::Metadata,
-    ) -> SDSSResult<Self::OutputType> {
+    ) -> RuntimeResult<Self::OutputType> {
         let mut dict = M::MapType::idx_init();
         while M::pretest_entry_metadata(scanner) & (dict.st_len() != dict_size) {
             let md = unsafe {
                 // UNSAFE(@ohsayan): +pretest
-                M::entry_md_dec(scanner).ok_or::<SDSSError>(
-                    SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into(),
+                M::entry_md_dec(scanner).ok_or::<StorageError>(
+                    StorageError::InternalDecodeStructureCorruptedPayload.into(),
                 )?
             };
             if !M::pretest_entry_data(scanner, &md) {
-                return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
+                return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
             }
             let key;
             let val;
@@ -109,9 +110,7 @@ where
                             val = _v;
                         }
                         None => {
-                            return Err(
-                                SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into()
-                            )
+                            return Err(StorageError::InternalDecodeStructureCorruptedPayload.into())
                         }
                     }
                 } else {
@@ -123,21 +122,19 @@ where
                             val = _v;
                         }
                         _ => {
-                            return Err(
-                                SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into()
-                            )
+                            return Err(StorageError::InternalDecodeStructureCorruptedPayload.into())
                         }
                     }
                 }
             }
             if !dict.st_insert(key, val) {
-                return Err(SDSSErrorKind::InternalDecodeStructureIllegalData.into());
+                return Err(StorageError::InternalDecodeStructureIllegalData.into());
             }
         }
         if dict.st_len() == dict_size {
             Ok(dict)
         } else {
-            Err(SDSSErrorKind::InternalDecodeStructureIllegalData.into())
+            Err(StorageError::InternalDecodeStructureIllegalData.into())
         }
     }
 }

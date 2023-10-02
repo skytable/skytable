@@ -30,7 +30,7 @@ mod validation {
         crate::engine::{
             core::model::{DeltaVersion, Field, Layer},
             data::tag::{DataTag, FullTag},
-            error::Error,
+            error::QueryError,
             idx::STIndexSeq,
         },
     };
@@ -89,7 +89,7 @@ mod validation {
                 "create model mymodel(primary username: string, primary contract_location: binary)"
             )
             .unwrap_err(),
-            Error::QPDdlModelBadDefinition
+            QueryError::QPDdlModelBadDefinition
         );
     }
 
@@ -97,7 +97,7 @@ mod validation {
     fn duplicate_fields() {
         assert_eq!(
             create("create model mymodel(primary username: string, username: binary)").unwrap_err(),
-            Error::QPDdlModelBadDefinition
+            QueryError::QPDdlModelBadDefinition
         );
     }
 
@@ -105,7 +105,7 @@ mod validation {
     fn illegal_props() {
         assert_eq!(
         create("create model mymodel(primary username: string, password: binary) with { lol_prop: false }").unwrap_err(),
-        Error::QPDdlModelBadDefinition
+        QueryError::QPDdlModelBadDefinition
     );
     }
 
@@ -116,12 +116,12 @@ mod validation {
             "create model mymodel(primary username_bytes: list { type: uint8 }, password: binary)"
         )
         .unwrap_err(),
-        Error::QPDdlModelBadDefinition
+        QueryError::QPDdlModelBadDefinition
     );
         assert_eq!(
             create("create model mymodel(primary username: float32, password: binary)")
                 .unwrap_err(),
-            Error::QPDdlModelBadDefinition
+            QueryError::QPDdlModelBadDefinition
         );
     }
 }

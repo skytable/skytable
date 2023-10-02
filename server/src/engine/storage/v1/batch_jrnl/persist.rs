@@ -42,11 +42,11 @@ use {
                 cell::Datacell,
                 tag::{DataTag, TagClass, TagUnique},
             },
+            error::{RuntimeResult, StorageError},
             idx::STIndexSeq,
             storage::v1::{
                 inf::PersistTypeDscr,
                 rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedWriter},
-                SDSSErrorKind, SDSSResult,
             },
         },
         util::EndianQW,
@@ -59,7 +59,7 @@ pub struct DataBatchPersistDriver<Fs: RawFSInterface> {
 }
 
 impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
-    pub fn new(mut file: SDSSFileIO<Fs>, is_new: bool) -> SDSSResult<Self> {
+    pub fn new(mut file: SDSSFileIO<Fs>, is_new: bool) -> RuntimeResult<Self> {
         if !is_new {
             file.fsynced_write(&[MARKER_BATCH_REOPEN])?;
         }
@@ -67,7 +67,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
             f: SDSSFileTrackedWriter::new(file),
         })
     }
-    pub fn close(mut self) -> SDSSResult<()> {
+    pub fn close(mut self) -> RuntimeResult<()> {
         if self
             .f
             .inner_file()
@@ -76,10 +76,10 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         {
             return Ok(());
         } else {
-            return Err(SDSSErrorKind::DataBatchCloseError.into());
+            return Err(StorageError::DataBatchCloseError.into());
         }
     }
-    pub fn write_new_batch(&mut self, model: &Model, observed_len: usize) -> SDSSResult<()> {
+    pub fn write_new_batch(&mut self, model: &Model, observed_len: usize) -> RuntimeResult<()> {
         // pin model
         let irm = model.intent_read_model();
         let schema_version = model.delta_state().schema_current_version();
@@ -89,7 +89,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         // prepare computations
         let mut i = 0;
         let mut inconsistent_reads = 0;
-        let mut exec = || -> SDSSResult<()> {
+        let mut exec = || -> RuntimeResult<()> {
             // write batch start
             self.write_batch_start(
                 observed_len,
@@ -154,7 +154,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         schema_version: DeltaVersion,
         pk_tag: TagUnique,
         col_cnt: usize,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         self.f
             .unfsynced_write(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.value_u8()])?;
         let observed_len_bytes = observed_len.u64_bytes_le();
@@ -169,7 +169,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         &mut self,
         observed_len: usize,
         inconsistent_reads: usize,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         // [0xFD][actual_commit][checksum]
         self.f.unfsynced_write(&[MARKER_END_OF_BATCH])?;
         let actual_commit = (observed_len - inconsistent_reads).u64_bytes_le();
@@ -180,7 +180,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     }
     /// Attempt to fix the batch journal
     // TODO(@ohsayan): declare an "international system disaster" when this happens
-    fn attempt_fix_data_batchfile(&mut self) -> SDSSResult<()> {
+    fn attempt_fix_data_batchfile(&mut self) -> RuntimeResult<()> {
         /*
             attempt to append 0xFF to the part of the file where a corruption likely occurred, marking
             it recoverable
@@ -189,13 +189,13 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         if f.fsynced_write(&[MARKER_RECOVERY_EVENT]).is_ok() {
             return Ok(());
         }
-        Err(SDSSErrorKind::DataBatchRecoveryFailStageOne.into())
+        Err(StorageError::DataBatchRecoveryFailStageOne.into())
     }
 }
 
 impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     /// encode the primary key only. this means NO TAG is encoded.
-    fn encode_pk_only(&mut self, pk: &PrimaryIndexKey) -> SDSSResult<()> {
+    fn encode_pk_only(&mut self, pk: &PrimaryIndexKey) -> RuntimeResult<()> {
         let buf = &mut self.f;
         match pk.tag() {
             TagUnique::UnsignedInt | TagUnique::SignedInt => {
@@ -223,7 +223,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         Ok(())
     }
     /// Encode a single cell
-    fn encode_cell(&mut self, value: &Datacell) -> SDSSResult<()> {
+    fn encode_cell(&mut self, value: &Datacell) -> RuntimeResult<()> {
         let ref mut buf = self.f;
         buf.unfsynced_write(&[
             PersistTypeDscr::translate_from_class(value.tag().tag_class()).value_u8(),
@@ -275,7 +275,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         mdl: &Model,
         irm: &IRModel,
         row_data: &RowData,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         for field_name in irm.fields().stseq_ord_key() {
             match row_data.fields().get(field_name) {
                 Some(cell) => {
@@ -288,7 +288,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         Ok(())
     }
     /// Write the change type and txnid
-    fn write_batch_item_common_row_data(&mut self, delta: &DataDelta) -> SDSSResult<()> {
+    fn write_batch_item_common_row_data(&mut self, delta: &DataDelta) -> RuntimeResult<()> {
         let change_type = [delta.change().value_u8()];
         self.f.unfsynced_write(&change_type)?;
         let txn_id = delta.data_version().value_u64().to_le_bytes();

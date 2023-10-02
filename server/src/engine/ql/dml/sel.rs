@@ -28,7 +28,7 @@ use {
     super::{WhereClause, WhereClauseCollection},
     crate::{
         engine::{
-            error::{Error, QueryResult},
+            error::{QueryError, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
@@ -104,7 +104,7 @@ impl<'a> SelectStatement<'a> {
                    1 2    3
         */
         if compiler::unlikely(state.remaining() < 3) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         let mut select_fields = Vec::new();
         let is_wildcard = state.cursor_eq(Token![*]);
@@ -123,7 +123,7 @@ impl<'a> SelectStatement<'a> {
         state.poison_if_not(is_wildcard | !select_fields.is_empty());
         // we should have from + model
         if compiler::unlikely(state.remaining() < 2 || !state.okay()) {
-            return compiler::cold_rerr(Error::QLInvalidSyntax);
+            return compiler::cold_rerr(QueryError::QLInvalidSyntax);
         }
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors
@@ -146,7 +146,7 @@ impl<'a> SelectStatement<'a> {
                 clause: WhereClause::new(clauses),
             })
         } else {
-            compiler::cold_rerr(Error::QLInvalidSyntax)
+            compiler::cold_rerr(QueryError::QLInvalidSyntax)
         }
     }
 }

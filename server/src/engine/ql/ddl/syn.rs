@@ -50,7 +50,7 @@ use crate::{
             cell::Datacell,
             dict::{DictEntryGeneric, DictGeneric},
         },
-        error::{Error, QueryResult},
+        error::{QueryError, QueryResult},
         ql::{
             ast::{QueryData, State},
             lex::{Ident, Token},
@@ -369,7 +369,7 @@ impl<'a> FieldSpec<'a> {
     pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 2) {
             // smallest field: `ident: type`
-            return Err(Error::QLUnexpectedEndOfStatement);
+            return Err(QueryError::QLUnexpectedEndOfStatement);
         }
         // check if primary or null
         let is_primary = state.cursor_eq(Token![primary]);
@@ -381,7 +381,7 @@ impl<'a> FieldSpec<'a> {
         // field name
         let field_name = match (state.fw_read(), state.fw_read()) {
             (Token::Ident(id), Token![:]) => id,
-            _ => return Err(Error::QLInvalidSyntax),
+            _ => return Err(QueryError::QLInvalidSyntax),
         };
         // layers
         let mut layers = Vec::new();
@@ -394,7 +394,7 @@ impl<'a> FieldSpec<'a> {
                 primary: is_primary,
             })
         } else {
-            Err(Error::QLInvalidTypeDefinitionSyntax)
+            Err(QueryError::QLInvalidTypeDefinitionSyntax)
         }
     }
 }
@@ -420,7 +420,7 @@ impl<'a> ExpandedField<'a> {
     pub(super) fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 6) {
             // smallest: fieldname { type: ident }
-            return Err(Error::QLUnexpectedEndOfStatement);
+            return Err(QueryError::QLUnexpectedEndOfStatement);
         }
         let field_name = state.fw_read();
         state.poison_if_not(field_name.is_ident());
@@ -433,7 +433,7 @@ impl<'a> ExpandedField<'a> {
             // this has layers. fold them; but don't forget the colon
             if compiler::unlikely(state.exhausted()) {
                 // we need more tokens
-                return Err(Error::QLUnexpectedEndOfStatement);
+                return Err(QueryError::QLUnexpectedEndOfStatement);
             }
             state.poison_if_not(state.cursor_eq(Token![:]));
             state.cursor_ahead();
@@ -460,7 +460,7 @@ impl<'a> ExpandedField<'a> {
                 layers,
             })
         } else {
-            Err(Error::QLInvalidSyntax)
+            Err(QueryError::QLInvalidSyntax)
         }
     }
     #[inline(always)]
@@ -478,7 +478,7 @@ impl<'a> ExpandedField<'a> {
             alter model add myfield { type string }
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         match state.read() {
             Token::Ident(_) => {
@@ -510,10 +510,10 @@ impl<'a> ExpandedField<'a> {
                 if state.okay() {
                     Ok(cols.into_boxed_slice())
                 } else {
-                    Err(Error::QLInvalidSyntax)
+                    Err(QueryError::QLInvalidSyntax)
                 }
             }
-            _ => Err(Error::QPExpectedStatement),
+            _ => Err(QueryError::QPExpectedStatement),
         }
     }
 }

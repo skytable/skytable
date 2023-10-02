@@ -26,14 +26,18 @@
 
 use {
     crate::{
-        engine::storage::v1::{
-            journal::{self, JournalAdapter, JournalWriter},
-            spec, SDSSError, SDSSErrorKind, SDSSResult,
+        engine::{
+            error::{RuntimeResult, StorageError},
+            storage::v1::{
+                journal::{self, JournalAdapter, JournalWriter},
+                spec,
+            },
         },
         util,
     },
     std::cell::RefCell,
 };
+
 pub struct Database {
     data: RefCell<[u8; 10]>,
 }
@@ -52,7 +56,7 @@ impl Database {
     fn txn_reset(
         &self,
         txn_writer: &mut JournalWriter<super::VirtualFS, DatabaseTxnAdapter>,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         self.reset();
         txn_writer.append_event(TxEvent::Reset)
     }
@@ -64,7 +68,7 @@ impl Database {
         pos: usize,
         val: u8,
         txn_writer: &mut JournalWriter<super::VirtualFS, DatabaseTxnAdapter>,
-    ) -> SDSSResult<()> {
+    ) -> RuntimeResult<()> {
         self.set(pos, val);
         txn_writer.append_event(TxEvent::Set(pos, val))
     }
@@ -75,11 +79,11 @@ pub enum TxEvent {
 }
 #[derive(Debug)]
 pub enum TxError {
-    SDSS(SDSSError),
+    SDSS(StorageError),
 }
 direct_from! {
     TxError => {
-        SDSSError as SDSS
+        StorageError as SDSS
     }
 }
 #[derive(Debug)]
@@ -114,22 +118,14 @@ impl JournalAdapter for DatabaseTxnAdapter {
     }
 
     fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> Result<(), TxError> {
-        if payload.len() != 10 {
-            return Err(TxError::SDSS(
-                SDSSErrorKind::CorruptedFile("testtxn.log").into(),
-            ));
-        }
+        assert!(payload.len() >= 10, "corrupt file");
         let opcode = payload[0];
         let index = u64::from_le_bytes(util::copy_slice_to_array(&payload[1..9]));
         let new_value = payload[9];
         match opcode {
             0 if index == 0 && new_value == 0 => gs.reset(),
             1 if index < 10 && index < isize::MAX as u64 => gs.set(index as usize, new_value),
-            _ => {
-                return Err(TxError::SDSS(
-                    SDSSErrorKind::JournalLogEntryCorrupted.into(),
-                ))
-            }
+            _ => return Err(TxError::SDSS(StorageError::JournalLogEntryCorrupted.into())),
         }
         Ok(())
     }
@@ -138,7 +134,7 @@ impl JournalAdapter for DatabaseTxnAdapter {
 fn open_log(
     log_name: &str,
     db: &Database,
-) -> SDSSResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
+) -> RuntimeResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
     journal::open_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(log_name, db)
         .map(|v| v.into_inner())
 }
@@ -147,7 +143,7 @@ fn open_log(
 fn first_boot_second_readonly() {
     // create log
     let db1 = Database::new();
-    let x = || -> SDSSResult<()> {
+    let x = || -> RuntimeResult<()> {
         let mut log = open_log("testtxn.log", &db1)?;
         db1.txn_set(0, 20, &mut log)?;
         db1.txn_set(9, 21, &mut log)?;
@@ -168,7 +164,7 @@ fn first_boot_second_readonly() {
 fn oneboot_mod_twoboot_mod_thirdboot_read() {
     // first boot: set all to 1
     let db1 = Database::new();
-    let x = || -> SDSSResult<()> {
+    let x = || -> RuntimeResult<()> {
         let mut log = open_log("duatxn.db-tlog", &db1)?;
         for i in 0..10 {
             db1.txn_set(i, 1, &mut log)?;
@@ -180,7 +176,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
     drop(db1);
     // second boot
     let db2 = Database::new();
-    let x = || -> SDSSResult<()> {
+    let x = || -> RuntimeResult<()> {
         let mut log = open_log("duatxn.db-tlog", &db2)?;
         assert_eq!(bkp_db1, db2.copy_data());
         for i in 0..10 {

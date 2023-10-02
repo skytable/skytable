@@ -30,7 +30,7 @@ use crate::engine::{
         space::{Space, SpaceMeta},
     },
     data::{cell::Datacell, tag::TagSelector, uuid::Uuid, DictEntryGeneric},
-    error::Error,
+    error::QueryError,
     fractal::{test_utils::TestGlobal, GlobalInstanceLike},
     idx::STIndex,
     ql::{
@@ -318,7 +318,7 @@ fn drop_model() {
                     .namespace()
                     .with_model(("myspace", "mymodel"), |_| { Ok(()) })
                     .unwrap_err(),
-                Error::QPObjectNotFound
+                QueryError::QPObjectNotFound
             );
         })
     })

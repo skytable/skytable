@@ -26,7 +26,7 @@
 
 use crate::engine::{
     core::{self, model::delta::DataDeltaKind},
-    error::{Error, QueryResult},
+    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::MTIndex,
     ql::dml::del::DeleteStatement,
@@ -55,7 +55,7 @@ pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> 
                 );
                 Ok(())
             }
-            None => Err(Error::QPDmlRowNotFound),
+            None => Err(QueryError::QPDmlRowNotFound),
         }
     })
 }

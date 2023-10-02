@@ -42,7 +42,7 @@ fn layerview(layer_def: &str) -> QueryResult<Field> {
 mod layer_spec_validation {
     use {
         super::layerview,
-        crate::engine::{core::model::Layer, error::Error},
+        crate::engine::{core::model::Layer, error::QueryError},
     };
 
     #[test]
@@ -64,7 +64,7 @@ mod layer_spec_validation {
     fn invalid_list() {
         assert_eq!(
             layerview("list").unwrap_err(),
-            Error::QPDdlInvalidTypeDefinition
+            QueryError::QPDdlInvalidTypeDefinition
         );
     }
 
@@ -72,7 +72,7 @@ mod layer_spec_validation {
     fn invalid_flat() {
         assert_eq!(
             layerview("string { type: string }").unwrap_err(),
-            Error::QPDdlInvalidTypeDefinition
+            QueryError::QPDdlInvalidTypeDefinition
         );
     }
 }
