@@ -24,8 +24,6 @@
  *
 */
 
-#[cfg(test)]
-use super::WhereClauseCollection;
 use {
     super::{u, WhereClause},
     crate::{
@@ -138,9 +136,6 @@ impl<'a> UpdateStatement<'a> {
     pub fn expressions(&self) -> &[AssignmentExpression<'a>] {
         &self.expressions
     }
-    pub fn clauses(&self) -> &WhereClause<'a> {
-        &self.wc
-    }
     pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
         &mut self.wc
     }
@@ -152,14 +147,6 @@ impl<'a> UpdateStatement<'a> {
 impl<'a> UpdateStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
-    pub fn new_test(
-        entity: Entity<'a>,
-        expressions: Vec<AssignmentExpression<'a>>,
-        wc: WhereClauseCollection<'a>,
-    ) -> Self {
-        Self::new(entity, expressions, WhereClause::new(wc))
-    }
-    #[inline(always)]
     pub fn new(
         entity: Entity<'a>,
         expressions: Vec<AssignmentExpression<'a>>,

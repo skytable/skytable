@@ -32,6 +32,7 @@ pub type QueryResult<T> = Result<T, QueryError>;
 /// an enumeration of 'flat' errors that the server actually responds to the client with, since we do not want to send specific information
 /// about anything (as that will be a security hole). The variants correspond with their actual response codes
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u8)]
 pub enum QueryError {
     /// I/O error
     SysServerError,
@@ -39,8 +40,6 @@ pub enum QueryError {
     SysOutOfMemory,
     /// unknown server error
     SysUnknownError,
-    /// invalid protocol packet
-    NetProtocolIllegalPacket,
     /// something like an integer that randomly has a character to attached to it like `1234q`
     LexInvalidLiteral,
     /// something like an invalid 'string" or a safe string with a bad length etc
@@ -51,14 +50,10 @@ pub enum QueryError {
     QLUnexpectedEndOfStatement,
     /// incorrect syntax for "something"
     QLInvalidSyntax,
-    /// expected a statement keyword found something else
-    QLExpectedStatement,
     /// invalid collection definition definition
     QLInvalidCollectionSyntax,
     /// invalid type definition syntax
     QLInvalidTypeDefinitionSyntax,
-    /// invalid relational expression
-    QLIllegalRelExp,
     /// expected a full entity definition
     QPExpectedEntity,
     /// expected a statement, found something else
@@ -93,8 +88,6 @@ pub enum QueryError {
     QPDmlRowNotFound,
     /// transactional error
     TransactionalError,
-    /// storage subsystem error
-    StorageSubsystemError,
     SysAuthError,
 }
 
@@ -176,8 +169,6 @@ enumerate_err! {
         OnRestoreDataMissing = "txn-payload-conflict-missing",
         /// On restore, a certain item that was expected to match a certain value, has a different value
         OnRestoreDataConflictMismatch = "txn-payload-conflict-mismatch",
-        /// out of memory
-        OutOfMemory = "txn-error-oom",
     }
 }
 
@@ -192,8 +183,6 @@ enumerate_err! {
         HeaderDecodeCorruptedHeader = "header-corrupted",
         /// Expected header values were not matched with the current header
         HeaderDecodeDataMismatch = "header-data-mismatch",
-        /// The time in the [header/dynrec/rtsig] is in the future
-        HeaderTimeConflict = "header-invalid-time",
         // journal
         /// While attempting to handle a basic failure (such as adding a journal entry), the recovery engine ran into an exceptional
         /// situation where it failed to make a necessary repair the log
@@ -202,8 +191,6 @@ enumerate_err! {
         JournalLogEntryCorrupted = "journal-entry-corrupted",
         /// The structure of the journal is corrupted
         JournalCorrupted = "journal-corrupted",
-        /// when restoring the journal, a transactional error (i.e constraint violation) occurred
-        JournalRestoreTxnError = "journal-illegal-data",
         // internal file structures
         /// While attempting to decode a structure in an internal segment of a file, the storage engine ran into a possibly irrecoverable error
         InternalDecodeStructureCorrupted = "structure-decode-corrupted",

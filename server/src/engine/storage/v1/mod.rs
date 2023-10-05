@@ -30,7 +30,7 @@ mod journal;
 pub(in crate::engine) mod loader;
 mod rw;
 pub mod spec;
-mod sysdb;
+pub mod sysdb;
 // hl
 pub mod inf;
 // test
@@ -40,7 +40,7 @@ mod tests;
 
 // re-exports
 pub use {
-    journal::{open_journal, JournalAdapter, JournalWriter},
+    journal::{JournalAdapter, JournalWriter},
     memfs::NullFS,
     rw::{LocalFS, RawFSInterface, SDSSFileIO},
 };

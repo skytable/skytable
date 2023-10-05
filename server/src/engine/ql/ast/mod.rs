@@ -57,6 +57,7 @@ pub struct State<'a, Qd> {
     f: bool,
 }
 
+#[cfg(test)]
 impl<'a> State<'a, InplaceData> {
     pub const fn new_inplace(tok: &'a [Token<'a>]) -> Self {
         Self::new(tok, InplaceData::new())
@@ -186,11 +187,6 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         self.t[self.i] == token
     }
     #[inline(always)]
-    /// Read ahead from the cursor by the given positions
-    pub(crate) fn read_ahead(&self, ahead: usize) -> &'a Token<'a> {
-        &self.t[self.i + ahead]
-    }
-    #[inline(always)]
     /// Move the cursor back by 1
     pub(crate) fn cursor_back(&mut self) {
         self.cursor_back_by(1);
@@ -246,16 +242,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         self.not_exhausted() && self.okay()
     }
     #[inline(always)]
-    /// Loop condition for tt and non-poisoned state only
-    pub fn loop_data_tt(&self) -> bool {
-        self.not_exhausted() && self.okay() && self.d.nonzero()
-    }
-    #[inline(always)]
-    /// Returns the number of consumed tokens
-    pub(crate) fn consumed(&self) -> usize {
-        self.t.len() - self.remaining()
-    }
-    #[inline(always)]
+    #[cfg(test)]
     /// Returns the position of the cursor
     pub(crate) fn cursor(&self) -> usize {
         self.i
@@ -338,12 +325,7 @@ pub enum Entity<'a> {
 }
 
 impl<'a> Entity<'a> {
-    pub fn any_single(self) -> Ident<'a> {
-        match self {
-            Self::Full(_, e) => e,
-            Self::Single(e) => e,
-        }
-    }
+    #[cfg(test)]
     pub fn into_full(self) -> Option<(Ident<'a>, Ident<'a>)> {
         if let Self::Full(a, b) = self {
             Some((a, b))
@@ -354,20 +336,6 @@ impl<'a> Entity<'a> {
     pub fn into_full_str(self) -> Option<(&'a str, &'a str)> {
         if let Self::Full(a, b) = self {
             Some((a.as_str(), b.as_str()))
-        } else {
-            None
-        }
-    }
-    pub fn into_single(self) -> Option<Ident<'a>> {
-        if let Self::Single(a) = self {
-            Some(a)
-        } else {
-            None
-        }
-    }
-    pub fn into_single_str(self) -> Option<&'a str> {
-        if let Self::Single(a) = self {
-            Some(a.as_str())
         } else {
             None
         }
@@ -393,6 +361,7 @@ impl<'a> Entity<'a> {
         Entity::Single(sl[0].uck_read_ident())
     }
     #[inline(always)]
+    #[cfg(test)]
     /// Returns true if the given token stream matches the signature of single entity syntax
     ///
     /// ⚠ WARNING: This will pass for full and single
@@ -400,11 +369,13 @@ impl<'a> Entity<'a> {
         !tok.is_empty() && tok[0].is_ident()
     }
     #[inline(always)]
+    #[cfg(test)]
     /// Returns true if the given token stream matches the signature of full entity syntax
     pub(super) fn signature_matches_full_len_checked(tok: &[Token]) -> bool {
         tok.len() > 2 && tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident()
     }
     #[inline(always)]
+    #[cfg(test)]
     /// Attempt to parse an entity using the given token stream. It also accepts a counter
     /// argument to forward the cursor
     pub fn parse_from_tokens_len_checked(tok: &'a [Token], c: &mut usize) -> QueryResult<Self> {
@@ -521,11 +492,6 @@ pub enum Statement<'a> {
     Update(dml::upd::UpdateStatement<'a>),
     /// DML delete
     Delete(dml::del::DeleteStatement<'a>),
-}
-
-#[cfg(test)]
-pub fn compile_test<'a>(tok: &'a [Token<'a>]) -> QueryResult<Statement<'a>> {
-    self::compile(tok, InplaceData::new())
 }
 
 #[inline(always)]

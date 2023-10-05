@@ -37,6 +37,7 @@ use crate::engine::{
     sync::atm::cpin,
 };
 
+#[allow(unused)]
 pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, insert.entity(), |mdl| {
         let irmwd = mdl.intent_write_new_data();

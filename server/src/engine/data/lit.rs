@@ -80,6 +80,7 @@ impl<'a> Lit<'a> {
     }
 }
 
+#[allow(unused)]
 impl<'a> Lit<'a> {
     /// Attempt to read a bool
     pub fn try_bool(&self) -> Option<bool> {
@@ -130,6 +131,7 @@ impl<'a> Lit<'a> {
     }
 }
 
+#[allow(unused)]
 impl<'a> Lit<'a> {
     /// Attempt to read a binary value
     pub fn try_bin(&self) -> Option<&'a [u8]> {
@@ -399,6 +401,16 @@ fn token_array_lt_test() {
         primary_key: tokens[0].as_ir(),
         shorthand: tokens[1].as_ir(),
     };
+    {
+        {
+            let SelectStatement {
+                primary_key,
+                shorthand,
+            } = &select_stmt;
+            let _ = primary_key.as_ir();
+            let _ = shorthand.as_ir();
+        }
+    }
     drop(select_stmt);
     drop(tokens);
 }

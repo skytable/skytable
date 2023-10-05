@@ -27,15 +27,10 @@
 #[macro_use]
 mod macros;
 pub mod compiler;
-pub mod error;
 pub mod os;
 #[cfg(test)]
 pub mod test_utils;
 use {
-    crate::{
-        actions::{ActionError, ActionResult},
-        protocol::interface::ProtocolSpec,
-    },
     core::{
         fmt::{self, Debug},
         marker::PhantomData,
@@ -88,20 +83,6 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
             Some(t) => t,
             None => impossible!(),
         }
-    }
-}
-
-pub trait UnwrapActionError<T> {
-    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T>;
-    fn unwrap_or_aerr<P: ProtocolSpec>(self) -> ActionResult<T>;
-}
-
-impl<T> UnwrapActionError<T> for Option<T> {
-    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T> {
-        self.ok_or_else(|| e.into())
-    }
-    fn unwrap_or_aerr<P: ProtocolSpec>(self) -> ActionResult<T> {
-        self.ok_or_else(|| P::RCODE_ACTION_ERR.into())
     }
 }
 

@@ -92,18 +92,14 @@ impl CHTRuntimeLog {
         fn hsplit(self: &Self) {
             self.data.split.fetch_add(1, ORD_ACQ);
         } else {
-            void!()
+            ()
         }
         fn hlnode(self: &Self) {
             self.data.hln.fetch_add(1, ORD_ACQ);
         } else {
-            void!()
+            ()
         }
-        fn repsplit(self: &Self) -> usize {
-            self.data.split.load(ORD_RLX)
-        } else {
-            0
-        }
+        #[cfg(test)]
         fn replnode(self: &Self) -> usize {
             self.data.hln.load(ORD_RLX)
         } else {
@@ -195,12 +191,9 @@ impl<T, C: Config> RawTree<T, C> {
         self.l.load(ORD_RLX)
     }
     #[inline(always)]
+    #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-    #[inline(always)]
-    pub const fn with_state(h: C::HState) -> Self {
-        Self::_new(h)
     }
 }
 
@@ -230,6 +223,7 @@ impl<T: TreeElement, C: Config> RawTree<T, C> {
     fn iter_key<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKey<'t, 'g, 'v, T, C> {
         IterKey::new(self, g)
     }
+    #[allow(unused)]
     fn iter_val<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterVal<'t, 'g, 'v, T, C> {
         IterVal::new(self, g)
     }
@@ -584,10 +578,6 @@ impl<T: TreeElement, C: Config> RawTree<T, C> {
 
 // low-level methods
 impl<T, C: Config> RawTree<T, C> {
-    // hilarious enough but true, l doesn't affect safety but only creates an incorrect state
-    fn decr_len(&self) {
-        self.decr_len_by(1)
-    }
     fn decr_len_by(&self, by: usize) {
         self.l.fetch_sub(by, ORD_RLX);
     }

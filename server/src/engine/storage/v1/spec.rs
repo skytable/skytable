@@ -37,10 +37,7 @@ use {
     crate::{
         engine::{
             error::{RuntimeResult, StorageError},
-            storage::{
-                header::{HostArch, HostEndian, HostOS, HostPointerWidth},
-                versions::{self, DriverVersion, HeaderVersion, ServerVersion},
-            },
+            storage::versions::{self, DriverVersion, HeaderVersion, ServerVersion},
         },
         util::os,
     },
@@ -54,6 +51,133 @@ use {
     meta
 */
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+/// Host architecture enumeration for common platforms
+pub enum HostArch {
+    X86 = 0,
+    X86_64 = 1,
+    ARM = 2,
+    ARM64 = 3,
+    MIPS = 4,
+    PowerPC = 5,
+}
+
+impl HostArch {
+    pub const fn new() -> Self {
+        if cfg!(target_arch = "x86") {
+            HostArch::X86
+        } else if cfg!(target_arch = "x86_64") {
+            HostArch::X86_64
+        } else if cfg!(target_arch = "arm") {
+            HostArch::ARM
+        } else if cfg!(target_arch = "aarch64") {
+            HostArch::ARM64
+        } else if cfg!(target_arch = "mips") {
+            HostArch::MIPS
+        } else if cfg!(target_arch = "powerpc") {
+            HostArch::PowerPC
+        } else {
+            panic!("Unsupported target architecture")
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+/// Host OS enumeration for common operating systems
+pub enum HostOS {
+    // T1
+    Linux = 0,
+    Windows = 1,
+    MacOS = 2,
+    // T2
+    Android = 3,
+    AppleiOS = 4,
+    FreeBSD = 5,
+    OpenBSD = 6,
+    NetBSD = 7,
+    WASI = 8,
+    Emscripten = 9,
+    // T3
+    Solaris = 10,
+    Fuchsia = 11,
+    Redox = 12,
+    DragonFly = 13,
+}
+
+impl HostOS {
+    pub const fn new() -> Self {
+        if cfg!(target_os = "linux") {
+            HostOS::Linux
+        } else if cfg!(target_os = "windows") {
+            HostOS::Windows
+        } else if cfg!(target_os = "macos") {
+            HostOS::MacOS
+        } else if cfg!(target_os = "android") {
+            HostOS::Android
+        } else if cfg!(target_os = "ios") {
+            HostOS::AppleiOS
+        } else if cfg!(target_os = "freebsd") {
+            HostOS::FreeBSD
+        } else if cfg!(target_os = "openbsd") {
+            HostOS::OpenBSD
+        } else if cfg!(target_os = "netbsd") {
+            HostOS::NetBSD
+        } else if cfg!(target_os = "dragonfly") {
+            HostOS::DragonFly
+        } else if cfg!(target_os = "redox") {
+            HostOS::Redox
+        } else if cfg!(target_os = "fuchsia") {
+            HostOS::Fuchsia
+        } else if cfg!(target_os = "solaris") {
+            HostOS::Solaris
+        } else if cfg!(target_os = "emscripten") {
+            HostOS::Emscripten
+        } else if cfg!(target_os = "wasi") {
+            HostOS::WASI
+        } else {
+            panic!("unknown os")
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+/// Host endian enumeration
+pub enum HostEndian {
+    Big = 0,
+    Little = 1,
+}
+
+impl HostEndian {
+    pub const fn new() -> Self {
+        if cfg!(target_endian = "little") {
+            Self::Little
+        } else {
+            Self::Big
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[repr(u8)]
+/// Host pointer width enumeration
+pub enum HostPointerWidth {
+    P32 = 0,
+    P64 = 1,
+}
+
+impl HostPointerWidth {
+    pub const fn new() -> Self {
+        match sizeof!(usize) {
+            4 => Self::P32,
+            8 => Self::P64,
+            _ => panic!("unknown pointer width"),
+        }
+    }
+}
+
 /// The file scope
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
@@ -61,23 +185,6 @@ pub enum FileScope {
     Journal = 0,
     DataBatch = 1,
     FlatmapData = 2,
-}
-
-impl FileScope {
-    pub const fn try_new(id: u64) -> Option<Self> {
-        Some(match id {
-            0 => Self::Journal,
-            1 => Self::DataBatch,
-            2 => Self::FlatmapData,
-            _ => return None,
-        })
-    }
-    pub const fn new(id: u64) -> Self {
-        match Self::try_new(id) {
-            Some(v) => v,
-            None => panic!("unknown filescope"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
@@ -88,25 +195,6 @@ pub enum FileSpecifier {
     SysDB = 2,
     #[cfg(test)]
     TestTransactionLog = 0xFF,
-}
-
-impl FileSpecifier {
-    pub const fn try_new(v: u32) -> Option<Self> {
-        Some(match v {
-            0 => Self::GNSTxnLog,
-            1 => Self::TableDataBatch,
-            2 => Self::SysDB,
-            #[cfg(test)]
-            0xFF => Self::TestTransactionLog,
-            _ => return None,
-        })
-    }
-    pub const fn new(v: u32) -> Self {
-        match Self::try_new(v) {
-            Some(v) => v,
-            _ => panic!("unknown filespecifier"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -450,6 +538,7 @@ impl SDSSStaticHeaderV1Compact {
     }
 }
 
+#[allow(unused)]
 impl SDSSStaticHeaderV1Compact {
     pub fn header_version(&self) -> HeaderVersion {
         self.magic_header_version

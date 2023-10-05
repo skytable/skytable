@@ -53,13 +53,6 @@ impl Database {
     fn reset(&self) {
         *self.data.borrow_mut() = [0; 10];
     }
-    fn txn_reset(
-        &self,
-        txn_writer: &mut JournalWriter<super::VirtualFS, DatabaseTxnAdapter>,
-    ) -> RuntimeResult<()> {
-        self.reset();
-        txn_writer.append_event(TxEvent::Reset)
-    }
     fn set(&self, pos: usize, val: u8) {
         self.data.borrow_mut()[pos] = val;
     }
@@ -73,7 +66,9 @@ impl Database {
         txn_writer.append_event(TxEvent::Set(pos, val))
     }
 }
+
 pub enum TxEvent {
+    #[allow(unused)]
     Reset,
     Set(usize, u8),
 }
@@ -135,7 +130,7 @@ fn open_log(
     log_name: &str,
     db: &Database,
 ) -> RuntimeResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
-    journal::open_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(log_name, db)
+    journal::open_or_create_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(log_name, db)
         .map(|v| v.into_inner())
 }
 

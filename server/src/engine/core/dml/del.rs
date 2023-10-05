@@ -33,6 +33,7 @@ use crate::engine::{
     sync,
 };
 
+#[allow(unused)]
 pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, delete.entity(), |model| {
         let g = sync::atm::cpin();

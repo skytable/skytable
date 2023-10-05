@@ -67,16 +67,9 @@ impl SpaceMeta {
     pub fn dict(&self) -> &RwLock<DictGeneric> {
         &self.props
     }
+    #[cfg(test)]
     pub fn get_env<'a>(rwl: &'a parking_lot::RwLockReadGuard<'a, DictGeneric>) -> &'a DictGeneric {
         match rwl.get(Self::KEY_ENV).unwrap() {
-            DictEntryGeneric::Data(_) => unreachable!(),
-            DictEntryGeneric::Map(m) => m,
-        }
-    }
-    pub fn get_env_mut<'a>(
-        rwl: &'a mut parking_lot::RwLockWriteGuard<'a, DictGeneric>,
-    ) -> &'a mut DictGeneric {
-        match rwl.get_mut(Self::KEY_ENV).unwrap() {
             DictEntryGeneric::Data(_) => unreachable!(),
             DictEntryGeneric::Map(m) => m,
         }
@@ -89,14 +82,6 @@ impl SpaceMeta {
 struct ProcedureCreate {
     space_name: Box<str>,
     space: Space,
-}
-
-impl ProcedureCreate {
-    #[inline(always)]
-    /// Define the procedure
-    fn new(space_name: Box<str>, space: Space) -> Self {
-        Self { space_name, space }
-    }
 }
 
 impl Space {
@@ -137,9 +122,11 @@ impl Space {
 }
 
 impl Space {
+    #[cfg(test)]
     pub fn empty() -> Self {
         Space::new_auto(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
+    #[cfg(test)]
     pub fn empty_with_uuid(uuid: Uuid) -> Self {
         Space::new_with_uuid(Default::default(), SpaceMeta::with_env(into_dict!()), uuid)
     }
@@ -191,6 +178,7 @@ impl Space {
 }
 
 impl Space {
+    #[allow(unused)]
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         space: CreateSpace,
@@ -228,6 +216,7 @@ impl Space {
         let _ = wl.st_insert(space_name, space);
         Ok(())
     }
+    #[allow(unused)]
     pub fn transactional_exec_alter<G: GlobalInstanceLike>(
         global: &G,
         AlterSpace {
@@ -266,6 +255,7 @@ impl Space {
             Ok(())
         })
     }
+    #[allow(unused)]
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         DropSpace { space, force: _ }: DropSpace,

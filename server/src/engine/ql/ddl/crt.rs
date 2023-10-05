@@ -100,6 +100,7 @@ pub struct CreateModel<'a> {
 */
 
 impl<'a> CreateModel<'a> {
+    #[cfg(test)]
     pub fn new(model_name: Entity<'a>, fields: Vec<FieldSpec<'a>>, props: DictGeneric) -> Self {
         Self {
             model_name,

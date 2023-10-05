@@ -28,9 +28,9 @@
 pub use unix::*;
 #[cfg(windows)]
 pub use windows::*;
+mod flock;
 mod free_memory;
 
-pub use free_memory::free_memory_in_bytes;
 use {
     crate::IoResult,
     std::{
@@ -40,6 +40,7 @@ use {
         time::{SystemTime, UNIX_EPOCH},
     },
 };
+pub use {flock::FileLock, free_memory::free_memory_in_bytes};
 
 #[derive(Debug)]
 #[repr(transparent)]

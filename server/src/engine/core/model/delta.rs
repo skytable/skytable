@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)]
+
 use {
     super::{Fields, Model},
     crate::{

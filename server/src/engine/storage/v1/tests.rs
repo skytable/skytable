@@ -36,15 +36,20 @@ mod sysdb {
             super::sysdb::{self, SystemStoreInitState},
             VirtualFS as VFS,
         },
-        crate::engine::config::{AuthDriver, ConfigAuth},
+        crate::engine::config::{AuthDriver, ConfigAuth, ConfigMode},
     };
     fn open_sysdb(
         auth_config: ConfigAuth,
         sysdb_path: &str,
         sysdb_cow_path: &str,
     ) -> sysdb::SystemStoreInit {
-        sysdb::open_or_reinit_system_database::<VFS>(auth_config, sysdb_path, sysdb_cow_path)
-            .unwrap()
+        sysdb::open_or_reinit_system_database::<VFS>(
+            auth_config,
+            ConfigMode::Dev,
+            sysdb_path,
+            sysdb_cow_path,
+        )
+        .unwrap()
     }
     #[test]
     fn open_close() {

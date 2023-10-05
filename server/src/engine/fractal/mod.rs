@@ -64,15 +64,15 @@ pub type ModelDrivers<Fs> = HashMap<ModelUniqueID, drivers::FractalModelDriver<F
 /// data
 pub struct GlobalStateStart {
     pub global: Global,
-    pub mgr_handles: mgr::FractalServiceHandles,
+    pub boot: mgr::FractalBoot,
 }
 
-/// Enable all drivers and start all engines
+/// Enable all drivers and start all engines (or others that you must start)
 ///
 /// ## Safety
 ///
 /// Must be called iff this is the only thread calling it
-pub unsafe fn enable_and_start_all(
+pub unsafe fn load_and_enable_all(
     gns: GlobalNS,
     config: config::SysConfig,
     gns_driver: GNSTransactionDriverAnyFS<LocalFS>,
@@ -94,7 +94,7 @@ pub unsafe fn enable_and_start_all(
     let token = Global::new();
     GlobalStateStart {
         global: token.clone(),
-        mgr_handles: mgr::FractalMgr::start_all(token, lp_recv, hp_recv),
+        boot: mgr::FractalBoot::prepare(token.clone(), lp_recv, hp_recv),
     }
 }
 
@@ -188,7 +188,7 @@ impl GlobalInstanceLike for Global {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// A handle to the global state
 pub struct Global(());
 
@@ -230,7 +230,16 @@ impl Global {
         Self::__gref_raw().assume_init_ref()
     }
     pub unsafe fn unload_all(self) {
-        core::ptr::drop_in_place(Self::__gref_raw().as_mut_ptr())
+        // TODO(@ohsayan): handle errors
+        self.namespace_txn_driver()
+            .lock()
+            .__journal_mut()
+            .__append_journal_close_and_close()
+            .unwrap();
+        for (_, driver) in self.get_state().mdl_driver.write().iter_mut() {
+            driver.batch_driver().lock().close().unwrap();
+        }
+        core::ptr::drop_in_place(Self::__gref_raw().as_mut_ptr());
     }
 }
 

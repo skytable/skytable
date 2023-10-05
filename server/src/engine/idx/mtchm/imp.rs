@@ -37,11 +37,10 @@ use {
         idx::{meta::Comparable, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, MTIndex},
         sync::atm::Guard,
     },
-    std::sync::Arc,
 };
 
 pub type Raw<E, C> = RawTree<E, C>;
-pub type ChmArc<K, V, C> = Raw<Arc<(K, V)>, C>;
+#[cfg(test)]
 pub type ChmCopy<K, V, C> = Raw<(K, V), C>;
 
 impl<E, C: Config> IndexBaseSpec for Raw<E, C> {

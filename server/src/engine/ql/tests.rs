@@ -46,7 +46,7 @@ pub fn lex_insecure(src: &[u8]) -> QueryResult<Vec<Token<'_>>> {
     InsecureLexer::lex(src)
 }
 pub fn lex_secure<'a>(src: &'a [u8], query_window: usize) -> QueryResult<Vec<Token<'a>>> {
-    SecureLexer::lex(src, query_window)
+    SecureLexer::lex_with_window(src, query_window)
 }
 
 pub trait NullableData<T> {

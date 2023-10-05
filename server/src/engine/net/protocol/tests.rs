@@ -39,16 +39,7 @@ use crate::engine::{
     client handshake
 */
 
-const FULL_HANDSHAKE_NO_AUTH: [u8; 7] = [b'H', 0, 0, 0, 0, 0, 0];
 const FULL_HANDSHAKE_WITH_AUTH: [u8; 23] = *b"H\0\0\0\0\x015\n8\nsayanpass1234";
-
-const STATIC_HANDSHAKE_NO_AUTH: CHandshakeStatic = CHandshakeStatic::new(
-    HandshakeVersion::Original,
-    ProtocolVersion::Original,
-    DataExchangeMode::QueryTime,
-    QueryMode::Bql1,
-    AuthMode::Anonymous,
-);
 
 const STATIC_HANDSHAKE_WITH_AUTH: CHandshakeStatic = CHandshakeStatic::new(
     HandshakeVersion::Original,
@@ -61,42 +52,6 @@ const STATIC_HANDSHAKE_WITH_AUTH: CHandshakeStatic = CHandshakeStatic::new(
 /*
     handshake with no state changes
 */
-
-#[test]
-fn parse_staged_no_auth() {
-    for i in 0..FULL_HANDSHAKE_NO_AUTH.len() {
-        let buf = &FULL_HANDSHAKE_NO_AUTH[..i + 1];
-        let mut scanner = BufferedScanner::new(buf);
-        let result = CHandshake::resume_with(&mut scanner, HandshakeState::Initial);
-        match buf.len() {
-            1..=5 => {
-                assert_eq!(
-                    result,
-                    HandshakeResult::ChangeState {
-                        new_state: HandshakeState::Initial,
-                        expect: CHandshake::INITIAL_READ,
-                    }
-                );
-            }
-            6 => {
-                assert_eq!(
-                    result,
-                    HandshakeResult::ChangeState {
-                        new_state: HandshakeState::StaticBlock(STATIC_HANDSHAKE_NO_AUTH),
-                        expect: 1,
-                    }
-                );
-            }
-            7 => {
-                assert_eq!(
-                    result,
-                    HandshakeResult::Completed(CHandshake::new(STATIC_HANDSHAKE_NO_AUTH, None))
-                );
-            }
-            _ => unreachable!(),
-        }
-    }
-}
 
 #[test]
 fn parse_staged_with_auth() {
@@ -144,7 +99,7 @@ fn parse_staged_with_auth() {
                     result,
                     HandshakeResult::Completed(CHandshake::new(
                         STATIC_HANDSHAKE_WITH_AUTH,
-                        Some(CHandshakeAuth::new(b"sayan", b"pass1234"))
+                        CHandshakeAuth::new(b"sayan", b"pass1234")
                     ))
                 );
             }
@@ -183,21 +138,12 @@ fn run_state_changes_return_rounds(src: &[u8], expected_final_handshake: CHandsh
 }
 
 #[test]
-fn parse_no_auth_with_state_updates() {
-    let rounds = run_state_changes_return_rounds(
-        &FULL_HANDSHAKE_NO_AUTH,
-        CHandshake::new(STATIC_HANDSHAKE_NO_AUTH, None),
-    );
-    assert_eq!(rounds, 2); // r1 = initial, r2 = auth NUL
-}
-
-#[test]
 fn parse_auth_with_state_updates() {
     let rounds = run_state_changes_return_rounds(
         &FULL_HANDSHAKE_WITH_AUTH,
         CHandshake::new(
             STATIC_HANDSHAKE_WITH_AUTH,
-            Some(CHandshakeAuth::new(b"sayan", b"pass1234")),
+            CHandshakeAuth::new(b"sayan", b"pass1234"),
         ),
     );
     assert_eq!(rounds, 3); // r1 = initial read, r2 = lengths, r3 = items

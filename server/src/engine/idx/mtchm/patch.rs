@@ -32,7 +32,6 @@ use {
 
 /// write mode flag
 pub type WriteFlag = u8;
-pub const WRITEMODE_DELETE: WriteFlag = 0xFF;
 /// fresh
 pub const WRITEMODE_FRESH: WriteFlag = 0b01;
 /// refresh

@@ -50,6 +50,7 @@ pub struct TestGlobal<Fs: RawFSInterface = VirtualFS> {
     gns: GlobalNS,
     hp_queue: RwLock<Vec<Task<CriticalTask>>>,
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
+    #[allow(unused)]
     max_delta_size: usize,
     txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
     model_drivers: RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>>,

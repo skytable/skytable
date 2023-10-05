@@ -132,9 +132,7 @@ impl ControlToken {
     }
 }
 
-const TUP_IDENTITY: fn(usize) -> (usize, usize) = |x| (x, x);
 const TUP_INCR: fn(usize) -> (usize, usize) = |x| (x, x + 1);
-const TUP_INCR_TWICE: fn(usize) -> (usize, usize) = |x| (x, x + 2);
 
 fn prepare_distr_data(source_buf: &[StringTup], distr_buf: &mut Vec<Vec<StringTup>>) {
     distr_buf.try_reserve(SPAM_TENANTS).unwrap();

@@ -178,14 +178,6 @@ impl<K, V> IndexSTSeqDllNode<K, V> {
         }
     }
     #[inline(always)]
-    fn alloc_null(k: K, v: V) -> *mut Self {
-        Self::_alloc::<false, false>(Self::new_null(k, v))
-    }
-    #[inline(always)]
-    fn alloc(k: K, v: V, p: *mut Self, n: *mut Self) -> *mut Self {
-        Self::_alloc::<true, true>(Self::new(k, v, p, n))
-    }
-    #[inline(always)]
     unsafe fn _drop(slf: *mut Self) {
         let _ = Box::from_raw(slf);
     }
@@ -224,6 +216,7 @@ pub struct IndexSTSeqDllMetrics {
 
 #[cfg(debug_assertions)]
 impl IndexSTSeqDllMetrics {
+    #[cfg(test)]
     pub const fn raw_f(&self) -> usize {
         self.stat_f
     }
@@ -277,9 +270,6 @@ impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
 }
 
 impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
-    pub fn new() -> Self {
-        Self::with_hasher(C::Hasher::default())
-    }
     pub fn with_capacity(cap: usize) -> Self {
         Self::with_capacity_and_hasher(cap, C::Hasher::default())
     }

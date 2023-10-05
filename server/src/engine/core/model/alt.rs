@@ -249,6 +249,7 @@ impl<'a> AlterPlan<'a> {
 }
 
 impl Model {
+    #[allow(unused)]
     pub fn transactional_exec_alter<G: GlobalInstanceLike>(
         global: &G,
         alter: AlterModel,

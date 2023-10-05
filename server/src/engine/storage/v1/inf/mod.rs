@@ -36,10 +36,7 @@ mod tests;
 
 use {
     crate::engine::{
-        data::{
-            dict::DictEntryGeneric,
-            tag::{DataTag, TagClass},
-        },
+        data::tag::TagClass,
         error::{RuntimeResult, StorageError},
         idx::{AsKey, AsValue},
         mem::BufferedScanner,
@@ -51,6 +48,7 @@ type VecU8 = Vec<u8>;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, sky_macros::EnumMethods)]
 #[repr(u8)]
+#[allow(unused)]
 /// Disambiguation for data
 pub enum PersistTypeDscr {
     Null = 0,
@@ -64,6 +62,7 @@ pub enum PersistTypeDscr {
     Dict = 8,
 }
 
+#[allow(unused)]
 impl PersistTypeDscr {
     /// translates the tag class definition into the dscr definition
     pub const fn translate_from_class(class: TagClass) -> Self {
@@ -78,12 +77,6 @@ impl PersistTypeDscr {
     }
     pub const unsafe fn from_raw(v: u8) -> Self {
         core::mem::transmute(v)
-    }
-    pub fn new_from_dict_gen_entry(e: &DictEntryGeneric) -> Self {
-        match e {
-            DictEntryGeneric::Map(_) => Self::Dict,
-            DictEntryGeneric::Data(dc) => Self::translate_from_class(dc.tag().tag_class()),
-        }
     }
     /// The data in question is null (well, can we call that data afterall?)
     pub const fn is_null(&self) -> bool {
@@ -239,6 +232,7 @@ pub trait PersistMapSpec {
 pub mod enc {
     use super::{map, PersistMapSpec, PersistObject, VecU8};
     // obj
+    #[cfg(test)]
     pub fn enc_full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
         let mut v = vec![];
         enc_full_into_buffer::<Obj>(&mut v, obj);
@@ -247,6 +241,7 @@ pub mod enc {
     pub fn enc_full_into_buffer<Obj: PersistObject>(buf: &mut VecU8, obj: Obj::InputType) {
         Obj::default_full_enc(buf, obj)
     }
+    #[cfg(test)]
     pub fn enc_full_self<Obj: PersistObject<InputType = Obj>>(obj: Obj) -> Vec<u8> {
         enc_full::<Obj>(obj)
     }
@@ -268,6 +263,7 @@ pub mod dec {
         crate::engine::{error::RuntimeResult, mem::BufferedScanner},
     };
     // obj
+    #[cfg(test)]
     pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> RuntimeResult<Obj::OutputType> {
         let mut scanner = BufferedScanner::new(data);
         dec_full_from_scanner::<Obj>(&mut scanner)
@@ -276,9 +272,6 @@ pub mod dec {
         scanner: &mut BufferedScanner,
     ) -> RuntimeResult<Obj::OutputType> {
         Obj::default_full_dec(scanner)
-    }
-    pub fn dec_full_self<Obj: PersistObject<OutputType = Obj>>(data: &[u8]) -> RuntimeResult<Obj> {
-        dec_full::<Obj>(data)
     }
     // dec
     pub fn dec_dict_full<PM: PersistMapSpec>(data: &[u8]) -> RuntimeResult<PM::MapType> {

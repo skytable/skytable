@@ -25,19 +25,18 @@
 */
 
 mod raw;
-pub use raw::{Ident, Keyword, Symbol, Token};
+pub use {
+    insecure_impl::InsecureLexer,
+    raw::{Ident, Keyword, KeywordMisc, KeywordStmt, Symbol, Token},
+};
 
 use {
-    crate::{
-        engine::{
-            data::lit::Lit,
-            error::{QueryError, QueryResult},
-            mem::BufferedScanner,
-        },
-        util::compiler,
+    crate::engine::{
+        data::lit::Lit,
+        error::{QueryError, QueryResult},
+        mem::BufferedScanner,
     },
     core::slice,
-    raw::{kwof, symof},
 };
 
 /*
@@ -100,12 +99,11 @@ impl<'a> Lexer<'a> {
     /// Scan an identifier or keyword
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
-        let st = s.to_ascii_lowercase();
-        match kwof(&st) {
+        match Keyword::get(s) {
             Some(kw) => self.tokens.push(kw.into()),
             // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
-            None if st == b"true" || st == b"false" => {
-                self.push_token(Lit::new_bool(st == b"true"))
+            None if s.eq_ignore_ascii_case(b"true") || s.eq_ignore_ascii_case(b"false") => {
+                self.push_token(Lit::new_bool(s.eq_ignore_ascii_case(b"true")))
             }
             None => self.tokens.push(unsafe {
                 // UNSAFE(@ohsayan): scan_ident only returns a valid ident which is always a string
@@ -114,7 +112,7 @@ impl<'a> Lexer<'a> {
         }
     }
     fn scan_byte(&mut self, byte: u8) {
-        match symof(byte) {
+        match Symbol::get(byte) {
             Some(tok) => self.push_token(tok),
             None => return self.set_error(QueryError::LexUnexpectedByte),
         }
@@ -136,186 +134,201 @@ impl<'a> Lexer<'a> {
     Insecure lexer
 */
 
-pub struct InsecureLexer<'a> {
-    l: Lexer<'a>,
-}
+mod insecure_impl {
+    #![allow(unused)] // TODO(@ohsayan): yank this
+    use {
+        super::Lexer,
+        crate::{
+            engine::{
+                data::lit::Lit,
+                error::{QueryError, QueryResult},
+                ql::lex::Token,
+            },
+            util::compiler,
+        },
+    };
 
-impl<'a> InsecureLexer<'a> {
-    pub fn lex(src: &'a [u8]) -> QueryResult<Vec<Token<'a>>> {
-        let slf = Self { l: Lexer::new(src) };
-        slf._lex()
+    pub struct InsecureLexer<'a> {
+        pub(crate) l: Lexer<'a>,
     }
-    fn _lex(mut self) -> QueryResult<Vec<Token<'a>>> {
-        while !self.l.token_buffer.eof() & self.l.no_error() {
-            let byte = unsafe {
-                // UNSAFE(@ohsayan): loop invariant
-                self.l.token_buffer.deref_cursor()
-            };
-            match byte {
-                #[cfg(test)]
-                byte if byte == b'\x01' => {
-                    self.l.push_token(Token::IgnorableComma);
-                    unsafe {
-                        // UNSAFE(@ohsayan): All good here. Already read the token
-                        self.l.token_buffer.incr_cursor();
-                    }
-                }
-                // ident
-                byte if byte.is_ascii_alphabetic() | (byte == b'_') => {
-                    self.l.scan_ident_or_keyword()
-                }
-                // uint
-                byte if byte.is_ascii_digit() => self.scan_unsigned_integer(),
-                // sint
-                b'-' => {
-                    unsafe {
-                        // UNSAFE(@ohsayan): loop invariant
-                        self.l.token_buffer.incr_cursor()
-                    };
-                    self.scan_signed_integer();
-                }
-                // binary
-                b'\r' => {
-                    unsafe {
-                        // UNSAFE(@ohsayan): loop invariant
-                        self.l.token_buffer.incr_cursor()
-                    }
-                    self.scan_binary()
-                }
-                // string
-                quote_style @ (b'"' | b'\'') => {
-                    unsafe {
-                        // UNSAFE(@ohsayan): loop invariant
-                        self.l.token_buffer.incr_cursor()
-                    }
-                    self.scan_quoted_string(quote_style)
-                }
-                // whitespace
-                b' ' | b'\n' | b'\t' => self.l.trim_ahead(),
-                // some random byte
-                byte => self.l.scan_byte(byte),
-            }
-        }
-        match self.l.last_error {
-            None => Ok(self.l.tokens),
-            Some(e) => Err(e),
-        }
-    }
-}
 
-impl<'a> InsecureLexer<'a> {
-    fn scan_binary(&mut self) {
-        let Some(len) = self
-            .l
-            .token_buffer
-            .try_next_ascii_u64_lf_separated_or_restore_cursor()
-        else {
-            self.l.set_error(QueryError::LexInvalidLiteral);
-            return;
-        };
-        let len = len as usize;
-        match self.l.token_buffer.try_next_variable_block(len) {
-            Some(block) => self.l.push_token(Lit::new_bin(block)),
-            None => self.l.set_error(QueryError::LexInvalidLiteral),
+    impl<'a> InsecureLexer<'a> {
+        pub fn lex(src: &'a [u8]) -> QueryResult<Vec<Token<'a>>> {
+            let slf = Self { l: Lexer::new(src) };
+            slf._lex()
         }
-    }
-    fn scan_quoted_string(&mut self, quote_style: u8) {
-        // cursor is at beginning of `"`; we need to scan until the end of quote or an escape
-        let mut buf = Vec::new();
-        while self
-            .l
-            .token_buffer
-            .rounded_cursor_not_eof_matches(|b| *b != quote_style)
-        {
-            let byte = unsafe {
-                // UNSAFE(@ohsayan): loop invariant
-                self.l.token_buffer.next_byte()
-            };
-            match byte {
-                b'\\' => {
-                    // hmm, this might be an escape (either `\\` or `\"`)
-                    if self
-                        .l
-                        .token_buffer
-                        .rounded_cursor_not_eof_matches(|b| *b == quote_style || *b == b'\\')
-                    {
-                        // ignore escaped byte
+        pub(crate) fn _lex(mut self) -> QueryResult<Vec<Token<'a>>> {
+            while !self.l.token_buffer.eof() & self.l.no_error() {
+                let byte = unsafe {
+                    // UNSAFE(@ohsayan): loop invariant
+                    self.l.token_buffer.deref_cursor()
+                };
+                match byte {
+                    #[cfg(test)]
+                    byte if byte == b'\x01' => {
+                        self.l.push_token(Token::IgnorableComma);
                         unsafe {
-                            buf.push(self.l.token_buffer.next_byte());
+                            // UNSAFE(@ohsayan): All good here. Already read the token
+                            self.l.token_buffer.incr_cursor();
                         }
-                    } else {
-                        // this is not allowed
-                        unsafe {
-                            // UNSAFE(@ohsayan): we move the cursor ahead, now we're moving it back
-                            self.l.token_buffer.decr_cursor()
-                        }
-                        self.l.set_error(QueryError::LexInvalidLiteral);
-                        return;
                     }
+                    // ident
+                    byte if byte.is_ascii_alphabetic() | (byte == b'_') => {
+                        self.l.scan_ident_or_keyword()
+                    }
+                    // uint
+                    byte if byte.is_ascii_digit() => self.scan_unsigned_integer(),
+                    // sint
+                    b'-' => {
+                        unsafe {
+                            // UNSAFE(@ohsayan): loop invariant
+                            self.l.token_buffer.incr_cursor()
+                        };
+                        self.scan_signed_integer();
+                    }
+                    // binary
+                    b'\r' => {
+                        unsafe {
+                            // UNSAFE(@ohsayan): loop invariant
+                            self.l.token_buffer.incr_cursor()
+                        }
+                        self.scan_binary()
+                    }
+                    // string
+                    quote_style @ (b'"' | b'\'') => {
+                        unsafe {
+                            // UNSAFE(@ohsayan): loop invariant
+                            self.l.token_buffer.incr_cursor()
+                        }
+                        self.scan_quoted_string(quote_style)
+                    }
+                    // whitespace
+                    b' ' | b'\n' | b'\t' => self.l.trim_ahead(),
+                    // some random byte
+                    byte => self.l.scan_byte(byte),
                 }
-                _ => buf.push(byte),
+            }
+            match self.l.last_error {
+                None => Ok(self.l.tokens),
+                Some(e) => Err(e),
             }
         }
-        let ended_with_quote = self
-            .l
-            .token_buffer
-            .rounded_cursor_not_eof_equals(quote_style);
-        // skip quote
-        unsafe {
-            // UNSAFE(@ohsayan): not eof
-            self.l.token_buffer.incr_cursor_if(ended_with_quote)
-        }
-        match String::from_utf8(buf) {
-            Ok(s) if ended_with_quote => self.l.push_token(Lit::new_string(s)),
-            Err(_) | Ok(_) => self.l.set_error(QueryError::LexInvalidLiteral),
-        }
     }
-    fn scan_unsigned_integer(&mut self) {
-        let mut okay = true;
-        // extract integer
-        let int = self
-            .l
-            .token_buffer
-            .try_next_ascii_u64_stop_at::<false>(&mut okay, |b| b.is_ascii_digit());
-        /*
-            see if we ended at a correct byte:
-            iff the integer has an alphanumeric byte at the end is the integer invalid
-        */
-        if compiler::unlikely(
-            !okay
-                | self
-                    .l
-                    .token_buffer
-                    .rounded_cursor_not_eof_matches(u8::is_ascii_alphanumeric),
-        ) {
-            self.l.set_error(QueryError::LexInvalidLiteral);
-        } else {
-            self.l.push_token(Lit::new_uint(int))
-        }
-    }
-    fn scan_signed_integer(&mut self) {
-        if self.l.token_buffer.rounded_cursor_value().is_ascii_digit() {
-            unsafe {
-                // UNSAFE(@ohsayan): the cursor was moved ahead, now we're moving it back
-                self.l.token_buffer.decr_cursor()
-            }
-            let (okay, int) = self
+
+    impl<'a> InsecureLexer<'a> {
+        pub(crate) fn scan_binary(&mut self) {
+            let Some(len) = self
                 .l
                 .token_buffer
-                .try_next_ascii_i64_stop_at(|b| !b.is_ascii_digit());
-            if okay
-                & !self
+                .try_next_ascii_u64_lf_separated_or_restore_cursor()
+            else {
+                self.l.set_error(QueryError::LexInvalidLiteral);
+                return;
+            };
+            let len = len as usize;
+            match self.l.token_buffer.try_next_variable_block(len) {
+                Some(block) => self.l.push_token(Lit::new_bin(block)),
+                None => self.l.set_error(QueryError::LexInvalidLiteral),
+            }
+        }
+        pub(crate) fn scan_quoted_string(&mut self, quote_style: u8) {
+            // cursor is at beginning of `"`; we need to scan until the end of quote or an escape
+            let mut buf = Vec::new();
+            while self
+                .l
+                .token_buffer
+                .rounded_cursor_not_eof_matches(|b| *b != quote_style)
+            {
+                let byte = unsafe {
+                    // UNSAFE(@ohsayan): loop invariant
+                    self.l.token_buffer.next_byte()
+                };
+                match byte {
+                    b'\\' => {
+                        // hmm, this might be an escape (either `\\` or `\"`)
+                        if self
+                            .l
+                            .token_buffer
+                            .rounded_cursor_not_eof_matches(|b| *b == quote_style || *b == b'\\')
+                        {
+                            // ignore escaped byte
+                            unsafe {
+                                buf.push(self.l.token_buffer.next_byte());
+                            }
+                        } else {
+                            // this is not allowed
+                            unsafe {
+                                // UNSAFE(@ohsayan): we move the cursor ahead, now we're moving it back
+                                self.l.token_buffer.decr_cursor()
+                            }
+                            self.l.set_error(QueryError::LexInvalidLiteral);
+                            return;
+                        }
+                    }
+                    _ => buf.push(byte),
+                }
+            }
+            let ended_with_quote = self
+                .l
+                .token_buffer
+                .rounded_cursor_not_eof_equals(quote_style);
+            // skip quote
+            unsafe {
+                // UNSAFE(@ohsayan): not eof
+                self.l.token_buffer.incr_cursor_if(ended_with_quote)
+            }
+            match String::from_utf8(buf) {
+                Ok(s) if ended_with_quote => self.l.push_token(Lit::new_string(s)),
+                Err(_) | Ok(_) => self.l.set_error(QueryError::LexInvalidLiteral),
+            }
+        }
+        pub(crate) fn scan_unsigned_integer(&mut self) {
+            let mut okay = true;
+            // extract integer
+            let int = self
+                .l
+                .token_buffer
+                .try_next_ascii_u64_stop_at::<false>(&mut okay, |b| b.is_ascii_digit());
+            /*
+                see if we ended at a correct byte:
+                iff the integer has an alphanumeric byte at the end is the integer invalid
+            */
+            if compiler::unlikely(
+                !okay
+                    | self
+                        .l
+                        .token_buffer
+                        .rounded_cursor_not_eof_matches(u8::is_ascii_alphanumeric),
+            ) {
+                self.l.set_error(QueryError::LexInvalidLiteral);
+            } else {
+                self.l.push_token(Lit::new_uint(int))
+            }
+        }
+        pub(crate) fn scan_signed_integer(&mut self) {
+            if self.l.token_buffer.rounded_cursor_value().is_ascii_digit() {
+                unsafe {
+                    // UNSAFE(@ohsayan): the cursor was moved ahead, now we're moving it back
+                    self.l.token_buffer.decr_cursor()
+                }
+                let (okay, int) = self
                     .l
                     .token_buffer
-                    .rounded_cursor_value()
-                    .is_ascii_alphabetic()
-            {
-                self.l.push_token(Lit::new_sint(int))
+                    .try_next_ascii_i64_stop_at(|b| !b.is_ascii_digit());
+                if okay
+                    & !self
+                        .l
+                        .token_buffer
+                        .rounded_cursor_value()
+                        .is_ascii_alphabetic()
+                {
+                    self.l.push_token(Lit::new_sint(int))
+                } else {
+                    self.l.set_error(QueryError::LexInvalidLiteral)
+                }
             } else {
-                self.l.set_error(QueryError::LexInvalidLiteral)
+                self.l.push_token(Token![-]);
             }
-        } else {
-            self.l.push_token(Token![-]);
         }
     }
 }
@@ -331,14 +344,22 @@ pub struct SecureLexer<'a> {
 }
 
 impl<'a> SecureLexer<'a> {
-    pub fn new(src: &'a [u8], query_window: usize) -> Self {
+    pub fn new_with_segments(q: &'a [u8], p: &'a [u8]) -> Self {
+        Self {
+            l: Lexer::new(q),
+            param_buffer: BufferedScanner::new(p),
+        }
+    }
+    pub fn lex(self) -> QueryResult<Vec<Token<'a>>> {
+        self._lex()
+    }
+    #[cfg(test)]
+    pub fn lex_with_window(src: &'a [u8], query_window: usize) -> QueryResult<Vec<Token<'a>>> {
         Self {
             l: Lexer::new(&src[..query_window]),
             param_buffer: BufferedScanner::new(&src[query_window..]),
         }
-    }
-    pub fn lex(src: &'a [u8], query_window: usize) -> QueryResult<Vec<Token<'a>>> {
-        Self::new(src, query_window)._lex()
+        .lex()
     }
 }
 
@@ -352,10 +373,6 @@ impl<'a> SecureLexer<'a> {
             match b {
                 b if b.is_ascii_alphabetic() | (b == b'_') => self.l.scan_ident_or_keyword(),
                 b'?' => {
-                    // a parameter: null, bool, sint, uint, float, binary, string
-                    const TYPE: [&str; 8] = [
-                        "null", "bool", "uint", "sint", "float", "binary", "string", "ERROR",
-                    ];
                     // skip the param byte
                     unsafe {
                         // UNSAFE(@ohsayan): loop invariant

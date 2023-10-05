@@ -119,6 +119,7 @@ impl PrimaryIndexKey {
 }
 
 impl PrimaryIndexKey {
+    #[cfg(test)]
     pub fn try_from_dc(dc: Datacell) -> Option<Self> {
         Self::check(&dc).then(|| unsafe { Self::new_from_dc(dc) })
     }
@@ -172,19 +173,13 @@ impl PrimaryIndexKey {
         }
     }
     pub unsafe fn raw_clone(&self) -> Self {
-        Self {
-            tag: self.tag,
-            data: {
-                let (qw, nw) = self.data.dwordqn_load_qw_nw();
-                SpecialPaddedWord::new(qw, nw)
-            },
-        }
+        Self::new(self.tag, {
+            let (qw, nw) = self.data.dwordqn_load_qw_nw();
+            SpecialPaddedWord::new(qw, nw)
+        })
     }
     pub fn check(dc: &Datacell) -> bool {
         dc.tag().tag_unique().is_unique()
-    }
-    pub fn check_opt(dc: &Option<Datacell>) -> bool {
-        dc.as_ref().map(Self::check).unwrap_or(false)
     }
     /// ## Safety
     /// If you mess up construction, everything will fall apart

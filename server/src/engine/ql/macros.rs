@@ -30,9 +30,15 @@ macro_rules! __sym_token {
     };
 }
 
-macro_rules! __kw {
+macro_rules! __kw_misc {
     ($ident:ident) => {
-        $crate::engine::ql::lex::Token::Keyword($crate::engine::ql::lex::Keyword::$ident)
+        $crate::engine::ql::lex::Token::Keyword($crate::engine::ql::lex::Keyword::Misc($crate::engine::ql::lex::KeywordMisc::$ident))
+    };
+}
+
+macro_rules! __kw_stmt {
+    ($ident:ident) => {
+        $crate::engine::ql::lex::Token::Keyword($crate::engine::ql::lex::Keyword::Statement($crate::engine::ql::lex::KeywordStmt::$ident))
     };
 }
 
@@ -114,122 +120,113 @@ macro_rules! Token {
     };
     // ddl keywords
     (use) => {
-        __kw!(Use)
+        __kw_stmt!(Use)
     };
     (create) => {
-        __kw!(Create)
+        __kw_stmt!(Create)
     };
     (alter) => {
-        __kw!(Alter)
+        __kw_stmt!(Alter)
     };
     (drop) => {
-        __kw!(Drop)
-    };
-    (describe) => {
-        __kw!(Describe)
+        __kw_stmt!(Drop)
     };
     (model) => {
-        __kw!(Model)
+        __kw_misc!(Model)
     };
     (space) => {
-        __kw!(Space)
+        __kw_misc!(Space)
     };
     (primary) => {
-        __kw!(Primary)
+        __kw_misc!(Primary)
     };
     // ddl misc
     (with) => {
-        __kw!(With)
+        __kw_misc!(With)
     };
     (add) => {
-        __kw!(Add)
+        __kw_misc!(Add)
     };
     (remove) => {
-        __kw!(Remove)
+        __kw_misc!(Remove)
     };
     (sort) => {
-        __kw!(Sort)
+        __kw_misc!(Sort)
     };
     (type) => {
-        __kw!(Type)
+        __kw_misc!(Type)
     };
     // dml
     (insert) => {
-        __kw!(Insert)
+        __kw_stmt!(Insert)
     };
     (select) => {
-        __kw!(Select)
+        __kw_stmt!(Select)
     };
     (update) => {
-        __kw!(Update)
+        __kw_stmt!(Update)
     };
     (delete) => {
-        __kw!(Delete)
-    };
-    (exists) => {
-        __kw!(Exists)
-    };
-    (truncate) => {
-        __kw!(Truncate)
+        __kw_stmt!(Delete)
     };
     // dml misc
     (set) => {
-        __kw!(Set)
+        __kw_misc!(Set)
     };
     (limit) => {
-        __kw!(Limit)
+        __kw_misc!(Limit)
     };
     (from) => {
-        __kw!(From)
+        __kw_misc!(From)
     };
     (into) => {
-        __kw!(Into)
+        __kw_misc!(Into)
     };
     (where) => {
-        __kw!(Where)
+        __kw_misc!(Where)
     };
     (if) => {
-        __kw!(If)
+        __kw_misc!(If)
     };
     (and) => {
-        __kw!(And)
+        __kw_misc!(And)
     };
     (as) => {
-        __kw!(As)
+        __kw_misc!(As)
     };
     (by) => {
-        __kw!(By)
+        __kw_misc!(By)
     };
     (asc) => {
-        __kw!(Asc)
+        __kw_misc!(Asc)
     };
     (desc) => {
-        __kw!(Desc)
+        __kw_misc!(Desc)
     };
     // types
     (string) => {
-        __kw!(String)
+        __kw_misc!(String)
     };
     (binary) => {
-        __kw!(Binary)
+        __kw_misc!(Binary)
     };
     (list) => {
-        __kw!(List)
+        __kw_misc!(List)
     };
     (map) => {
-        __kw!(Map)
+        __kw_misc!(Map)
     };
     (bool) => {
-        __kw!(Bool)
+        __kw_misc!(Bool)
     };
     (int) => {
-        __kw!(Int)
+        __kw_misc!(Int)
     };
     (double) => {
-        __kw!(Double)
+        __kw_misc!(Double)
     };
     (float) => {
-        __kw!(Float)
+        __kw_misc!(Float)
     };
     // tt
     (open {}) => {
@@ -252,7 +249,7 @@ macro_rules! Token {
     };
     // misc
     (null) => {
-        __kw!(Null)
+        __kw_misc!(Null)
     };
 }
 

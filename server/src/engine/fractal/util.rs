@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)]
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug)]

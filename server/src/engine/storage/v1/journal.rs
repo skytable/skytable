@@ -43,7 +43,7 @@
 
 use {
     super::{
-        rw::{FileOpen, RawFSInterface, SDSSFileIO},
+        rw::{RawFSInterface, SDSSFileIO},
         spec,
     },
     crate::{
@@ -55,10 +55,12 @@ use {
 
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
-pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
+#[cfg(test)]
+pub fn open_or_create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     log_file_name: &str,
     gs: &TA::GlobalState,
-) -> RuntimeResult<FileOpen<JournalWriter<Fs, TA>>> {
+) -> RuntimeResult<super::rw::FileOpen<JournalWriter<Fs, TA>>> {
+    use super::rw::FileOpen;
     let file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<F>(log_file_name)? {
         FileOpen::Created(f) => return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?)),
         FileOpen::Existing((file, _header)) => file,
@@ -67,6 +69,21 @@ pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     Ok(FileOpen::Existing(JournalWriter::new(
         file, last_txn, false,
     )?))
+}
+
+pub fn create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
+    log_file_name: &str,
+) -> RuntimeResult<JournalWriter<Fs, TA>> {
+    JournalWriter::new(SDSSFileIO::create::<F>(log_file_name)?, 0, true)
+}
+
+pub fn load_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
+    log_file_name: &str,
+    gs: &TA::GlobalState,
+) -> RuntimeResult<JournalWriter<Fs, TA>> {
+    let (file, _) = SDSSFileIO::<Fs>::open::<F>(log_file_name)?;
+    let (file, last_txn_id) = JournalReader::<TA, Fs>::scroll(file, gs)?;
+    JournalWriter::new(file, last_txn_id, false)
 }
 
 /// The journal adapter
@@ -162,12 +179,6 @@ impl EventSourceMarker {
 }
 
 impl JournalEntryMetadata {
-    pub const fn is_server_event(&self) -> bool {
-        self.event_source_md == EventSourceMarker::SERVER_STD
-    }
-    pub const fn is_driver_event(&self) -> bool {
-        self.event_source_md <= 1
-    }
     pub const fn event_source_marker(&self) -> Option<EventSourceMarker> {
         Some(match self.event_source_md {
             EventSourceMarker::SERVER_STD => EventSourceMarker::ServerStandard,
@@ -183,7 +194,6 @@ impl JournalEntryMetadata {
 
 pub struct JournalReader<TA, Fs: RawFSInterface> {
     log_file: SDSSFileIO<Fs>,
-    log_size: u64,
     evid: u64,
     closed: bool,
     remaining_bytes: u64,
@@ -195,7 +205,6 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         let log_size = log_file.file_length()? - spec::SDSSStaticHeaderV1Compact::SIZE as u64;
         Ok(Self {
             log_file,
-            log_size,
             evid: 0,
             closed: false,
             remaining_bytes: log_size,
@@ -422,6 +431,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
         )?;
         Ok(())
     }
+    #[cfg(test)]
     pub fn append_journal_close_and_close(mut self) -> RuntimeResult<()> {
         self.__append_journal_close_and_close()
     }

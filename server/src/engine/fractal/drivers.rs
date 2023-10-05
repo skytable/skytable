@@ -36,6 +36,7 @@ use {
 
 /// GNS driver
 pub(super) struct FractalGNSDriver<Fs: RawFSInterface> {
+    #[allow(unused)]
     status: util::Status,
     txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
 }
@@ -54,6 +55,7 @@ impl<Fs: RawFSInterface> FractalGNSDriver<Fs> {
 
 /// Model driver
 pub struct FractalModelDriver<Fs: RawFSInterface> {
+    #[allow(unused)]
     hooks: Arc<FractalModelHooks>,
     batch_driver: Mutex<DataBatchPersistDriver<Fs>>,
 }
@@ -74,18 +76,10 @@ impl<Fs: RawFSInterface> FractalModelDriver<Fs> {
 
 /// Model hooks
 #[derive(Debug)]
-pub struct FractalModelHooks {
-    status: util::Status,
-}
+pub struct FractalModelHooks;
 
 impl FractalModelHooks {
-    #[cfg(test)]
-    pub fn test() -> Self {
-        Self::new()
-    }
     fn new() -> Self {
-        Self {
-            status: util::Status::new_okay(),
-        }
+        Self
     }
 }

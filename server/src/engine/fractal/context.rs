@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)]
+
 use core::fmt;
 use std::cell::RefCell;
 
@@ -143,17 +145,17 @@ impl From<LocalContext> for LocalCtxInstance {
 exported! {
     pub impl LocalContext {
         // all
-        fn set(origin: Subsystem, msg: impl Into<Dmsg>) { Self::_ctx(|ctx| { ctx.origin = Some(origin); ctx.dmsg = Some(msg.into()) }) }
-        fn test_set(origin: Subsystem, msg: impl Into<Dmsg>) { if_test(|| Self::set(origin, msg)) }
+        fn set(origin: Subsystem, dmsg: impl Into<Dmsg>) { Self::_ctx(|ctx| { ctx.origin = Some(origin); ctx.dmsg = Some(dmsg.into()) }) }
+        fn test_set(origin: Subsystem, dmsg: impl Into<Dmsg>) { if_test(|| Self::set(origin, dmsg)) }
         // dmsg
         /// set a local dmsg
-        fn set_dmsg(msg: impl Into<Dmsg>) { Self::_ctx(|ctx| ctx.dmsg = Some(msg.into())) }
+        fn set_dmsg(dmsg: impl Into<Dmsg>) { Self::_ctx(|ctx| ctx.dmsg = Some(dmsg.into())) }
         /// (only in test) set a local dmsg
-        fn test_set_dmsg(msg: impl Into<Dmsg>) { if_test(|| Self::set_dmsg(msg)) }
+        fn test_set_dmsg(dmsg: impl Into<Dmsg>) { if_test(|| Self::set_dmsg(dmsg)) }
         /// Set a local dmsg iff not already set
-        fn set_dmsg_if_unset(msg: impl Into<Dmsg>) { Self::_ctx(|ctx| { ctx.dmsg.get_or_insert(msg.into()); }) }
+        fn set_dmsg_if_unset(dmsg: impl Into<Dmsg>) { Self::_ctx(|ctx| { ctx.dmsg.get_or_insert(dmsg.into()); }) }
         /// (only in test) set a local dmsg iff not already set
-        fn test_set_dmsg_if_unset(msg: impl Into<Dmsg>) { if_test(|| Self::set_dmsg_if_unset(msg)) }
+        fn test_set_dmsg_if_unset(dmsg: impl Into<Dmsg>) { if_test(|| Self::set_dmsg_if_unset(dmsg)) }
         // origin
         /// set a local origin
         fn set_origin(origin: Subsystem) { Self::_ctx(|ctx| ctx.origin = Some(origin)) }

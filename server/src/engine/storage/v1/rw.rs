@@ -44,13 +44,8 @@ pub enum FileOpen<CF, EF = CF> {
     Existing(EF),
 }
 
+#[cfg(test)]
 impl<CF, EF> FileOpen<CF, EF> {
-    pub const fn is_created(&self) -> bool {
-        matches!(self, Self::Created(_))
-    }
-    pub const fn is_existing(&self) -> bool {
-        !self.is_created()
-    }
     pub fn into_existing(self) -> Option<EF> {
         match self {
             Self::Existing(e) => Some(e),
@@ -65,6 +60,7 @@ impl<CF, EF> FileOpen<CF, EF> {
     }
 }
 
+#[cfg(test)]
 impl<F> FileOpen<F> {
     pub fn into_inner(self) -> F {
         match self {
@@ -440,9 +436,6 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
     }
     pub fn seek_from_start(&mut self, by: u64) -> RuntimeResult<()> {
         self.f.fext_seek_ahead_from_start_by(by)
-    }
-    pub fn trim_file_to(&mut self, to: u64) -> RuntimeResult<()> {
-        self.f.fw_truncate_to(to)
     }
     pub fn retrieve_cursor(&mut self) -> RuntimeResult<u64> {
         self.f.fext_cursor()

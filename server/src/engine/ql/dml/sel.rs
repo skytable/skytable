@@ -24,8 +24,10 @@
  *
 */
 
+#[cfg(test)]
+use super::WhereClauseCollection;
 use {
-    super::{WhereClause, WhereClauseCollection},
+    super::WhereClause,
     crate::{
         engine::{
             error::{QueryError, QueryResult},
@@ -56,6 +58,7 @@ pub struct SelectStatement<'a> {
 
 impl<'a> SelectStatement<'a> {
     #[inline(always)]
+    #[cfg(test)]
     pub(crate) fn new_test(
         entity: Entity<'a>,
         fields: Vec<Ident<'a>>,
@@ -65,6 +68,7 @@ impl<'a> SelectStatement<'a> {
         Self::new(entity, fields, wildcard, clauses)
     }
     #[inline(always)]
+    #[cfg(test)]
     fn new(
         entity: Entity<'a>,
         fields: Vec<Ident<'a>>,
@@ -80,9 +84,6 @@ impl<'a> SelectStatement<'a> {
     }
     pub fn entity(&self) -> Entity<'a> {
         self.entity
-    }
-    pub fn clauses(&self) -> &WhereClause<'a> {
-        &self.clause
     }
     pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
         &mut self.clause

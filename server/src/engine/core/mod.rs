@@ -25,6 +25,7 @@
 */
 
 pub(in crate::engine) mod dml;
+pub mod exec;
 pub(in crate::engine) mod index;
 pub(in crate::engine) mod model;
 pub(in crate::engine) mod query_meta;

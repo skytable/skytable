@@ -48,7 +48,6 @@ use {
 */
 
 pub const T_UUIDSTR: &str = "4593264b-0231-43e9-b0aa-50784f14e204";
-pub const T_UUIDBIN: &[u8] = T_UUIDSTR.as_bytes();
 pub const T_TIMESEC: u64 = 1673187839_u64;
 
 type ProducerFn = fn() -> Datacell;
@@ -120,16 +119,6 @@ fn ldfunc(func: Ident<'_>) -> Option<ProducerFn> {
     } else {
         None
     }
-}
-#[inline(always)]
-fn ldfunc_exists(func: Ident<'_>) -> bool {
-    ldfunc(func).is_some()
-}
-#[inline(always)]
-unsafe fn ldfunc_unchecked(func: &[u8]) -> ProducerFn {
-    let ph = hashp(func) as usize;
-    debug_assert_eq!(PRODUCER_F[ph].0, func);
-    PRODUCER_F[ph].1
 }
 
 /// ## Panics
@@ -338,6 +327,7 @@ pub struct InsertStatement<'a> {
 
 impl<'a> InsertStatement<'a> {
     #[inline(always)]
+    #[cfg(test)]
     pub fn new(entity: Entity<'a>, data: InsertData<'a>) -> Self {
         Self { entity, data }
     }

@@ -37,12 +37,6 @@ pub enum TagClass {
 }
 
 impl TagClass {
-    pub const fn try_from_raw(v: u8) -> Option<Self> {
-        if v > Self::MAX {
-            return None;
-        }
-        Some(unsafe { Self::from_raw(v) })
-    }
     pub const unsafe fn from_raw(v: u8) -> Self {
         core::mem::transmute(v)
     }

@@ -61,10 +61,6 @@ impl<'a, T> Scanner<'a, T> {
     pub const fn remaining(&self) -> usize {
         self.buffer_len() - self.__cursor
     }
-    /// Returns the number of items consumed by the scanner
-    pub const fn consumed(&self) -> usize {
-        self.__cursor
-    }
     /// Returns the current cursor position
     pub const fn cursor(&self) -> usize {
         self.__cursor
@@ -185,17 +181,6 @@ impl<'a> Scanner<'a, u8> {
             })
         }
     }
-    /// Attempt to parse the next block
-    pub fn try_next_block<const N: usize>(&mut self) -> Option<[u8; N]> {
-        if self.has_left(N) {
-            Some(unsafe {
-                // UNSAFE(@ohsayan): +remaining check
-                self.next_chunk()
-            })
-        } else {
-            None
-        }
-    }
     /// Attempt to parse the next block (variable)
     pub fn try_next_variable_block(&mut self, len: usize) -> Option<&'a [u8]> {
         if self.has_left(len) {
@@ -239,9 +224,6 @@ impl<'a> Scanner<'a, u8> {
     ) -> ScannerDecodeResult<u64> {
         self.try_next_ascii_u64_lf_separated_with_result_or::<true>()
     }
-    pub fn try_next_ascii_u64_lf_separated_with_result(&mut self) -> ScannerDecodeResult<u64> {
-        self.try_next_ascii_u64_lf_separated_with_result_or::<false>()
-    }
     pub fn try_next_ascii_u64_lf_separated_with_result_or<const RESTORE_CURSOR: bool>(
         &mut self,
     ) -> ScannerDecodeResult<u64> {
@@ -278,9 +260,6 @@ impl<'a> Scanner<'a, u8> {
     /// If we were unable to read in the integer, then the cursor will be restored to its starting position
     pub fn try_next_ascii_u64_lf_separated_or_restore_cursor(&mut self) -> Option<u64> {
         self.try_next_ascii_u64_lf_separated_or::<true>()
-    }
-    pub fn try_next_ascii_u64_lf_separated(&mut self) -> Option<u64> {
-        self.try_next_ascii_u64_lf_separated_or::<false>()
     }
     pub fn try_next_ascii_u64_lf_separated_or<const RESTORE_CURSOR: bool>(
         &mut self,

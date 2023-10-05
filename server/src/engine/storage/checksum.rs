@@ -43,12 +43,6 @@ impl SCrc {
             digest: CRC64.digest(),
         }
     }
-    pub fn recompute_with_new_byte(&mut self, b: u8) {
-        self.digest.update(&[b])
-    }
-    pub fn recompute_with_new_block<const N: usize>(&mut self, b: [u8; N]) {
-        self.digest.update(&b);
-    }
     pub fn recompute_with_new_var_block(&mut self, b: &[u8]) {
         self.digest.update(b)
     }

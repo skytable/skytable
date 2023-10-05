@@ -51,14 +51,6 @@ pub struct Error {
 }
 
 impl Error {
-    /// Returns the diagnostic message
-    pub fn dmsg(&self) -> Option<&Dmsg> {
-        self.dmsg.as_ref()
-    }
-    /// Returns the origin
-    pub fn origin(&self) -> Option<Subsystem> {
-        self.origin
-    }
     /// Returns the error kind
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
@@ -89,10 +81,6 @@ impl Error {
     /// new error with kind and origin
     fn with_origin(kind: ErrorKind, origin: Subsystem) -> Self {
         Self::_new(kind, Some(origin), None)
-    }
-    /// new error with kind and dmsg
-    fn with_dmsg(kind: ErrorKind, dmsg: impl Into<Dmsg>) -> Self {
-        Self::_new(kind, None, Some(dmsg.into()))
     }
     /// remove the dmsg from self
     fn remove_dmsg(self) -> Self {

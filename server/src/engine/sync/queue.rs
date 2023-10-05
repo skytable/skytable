@@ -24,10 +24,12 @@
  *
 */
 
+#[cfg(test)]
+use crossbeam_epoch::pin;
 use {
     super::atm::Atomic,
     crate::engine::mem::CachePadded,
-    crossbeam_epoch::{pin, unprotected, Guard, Owned, Shared},
+    crossbeam_epoch::{unprotected, Guard, Owned, Shared},
     std::{mem::MaybeUninit, sync::atomic::Ordering},
 };
 
@@ -66,10 +68,6 @@ impl<T> Queue<T> {
         slf.head.store(sentinel, Ordering::Relaxed);
         slf.tail.store(sentinel, Ordering::Relaxed);
         slf
-    }
-    pub fn blocking_enqueue_autopin(&self, new: T) {
-        let g = pin();
-        self.blocking_enqueue(new, &g);
     }
     pub fn blocking_enqueue(&self, new: T, g: &Guard) {
         let newptr = Owned::new(QNode::new_data(new)).into_shared(g);
@@ -114,10 +112,6 @@ impl<T> Queue<T> {
                 );
             }
         }
-    }
-    pub fn blocking_try_dequeue_autopin(&self) -> Option<T> {
-        let g = pin();
-        self.blocking_try_dequeue(&g)
     }
     pub fn blocking_try_dequeue(&self, g: &Guard) -> Option<T> {
         loop {

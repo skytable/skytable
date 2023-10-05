@@ -67,7 +67,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
             f: SDSSFileTrackedWriter::new(file),
         })
     }
-    pub fn close(mut self) -> RuntimeResult<()> {
+    pub fn close(&mut self) -> RuntimeResult<()> {
         if self
             .f
             .inner_file()

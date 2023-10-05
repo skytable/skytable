@@ -92,6 +92,7 @@ pub struct ModelIDRes {
 }
 
 impl ModelIDRes {
+    #[cfg(test)]
     pub fn new(
         space_id: super::SpaceIDRes,
         model_name: Box<str>,

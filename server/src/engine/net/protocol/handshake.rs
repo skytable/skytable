@@ -90,8 +90,7 @@ pub enum QueryMode {
 #[repr(u8)]
 /// the authentication mode
 pub enum AuthMode {
-    Anonymous = 0,
-    Password = 1,
+    Password = 0,
 }
 
 impl AuthMode {
@@ -101,7 +100,6 @@ impl AuthMode {
     /// returns the minimum number of metadata bytes need to parse the payload for this auth mode
     const fn min_payload_bytes(&self) -> usize {
         match self {
-            Self::Anonymous => 1,
             Self::Password => 4,
         }
     }
@@ -173,6 +171,21 @@ impl CHandshakeStatic {
             auth_mode,
         }
     }
+    pub fn hs_version(&self) -> HandshakeVersion {
+        self.hs_version
+    }
+    pub fn protocol(&self) -> ProtocolVersion {
+        self.protocol
+    }
+    pub fn exchange_mode(&self) -> DataExchangeMode {
+        self.exchange_mode
+    }
+    pub fn query_mode(&self) -> QueryMode {
+        self.query_mode
+    }
+    pub fn auth_mode(&self) -> AuthMode {
+        self.auth_mode
+    }
 }
 
 /// handshake authentication
@@ -186,6 +199,12 @@ pub struct CHandshakeAuth<'a> {
 impl<'a> CHandshakeAuth<'a> {
     pub fn new(username: &'a [u8], password: &'a [u8]) -> Self {
         Self { username, password }
+    }
+    pub fn username(&self) -> &[u8] {
+        self.username
+    }
+    pub fn password(&self) -> &[u8] {
+        self.password
     }
 }
 
@@ -210,13 +229,13 @@ pub struct CHandshake<'a> {
     /// the static segment of the handshake
     hs_static: CHandshakeStatic,
     /// the auth section of the dynamic segment of the handshake
-    hs_auth: Option<CHandshakeAuth<'a>>,
+    hs_auth: CHandshakeAuth<'a>,
 }
 
 impl<'a> CHandshake<'a> {
     pub const INITIAL_READ: usize = 6;
     const CLIENT_HELLO: u8 = b'H';
-    pub fn new(hs_static: CHandshakeStatic, hs_auth: Option<CHandshakeAuth<'a>>) -> Self {
+    pub fn new(hs_static: CHandshakeStatic, hs_auth: CHandshakeAuth<'a>) -> Self {
         Self { hs_static, hs_auth }
     }
     /// Resume handshake with the given state and buffer
@@ -242,6 +261,12 @@ impl<'a> CHandshake<'a> {
                 pwd_l,
             } => Self::resume_at_variable_block_payload(scanner, static_hs, uname_l, pwd_l),
         }
+    }
+    pub fn hs_static(&self) -> CHandshakeStatic {
+        self.hs_static
+    }
+    pub fn hs_auth(&self) -> &CHandshakeAuth<'a> {
+        &self.hs_auth
     }
 }
 
@@ -319,10 +344,7 @@ impl<'a> CHandshake<'a> {
                 // UNSAFE(@ohsayan): we just checked buffered size
                 let uname = scanner.next_chunk_variable(uname_l);
                 let pwd = scanner.next_chunk_variable(pwd_l);
-                HandshakeResult::Completed(Self::new(
-                    static_hs,
-                    Some(CHandshakeAuth::new(uname, pwd)),
-                ))
+                HandshakeResult::Completed(Self::new(static_hs, CHandshakeAuth::new(uname, pwd)))
             };
         }
         HandshakeResult::ChangeState {
@@ -352,14 +374,6 @@ impl<'a> CHandshake<'a> {
         }
         // we seem to have enough data for this auth mode
         match static_header.auth_mode {
-            AuthMode::Anonymous => {
-                if unsafe { scanner.next_byte() } == 0 {
-                    // matched
-                    return HandshakeResult::Completed(Self::new(static_header, None));
-                }
-                // we can only accept a NUL byte
-                return HandshakeResult::Error(ProtocolError::RejectAuth);
-            }
             AuthMode::Password => {}
         }
         // let us see if we can parse the username length

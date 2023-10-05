@@ -157,13 +157,6 @@ impl GenericDictEntryMD {
             dscr: data[8],
         }
     }
-    /// encode md
-    pub(crate) fn encode(klen: usize, dscr: u8) -> [u8; 9] {
-        let mut ret = [0u8; 9];
-        ret[..8].copy_from_slice(&klen.u64_bytes_le());
-        ret[8] = dscr;
-        ret
-    }
 }
 
 impl PersistMapSpec for GenericDictSpec {

@@ -26,8 +26,6 @@
 
 use std::hash::{BuildHasher, Hasher};
 
-pub type Hasher32Fx = HasherRawFx<u32>;
-pub type Hasher64Fx = HasherRawFx<u64>;
 pub type HasherNativeFx = HasherRawFx<usize>;
 
 const ROTATE: u32 = 5;

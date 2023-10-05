@@ -24,6 +24,7 @@
  *
 */
 
+
 use {
     super::atm::{ORD_ACQ, ORD_REL, ORD_RLX},
     std::{
@@ -39,8 +40,6 @@ use {
         sync::atomic::{self, AtomicUsize},
     },
 };
-
-pub type BytesRC = SliceRC<u8>;
 
 #[derive(Debug, Clone)]
 pub struct StrRC {
@@ -124,14 +123,6 @@ impl<T> SliceRC<T> {
                 // UNSAFE(@ohsayan): we will eventually deallocate this
                 EArc::new()
             },
-        }
-    }
-    #[inline(always)]
-    pub fn from_bx(b: Box<[T]>) -> Self {
-        let mut b = ManuallyDrop::new(b);
-        unsafe {
-            // UNSAFE(@ohsayan): non-null from the slice as usual
-            Self::new(NonNull::new_unchecked(b.as_mut_ptr()), b.len())
         }
     }
     #[inline(always)]

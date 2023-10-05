@@ -232,6 +232,7 @@ pub fn collect_trace_path() -> Vec<&'static str> {
     ROUTE_TRACE.with(|v| v.borrow().iter().cloned().collect())
 }
 
+#[allow(unused)]
 pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, update.entity(), |mdl| {
         let mut ret = Ok(());

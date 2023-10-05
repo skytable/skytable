@@ -37,9 +37,6 @@ impl Uuid {
             data: uuid::Uuid::new_v4(),
         }
     }
-    pub fn as_slice(&self) -> &[u8] {
-        self.data.as_bytes()
-    }
     pub fn from_bytes(b: [u8; 16]) -> Self {
         Self {
             data: uuid::Uuid::from_u128_le(u128::from_le_bytes(b)),

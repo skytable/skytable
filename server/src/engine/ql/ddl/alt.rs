@@ -47,6 +47,7 @@ pub struct AlterSpace<'a> {
 }
 
 impl<'a> AlterSpace<'a> {
+    #[cfg(test)]
     pub fn new(space_name: Ident<'a>, updated_props: DictGeneric) -> Self {
         Self {
             space_name,

@@ -27,7 +27,6 @@
 //! Implementations of the Skytable Disk Storage Subsystem (SDSS)
 
 mod checksum;
-mod header;
 mod versions;
 // impls
 pub mod v1;

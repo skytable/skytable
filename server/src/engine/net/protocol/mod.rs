@@ -24,65 +24,126 @@
  *
 */
 
+use tokio::io::AsyncWriteExt;
+
 mod exchange;
 mod handshake;
 #[cfg(test)]
 mod tests;
 
+// re-export
+pub use exchange::SQuery;
+
 use {
-    self::handshake::{CHandshake, HandshakeResult, HandshakeState},
-    super::{IoResult, QLoopReturn, Socket},
-    crate::engine::{fractal::Global, mem::BufferedScanner},
+    self::{
+        exchange::{QueryTimeExchangeResult, QueryTimeExchangeState},
+        handshake::{
+            AuthMode, CHandshake, DataExchangeMode, HandshakeResult, HandshakeState,
+            HandshakeVersion, ProtocolError, ProtocolVersion, QueryMode,
+        },
+    },
+    super::{IoResult, QueryLoopResult, Socket},
+    crate::engine::{
+        self,
+        fractal::{Global, GlobalInstanceLike},
+        mem::BufferedScanner,
+    },
     bytes::{Buf, BytesMut},
     tokio::io::{AsyncReadExt, BufWriter},
 };
 
-pub async fn query_loop<S: Socket>(
+pub(super) async fn query_loop<S: Socket>(
     con: &mut BufWriter<S>,
     buf: &mut BytesMut,
-    _global: &Global,
-) -> IoResult<QLoopReturn> {
+    global: &Global,
+) -> IoResult<QueryLoopResult> {
     // handshake
-    match do_handshake(con, buf).await? {
-        Some(ret) => return Ok(ret),
-        None => {}
-    }
+    let _ = match do_handshake(con, buf, global).await? {
+        PostHandshake::Okay(hs) => hs,
+        PostHandshake::ConnectionClosedFin => return Ok(QueryLoopResult::Fin),
+        PostHandshake::ConnectionClosedRst => return Ok(QueryLoopResult::Rst),
+        PostHandshake::Error(e) => {
+            // failed to handshake; we'll close the connection
+            let hs_err_packet = [b'H', b'1', 1, e.value_u8()];
+            con.write_all(&hs_err_packet).await?;
+            return Ok(QueryLoopResult::HSFailed);
+        }
+    };
     // done handshaking
+    con.write_all(b"H1\x00\x00\x00").await?;
+    let mut exchg_state = QueryTimeExchangeState::default();
+    let mut expect_more = exchange::EXCHANGE_MIN_SIZE;
+    let mut cursor = 0;
     loop {
         let read_many = con.read_buf(buf).await?;
-        if let Some(t) = see_if_connection_terminates(read_many, buf) {
-            return Ok(t);
+        if read_many == 0 {
+            if buf.is_empty() {
+                return Ok(QueryLoopResult::Fin);
+            } else {
+                return Ok(QueryLoopResult::Rst);
+            }
         }
-        todo!()
+        if read_many < expect_more {
+            // we haven't buffered sufficient bytes; keep working
+            continue;
+        }
+        let mut buffer = unsafe { BufferedScanner::new_with_cursor(&buf, cursor) };
+        let sq = match exchange::resume(&mut buffer, exchg_state) {
+            QueryTimeExchangeResult::ChangeState {
+                new_state,
+                expect_more: _more,
+            } => {
+                exchg_state = new_state;
+                expect_more = _more;
+                cursor = buffer.cursor();
+                continue;
+            }
+            QueryTimeExchangeResult::SQCompleted(sq) => sq,
+            QueryTimeExchangeResult::Error => {
+                con.write_all(b"!\x00").await?;
+                exchg_state = QueryTimeExchangeState::default();
+                continue;
+            }
+        };
+        // now execute query
+        match engine::core::exec::execute_query(global, sq).await {
+            Ok(()) => {
+                buf.clear();
+            }
+            Err(_e) => {
+                // TOOD(@ohsayan): actual error codes! 
+                con.write_all(&[b'!', 1]).await?;
+            },
+        }
+        exchg_state = QueryTimeExchangeState::default();
     }
 }
 
-#[inline(always)]
-fn see_if_connection_terminates(read_many: usize, buf: &[u8]) -> Option<QLoopReturn> {
-    if read_many == 0 {
-        // that's a connection termination
-        if buf.is_empty() {
-            // nice termination
-            return Some(QLoopReturn::Fin);
-        } else {
-            return Some(QLoopReturn::ConnectionRst);
-        }
-    }
-    None
+#[derive(Debug, PartialEq)]
+enum PostHandshake {
+    Okay(handshake::CHandshakeStatic),
+    Error(ProtocolError),
+    ConnectionClosedFin,
+    ConnectionClosedRst,
 }
 
 async fn do_handshake<S: Socket>(
     con: &mut BufWriter<S>,
     buf: &mut BytesMut,
-) -> IoResult<Option<QLoopReturn>> {
+    global: &Global,
+) -> IoResult<PostHandshake> {
     let mut expected = CHandshake::INITIAL_READ;
     let mut state = HandshakeState::default();
     let mut cursor = 0;
     let handshake;
     loop {
         let read_many = con.read_buf(buf).await?;
-        if let Some(t) = see_if_connection_terminates(read_many, buf) {
-            return Ok(Some(t));
+        if read_many == 0 {
+            if buf.is_empty() {
+                return Ok(PostHandshake::ConnectionClosedFin);
+            } else {
+                return Ok(PostHandshake::ConnectionClosedRst);
+            }
         }
         if buf.len() < expected {
             continue;
@@ -98,10 +159,38 @@ async fn do_handshake<S: Socket>(
                 state = new_state;
                 cursor = scanner.cursor();
             }
-            HandshakeResult::Error(_) => todo!(),
+            HandshakeResult::Error(e) => {
+                return Ok(PostHandshake::Error(e));
+            }
         }
     }
-    dbg!(handshake);
-    buf.advance(cursor);
-    Ok(None)
+    // check handshake
+    if cfg!(debug_assertions) {
+        assert_eq!(
+            handshake.hs_static().hs_version(),
+            HandshakeVersion::Original
+        );
+        assert_eq!(handshake.hs_static().protocol(), ProtocolVersion::Original);
+        assert_eq!(
+            handshake.hs_static().exchange_mode(),
+            DataExchangeMode::QueryTime
+        );
+        assert_eq!(handshake.hs_static().query_mode(), QueryMode::Bql1);
+        assert_eq!(handshake.hs_static().auth_mode(), AuthMode::Password);
+    }
+    match core::str::from_utf8(handshake.hs_auth().username()) {
+        Ok(uname) => {
+            let auth = global.sys_cfg().auth_data().read();
+            if auth
+                .verify_user(uname, handshake.hs_auth().password())
+                .is_ok()
+            {
+                let hs_static = handshake.hs_static();
+                buf.advance(cursor);
+                return Ok(PostHandshake::Okay(hs_static));
+            }
+        }
+        Err(_) => {}
+    };
+    Ok(PostHandshake::Error(ProtocolError::RejectAuth))
 }

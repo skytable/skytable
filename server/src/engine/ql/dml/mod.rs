@@ -158,9 +158,6 @@ impl<'a> WhereClause<'a> {
         state.poison_if(c.is_empty());
         Self { c }
     }
-    pub fn clauses(&self) -> &WhereClauseCollection {
-        &self.c
-    }
 }
 
 #[cfg(test)]
@@ -182,7 +179,7 @@ mod impls {
     }
     impl<'a> ASTNode<'a> for RelationalExpr<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-            Self::try_parse(state).ok_or(QueryError::QLIllegalRelExp)
+            Self::try_parse(state).ok_or(QueryError::QLInvalidSyntax)
         }
     }
 }

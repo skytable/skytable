@@ -51,12 +51,6 @@ impl<T> ModifyGuard<T> {
             modified: false,
         }
     }
-    pub const fn modified(me: &Self) -> bool {
-        me.modified
-    }
-    pub const fn same(me: &Self) -> bool {
-        !me.modified
-    }
 }
 
 impl<T> core::ops::Deref for ModifyGuard<T> {
@@ -80,13 +74,14 @@ impl<T> core::ops::DerefMut for ModifyGuard<T> {
 #[derive(Debug, PartialEq)]
 /// The final configuration that can be used to start up all services
 pub struct Configuration {
-    endpoints: ConfigEndpoint,
-    mode: ConfigMode,
-    system: ConfigSystem,
-    auth: ConfigAuth,
+    pub endpoints: ConfigEndpoint,
+    pub mode: ConfigMode,
+    pub system: ConfigSystem,
+    pub auth: ConfigAuth,
 }
 
 impl Configuration {
+    #[cfg(test)]
     pub fn new(
         endpoints: ConfigEndpoint,
         mode: ConfigMode,
@@ -136,21 +131,29 @@ pub struct ConfigEndpointTcp {
 }
 
 impl ConfigEndpointTcp {
+    #[cfg(test)]
     pub fn new(host: String, port: u16) -> Self {
         Self { host, port }
+    }
+    pub fn host(&self) -> &str {
+        self.host.as_ref()
+    }
+    pub fn port(&self) -> u16 {
+        self.port
     }
 }
 
 #[derive(Debug, PartialEq)]
 /// TLS endpoint configuration
 pub struct ConfigEndpointTls {
-    tcp: ConfigEndpointTcp,
+    pub tcp: ConfigEndpointTcp,
     cert: String,
     private_key: String,
     pkey_pass: String,
 }
 
 impl ConfigEndpointTls {
+    #[cfg(test)]
     pub fn new(
         tcp: ConfigEndpointTcp,
         cert: String,
@@ -164,13 +167,25 @@ impl ConfigEndpointTls {
             pkey_pass,
         }
     }
+    pub fn tcp(&self) -> &ConfigEndpointTcp {
+        &self.tcp
+    }
+    pub fn cert(&self) -> &str {
+        self.cert.as_ref()
+    }
+    pub fn private_key(&self) -> &str {
+        self.private_key.as_ref()
+    }
+    pub fn pkey_pass(&self) -> &str {
+        self.pkey_pass.as_ref()
+    }
 }
 
 /*
     config mode
 */
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone, Copy)]
 /// The configuration mode
 pub enum ConfigMode {
     /// In [`ConfigMode::Dev`] we're allowed to be more relaxed with settings
@@ -193,6 +208,7 @@ pub struct ConfigSystem {
 }
 
 impl ConfigSystem {
+    #[cfg(test)]
     pub fn new(reliability_system_window: u64) -> Self {
         Self {
             reliability_system_window,
@@ -991,8 +1007,6 @@ fn validate_configuration<CS: ConfigurationSource>(
 /// The return from parsing a configuration file
 #[derive(Debug, PartialEq)]
 pub enum ConfigReturn {
-    /// No configuration was provided. Need to use default
-    Default,
     /// Don't need to do anything. We've output a message and we're good to exit
     HelpMessage(String),
     /// A configuration that we have fully validated was provided
@@ -1014,11 +1028,7 @@ pub(super) fn apply_and_validate<CS: ConfigurationSource>(
     mut args: ParsedRawArgs,
 ) -> RuntimeResult<ConfigReturn> {
     let cfg = apply_config_changes::<CS>(&mut args)?;
-    if ModifyGuard::modified(&cfg) {
-        validate_configuration::<CS>(cfg.val).map(ConfigReturn::Config)
-    } else {
-        Ok(ConfigReturn::Default)
-    }
+    validate_configuration::<CS>(cfg.val).map(ConfigReturn::Config)
 }
 
 /*
@@ -1158,7 +1168,10 @@ pub fn check_configuration() -> RuntimeResult<ConfigReturn> {
                 }
                 None => {
                     // no env args or cli args; we're running on default
-                    return Ok(ConfigReturn::Default);
+                    return Err(ConfigError::new(ConfigErrorKind::ErrorString(
+                        "no configuration provided".into(),
+                    ))
+                    .into());
                 }
             }
         }

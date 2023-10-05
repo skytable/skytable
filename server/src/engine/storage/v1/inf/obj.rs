@@ -211,7 +211,6 @@ impl<'a> PersistObject for FieldRef<'a> {
     }
 }
 
-pub struct ModelLayout;
 pub struct ModelLayoutMD {
     model_uuid: Uuid,
     p_key_len: u64,
@@ -298,7 +297,6 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
     }
 }
 
-pub struct SpaceLayout;
 #[derive(Debug)]
 pub struct SpaceLayoutMD {
     uuid: Uuid,

@@ -79,15 +79,15 @@ pub fn resume<'a>(
     scanner: &mut BufferedScanner<'a>,
     state: QueryTimeExchangeState,
 ) -> QueryTimeExchangeResult<'a> {
-    if cfg!(debug_assertions) {
-        if !scanner.has_left(EXCHANGE_MIN_SIZE) {
-            return STATE_READ_INITIAL;
-        }
-    } else {
-        assert!(scanner.has_left(EXCHANGE_MIN_SIZE));
-    }
     match state {
         QueryTimeExchangeState::Initial => {
+            if cfg!(debug_assertions) {
+                if !scanner.has_left(EXCHANGE_MIN_SIZE) {
+                    return STATE_READ_INITIAL;
+                }
+            } else {
+                assert!(scanner.has_left(EXCHANGE_MIN_SIZE));
+            }
             // attempt to read atleast one byte
             if cfg!(debug_assertions) {
                 match scanner.try_next_byte() {
@@ -174,21 +174,23 @@ impl<'a> SQuery<'a> {
     pub(super) fn new(q: &'a [u8], q_window: usize) -> Self {
         Self { q, q_window }
     }
-    pub fn q(&self) -> &'a [u8] {
+    pub fn payload(&self) -> &'a [u8] {
         self.q
     }
     pub fn q_window(&self) -> usize {
         self.q_window
     }
     pub fn query(&self) -> &'a [u8] {
-        &self.q[..self.q_window]
+        &self.payload()[..self.q_window()]
     }
+    pub fn params(&self) -> &'a [u8] {
+        &self.payload()[self.q_window()..]
+    }
+    #[cfg(test)]
     pub fn query_str(&self) -> Option<&'a str> {
         core::str::from_utf8(self.query()).ok()
     }
-    pub fn params(&self) -> &'a [u8] {
-        &self.q[self.q_window..]
-    }
+    #[cfg(test)]
     pub fn params_str(&self) -> Option<&'a str> {
         core::str::from_utf8(self.params()).ok()
     }
@@ -295,6 +297,7 @@ impl<'a> SQuery<'a> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn create_simple_query<const N: usize>(query: &str, params: [&str; N]) -> Vec<u8> {
     let mut buf = vec![];
     let query_size_as_string = query.len().to_string();

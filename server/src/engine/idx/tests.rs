@@ -28,16 +28,11 @@ use super::*;
 
 mod idx_st_seq_dll {
     use super::{IndexBaseSpec, IndexSTSeqLib, STIndex, STIndexSeq};
-    use rand::{distributions::Alphanumeric, Rng};
 
     #[cfg(not(miri))]
     const SPAM_CNT: usize = 131_072;
     #[cfg(miri)]
     const SPAM_CNT: usize = 128;
-    #[cfg(not(miri))]
-    const SPAM_SIZE: usize = 128;
-    #[cfg(miri)]
-    const SPAM_SIZE: usize = 4;
 
     type Index = IndexSTSeqLib<String, String>;
 
@@ -58,12 +53,6 @@ mod idx_st_seq_dll {
     #[inline(always)]
     fn s(s: &str) -> String {
         s.to_owned()
-    }
-    fn ranstr(rand: &mut impl Rng) -> String {
-        rand.sample_iter(Alphanumeric)
-            .take(SPAM_SIZE)
-            .map(char::from)
-            .collect()
     }
     #[test]
     fn empty_drop() {

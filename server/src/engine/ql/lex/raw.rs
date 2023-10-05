@@ -29,6 +29,10 @@ use {
     core::{borrow::Borrow, fmt, ops::Deref, str},
 };
 
+/*
+    ident
+*/
+
 #[repr(transparent)]
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Ident<'a>(&'a [u8]);
@@ -109,6 +113,10 @@ impl<'a> Borrow<[u8]> for Ident<'a> {
     }
 }
 
+/*
+    token
+*/
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token<'a> {
     Symbol(Symbol),
@@ -159,71 +167,27 @@ direct_from! {
     }
 }
 
-build_lut!(
-    static KW_LUT in kwlut;
-    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-    pub enum Keyword {
-        Table = "table",
-        Model = "model",
-        Space = "space",
-        Index = "index",
-        Type = "type",
-        Function = "function",
-        Use = "use",
-        Create = "create",
-        Alter = "alter",
-        Drop = "drop",
-        Describe = "describe",
-        Truncate = "truncate",
-        Rename = "rename",
-        Add = "add",
-        Remove = "remove",
-        Transform = "transform",
-        Order = "order",
-        By = "by",
-        Primary = "primary",
-        Key = "key",
-        Value = "value",
-        With = "with",
-        On = "on",
-        Lock = "lock",
-        All = "all",
-        Insert = "insert",
-        Select = "select",
-        Exists = "exists",
-        Update = "update",
-        Delete = "delete",
-        Into = "into",
-        From = "from",
-        As = "as",
-        Return = "return",
-        Sort = "sort",
-        Group = "group",
-        Limit = "limit",
-        Asc = "asc",
-        Desc = "desc",
-        To = "to",
-        Set = "set",
-        Auto = "auto",
-        Default = "default",
-        In = "in",
-        Of = "of",
-        Transaction = "transaction",
-        Batch = "batch",
-        Read = "read",
-        Write = "write",
-        Begin = "begin",
-        End = "end",
-        Where = "where",
-        If = "if",
-        And = "and",
-        Or = "or",
-        Not = "not",
-        Null = "null",
+impl<'a> Token<'a> {
+    #[inline(always)]
+    pub(crate) const fn is_ident(&self) -> bool {
+        matches!(self, Token::Ident(_))
     }
-    |b: &str| -> &[u8] { b.as_bytes() },
-    |b: &str| -> String { b.to_ascii_uppercase() }
-);
+    #[inline(always)]
+    pub const fn is_lit(&self) -> bool {
+        matches!(self, Self::Lit(_))
+    }
+}
+
+impl<'a> AsRef<Token<'a>> for Token<'a> {
+    #[inline(always)]
+    fn as_ref(&self) -> &Token<'a> {
+        self
+    }
+}
+
+/*
+    symbols
+*/
 
 build_lut!(
     static SYM_LUT in symlut;
@@ -267,99 +231,225 @@ build_lut!(
     |c: u8| -> String { char::from(c).to_string() }
 );
 
+impl Symbol {
+    pub fn get(k: u8) -> Option<Self> {
+        const SYM_MAGIC_A: u8 = b'w';
+        const SYM_MAGIC_B: u8 = b'E';
+        static G: [u8; 69] = [
+            0, 0, 25, 0, 3, 0, 21, 0, 6, 13, 0, 0, 0, 0, 8, 0, 0, 0, 17, 0, 0, 30, 0, 28, 0, 20,
+            19, 12, 0, 0, 2, 0, 0, 15, 0, 0, 0, 5, 0, 31, 14, 0, 1, 0, 18, 29, 24, 0, 0, 10, 0, 0,
+            26, 0, 0, 0, 22, 0, 23, 7, 0, 27, 0, 4, 16, 11, 0, 0, 9,
+        ];
+        let symfh = |magic, k| (magic as u16 * k as u16) % G.len() as u16;
+        let hf =
+            (G[symfh(k, SYM_MAGIC_A) as usize] + G[symfh(k, SYM_MAGIC_B) as usize]) % G.len() as u8;
+        if hf < SYM_LUT.len() as u8 && SYM_LUT[hf as usize].0 == k {
+            Some(SYM_LUT[hf as usize].1)
+        } else {
+            None
+        }
+    }
+}
+
 /*
-    This section implements LUTs constructed using DAGs, as described by Czech et al in their paper. I wrote these pretty much by
-    brute-force using a byte-level multiplicative function (inside a script). This unfortunately implies that every time we *do*
-    need to add a new keyword, I will need to recompute and rewrite the vertices. I don't plan to use any codegen, so I think
-    this is good as-is. The real challenge here is to keep the graph small, and I couldn't do that for the symbols table even with
-    multiple trials. Please see if you can improve them.
-
-    Also the functions are unique to every graph, and every input set, so BE WARNED!
-
-    -- Sayan (@ohsayan)
-    Sept. 18, 2022
+    keywords
 */
 
-const SYM_MAGIC_A: u8 = b'w';
-const SYM_MAGIC_B: u8 = b'E';
-
-static SYM_GRAPH: [u8; 69] = [
-    0, 0, 25, 0, 3, 0, 21, 0, 6, 13, 0, 0, 0, 0, 8, 0, 0, 0, 17, 0, 0, 30, 0, 28, 0, 20, 19, 12, 0,
-    0, 2, 0, 0, 15, 0, 0, 0, 5, 0, 31, 14, 0, 1, 0, 18, 29, 24, 0, 0, 10, 0, 0, 26, 0, 0, 0, 22, 0,
-    23, 7, 0, 27, 0, 4, 16, 11, 0, 0, 9,
-];
-
-#[inline(always)]
-fn symfh(k: u8, magic: u8) -> u16 {
-    (magic as u16 * k as u16) % SYM_GRAPH.len() as u16
+macro_rules! flattened_lut {
+	(
+        $staticvis:vis static $staticname:ident in $staticpriv:ident;
+		$(#[$enumattr:meta])*
+		$vis:vis enum $enum:ident {
+			$($(#[$variant_attr:meta])* $variant:ident => {
+                $(#[$nested_enum_attr:meta])*
+                $nested_enum_vis:vis enum $nested_enum_name:ident {$($(#[$nested_variant_attr:meta])* $nested_enum_variant_name:ident $(= $nested_enum_variant_dscr:expr)?,)*}
+            }),* $(,)?
+		}
+	) => {
+		$(
+			$(#[$nested_enum_attr])*
+			$nested_enum_vis enum $nested_enum_name {$($(#[$nested_variant_attr])* $nested_enum_variant_name $(= $nested_enum_variant_dscr)*),*}
+			impl $nested_enum_name {
+                const __LEN: usize = {let mut i = 0; $( let _ = Self::$nested_enum_variant_name; i += 1; )*i};
+                const __SL: [usize; 2] = {
+                    let mut largest = 0;
+                    let mut smallest = usize::MAX;
+                    $(
+                        let this = stringify!($nested_enum_variant_name).len();
+                        if this > largest { largest = this } if this < smallest { smallest = this }
+                    )*
+                    [smallest, largest]
+                };
+                const __SMALLEST: usize = Self::__SL[0];
+                const __LARGEST: usize = Self::__SL[1];
+                const fn __max() -> usize { Self::__LEN }
+				pub const fn as_str(&self) -> &'static str {match self {$(
+                    Self::$nested_enum_variant_name => {
+                        const NAME_STR: &'static str = stringify!($nested_enum_variant_name);
+                        const NAME_BUF: [u8; { NAME_STR.len() }] = {
+                            let mut buf = [0u8; { NAME_STR.len() }]; let name = NAME_STR.as_bytes();
+                            buf[0] = name[0].to_ascii_lowercase(); let mut i = 1;
+                            while i < NAME_STR.len() { buf[i] = name[i]; i += 1; }
+                            buf
+                        }; const NAME: &'static str = unsafe { core::str::from_utf8_unchecked(&NAME_BUF) }; NAME
+                    }
+				)*}}
+			}
+            impl ToString for $nested_enum_name { fn to_string(&self) -> String { self.as_str().to_owned() } }
+		)*
+        $(#[$enumattr])*
+        $vis enum $enum {$($(#[$variant_attr])* $variant($nested_enum_name)),*}
+        impl $enum { pub const fn as_str(&self) -> &'static str { match self {$(Self::$variant(v) => { $nested_enum_name::as_str(v) })*} } }
+        impl $enum {
+            const SL: [usize; 2] = {
+                let mut largest = 0; let mut smallest = usize::MAX;
+                $(
+                    if $nested_enum_name::__LARGEST > largest { largest = $nested_enum_name::__LARGEST; }
+                    if $nested_enum_name::__SMALLEST < smallest { smallest = $nested_enum_name::__SMALLEST; }
+                )*
+                [smallest, largest]
+            };
+            const SIZE_MIN: usize = Self::SL[0];
+            const SIZE_MAX: usize = Self::SL[1];
+        }
+        impl ToString for $enum { fn to_string(&self) -> String { self.as_str().to_owned() } }
+        mod $staticpriv { pub const LEN: usize = { let mut i = 0; $(i += super::$nested_enum_name::__max();)* i }; }
+        $staticvis static $staticname: [(&'static [u8], $enum); { $staticpriv::LEN }] = [
+            $($(($nested_enum_name::$nested_enum_variant_name.as_str().as_bytes() ,$enum::$variant($nested_enum_name::$nested_enum_variant_name)),)*)*
+        ];
+	}
 }
 
-#[inline(always)]
-fn symph(k: u8) -> u8 {
-    (SYM_GRAPH[symfh(k, SYM_MAGIC_A) as usize] + SYM_GRAPH[symfh(k, SYM_MAGIC_B) as usize])
-        % SYM_GRAPH.len() as u8
-}
-
-#[inline(always)]
-pub(super) fn symof(sym: u8) -> Option<Symbol> {
-    let hf = symph(sym);
-    if hf < SYM_LUT.len() as u8 && SYM_LUT[hf as usize].0 == sym {
-        Some(SYM_LUT[hf as usize].1)
-    } else {
-        None
+flattened_lut! {
+    static KW_LUT in kwlut;
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    #[repr(u8)]
+    pub enum Keyword {
+        Statement => {
+            #[derive(Debug, PartialEq, Clone, Copy, sky_macros::EnumMethods)]
+            #[repr(u8)]
+            /// A statement keyword
+            pub enum KeywordStmt {
+                // sys
+                Sysctl = 0,
+                Describe = 1,
+                Inspect = 2,
+                // ddl
+                Use = 3,
+                Create = 4,
+                Alter = 5,
+                Drop = 6,
+                // dml
+                Insert = 7,
+                Select = 8,
+                Update = 9,
+                Delete = 10,
+                Exists = 11,
+            }
+        },
+        /// Hi
+        Misc => {
+            #[derive(Debug, PartialEq, Clone, Copy)]
+            #[repr(u8)]
+            /// Misc. keywords
+            pub enum KeywordMisc {
+                // item definitions
+                Table,
+                Model,
+                Space,
+                Index,
+                Type,
+                Function,
+                // operations
+                Rename,
+                Add,
+                Remove,
+                Transform,
+                Set,
+                // sort related
+                Order,
+                Sort,
+                Group,
+                Limit,
+                Asc,
+                Desc,
+                All,
+                // container relational specifier
+                By,
+                With,
+                On,
+                From,
+                Into,
+                As,
+                To,
+                In,
+                Of,
+                // logical
+                And,
+                Or,
+                Not,
+                // conditional
+                If,
+                Else,
+                Where,
+                When,
+                // value
+                Auto,
+                Default,
+                Null,
+                // transaction related
+                Transaction,
+                Batch,
+                Lock,
+                Read,
+                Write,
+                Begin,
+                End,
+                // misc
+                Key,
+                Value,
+                Primary,
+                // temporarily reserved (will probably be removed in the future)
+                Truncate, // TODO: decide what we want to do with this
+            }
+        }
     }
 }
 
-static KWG: [u8; 63] = [
-    0, 24, 15, 29, 51, 53, 44, 38, 43, 4, 27, 1, 37, 57, 32, 0, 46, 24, 59, 45, 32, 52, 8, 0, 23,
-    19, 33, 48, 56, 60, 33, 53, 18, 47, 49, 53, 2, 19, 1, 34, 19, 58, 11, 5, 0, 41, 27, 24, 20, 2,
-    0, 0, 48, 2, 42, 46, 43, 0, 18, 33, 21, 12, 41,
-];
-
-const KWMG_1: [u8; 11] = *b"MpVBwC1vsCy";
-const KWMG_2: [u8; 11] = *b"m7sNd9mtGzC";
-const KWMG_S: usize = KWMG_1.len();
-
-#[inline(always)]
-fn kwhf(k: &[u8], mg: &[u8]) -> u32 {
-    let mut i = 0;
-    let mut s = 0;
-    while i < k.len() {
-        s += mg[i % KWMG_S] as u32 * k[i] as u32;
-        i += 1;
+impl Keyword {
+    pub fn get(k: &[u8]) -> Option<Self> {
+        if (k.len() > Self::SIZE_MAX) | (k.len() < Self::SIZE_MIN) {
+            None
+        } else {
+            Self::compute(k)
+        }
     }
-    s % KWG.len() as u32
-}
-
-#[inline(always)]
-fn kwph(k: &[u8]) -> u8 {
-    (KWG[kwhf(k, &KWMG_1) as usize] + KWG[kwhf(k, &KWMG_2) as usize]) % KWG.len() as u8
-}
-
-#[inline(always)]
-pub(super) fn kwof(key: &[u8]) -> Option<Keyword> {
-    let ph = kwph(key);
-    if ph < KW_LUT.len() as u8 && KW_LUT[ph as usize].0 == key {
-        Some(KW_LUT[ph as usize].1)
-    } else {
-        None
+    fn compute(key: &[u8]) -> Option<Self> {
+        static G: [u8; 67] = [
+            0, 42, 57, 0, 20, 61, 15, 46, 28, 0, 31, 2, 1, 44, 47, 10, 35, 53, 30, 28, 48, 9, 1,
+            51, 61, 20, 20, 47, 23, 31, 0, 52, 55, 59, 27, 45, 54, 49, 29, 0, 66, 54, 23, 58, 13,
+            31, 47, 56, 1, 30, 40, 0, 0, 42, 27, 63, 6, 24, 65, 45, 42, 63, 60, 14, 26, 4, 13,
+        ];
+        static M1: [u8; 11] = *b"wsE1pgJgJMO";
+        static M2: [u8; 11] = *b"fICAB04WegN";
+        let h1 = Self::_sum(key, M1) % G.len();
+        let h2 = Self::_sum(key, M2) % G.len();
+        let h = (G[h1] + G[h2]) as usize % G.len();
+        if h < G.len() && KW_LUT[h].0.eq_ignore_ascii_case(key) {
+            Some(KW_LUT[h].1)
+        } else {
+            None
+        }
     }
-}
-
-impl<'a> Token<'a> {
     #[inline(always)]
-    pub(crate) const fn is_ident(&self) -> bool {
-        matches!(self, Token::Ident(_))
-    }
-    #[inline(always)]
-    pub const fn is_lit(&self) -> bool {
-        matches!(self, Self::Lit(_))
-    }
-}
-
-impl<'a> AsRef<Token<'a>> for Token<'a> {
-    #[inline(always)]
-    fn as_ref(&self) -> &Token<'a> {
-        self
+    fn _sum(key: &[u8], block: [u8; 11]) -> usize {
+        let mut sum = 0;
+        let mut i = 0;
+        while i < key.len() {
+            let char = block[i % 11];
+            sum += char as usize * (key[i] | 0x20) as usize;
+            i += 1;
+        }
+        sum
     }
 }

@@ -24,8 +24,6 @@
  *
 */
 
-#[cfg(test)]
-use crate::engine::storage::v1::memfs::VirtualFS;
 use {
     crate::{
         engine::{
@@ -57,11 +55,6 @@ pub use {
     },
     space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
 };
-
-pub type GNSTransactionDriverNullZero =
-    GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullFS>;
-#[cfg(test)]
-pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
 
 /// The GNS transaction driver is used to handle DDL transactions
 pub struct GNSTransactionDriverAnyFS<Fs: RawFSInterface = LocalFS> {
@@ -198,6 +191,7 @@ pub struct SpaceIDRes {
 }
 
 impl SpaceIDRes {
+    #[cfg(test)]
     pub fn new(uuid: Uuid, name: Box<str>) -> Self {
         Self { uuid, name }
     }

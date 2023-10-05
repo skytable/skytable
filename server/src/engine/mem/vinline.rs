@@ -73,6 +73,7 @@ impl<const N: usize, T> VInline<N, T> {
         }
     }
     #[inline(always)]
+    #[allow(unused)]
     pub fn clear(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): as_slice_mut will always give a valid ptr
@@ -81,6 +82,7 @@ impl<const N: usize, T> VInline<N, T> {
         self.l = 0;
     }
     #[inline(always)]
+    #[allow(unused)]
     pub fn remove(&mut self, idx: usize) -> T {
         if !(idx < self.len()) {
             panic!("index out of range");
@@ -91,12 +93,14 @@ impl<const N: usize, T> VInline<N, T> {
         }
     }
     #[inline(always)]
+    #[allow(unused)]
     pub fn remove_compact(&mut self, idx: usize) -> T {
         let r = self.remove(idx);
         self.optimize_capacity();
         r
     }
     #[inline(always)]
+    #[allow(unused)]
     /// SAFETY: `idx` must be < l
     unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
         // UNSAFE(@ohsayan): idx is in range
@@ -122,6 +126,7 @@ impl<const N: usize, T> VInline<N, T> {
     const _ENSURE_ALIGN: () =
         debug_assert!(mem::align_of::<Vec<String>>() == mem::align_of::<VInline<N, String>>());
     #[inline(always)]
+    #[cfg(test)]
     pub fn on_heap(&self) -> bool {
         self.c > N
     }

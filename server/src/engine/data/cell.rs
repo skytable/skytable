@@ -333,13 +333,6 @@ impl Datacell {
     pub fn is_init(&self) -> bool {
         self.init
     }
-    pub fn as_option(&self) -> Option<&Datacell> {
-        if self.init {
-            Some(self)
-        } else {
-            None
-        }
-    }
     unsafe fn load_word<'a, T>(&'a self) -> T
     where
         NativeQword: WordIO<T>,
@@ -348,13 +341,6 @@ impl Datacell {
     }
     unsafe fn _new(tag: CUTag, data: DataRaw, init: bool) -> Self {
         Self { init, tag, data }
-    }
-    pub unsafe fn upgrade_from(a: u64, b: usize, tag: CUTag) -> Self {
-        Self {
-            init: true,
-            tag,
-            data: DataRaw::word(DwordQN::dwordqn_store_qw_nw(a, b)),
-        }
     }
     unsafe fn new(tag: CUTag, data: DataRaw) -> Self {
         Self::_new(tag, data, true)

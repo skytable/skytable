@@ -27,7 +27,10 @@
 use crate::engine::config::ConfigAuth;
 
 use {
-    crate::engine::error::{QueryError, QueryResult},
+    crate::engine::{
+        config::ConfigMode,
+        error::{QueryError, QueryResult},
+    },
     parking_lot::RwLock,
     std::collections::{hash_map::Entry, HashMap},
 };
@@ -37,23 +40,27 @@ use {
 pub struct SysConfig {
     auth_data: RwLock<SysAuth>,
     host_data: SysHostData,
+    run_mode: ConfigMode,
 }
 
 impl PartialEq for SysConfig {
     fn eq(&self, other: &Self) -> bool {
-        self.host_data == other.host_data && self.auth_data.read().eq(&other.auth_data.read())
+        self.run_mode == other.run_mode
+            && self.host_data == other.host_data
+            && self.auth_data.read().eq(&other.auth_data.read())
     }
 }
 
 impl SysConfig {
     /// Initialize a new system config
-    pub fn new(auth_data: RwLock<SysAuth>, host_data: SysHostData) -> Self {
+    pub fn new(auth_data: RwLock<SysAuth>, host_data: SysHostData, run_mode: ConfigMode) -> Self {
         Self {
             auth_data,
             host_data,
+            run_mode,
         }
     }
-    pub fn new_full(new_auth: ConfigAuth, host_data: SysHostData) -> Self {
+    pub fn new_full(new_auth: ConfigAuth, host_data: SysHostData, run_mode: ConfigMode) -> Self {
         Self::new(
             RwLock::new(SysAuth::new(
                 rcrypt::hash(new_auth.root_key, rcrypt::DEFAULT_COST)
@@ -62,10 +69,11 @@ impl SysConfig {
                 Default::default(),
             )),
             host_data,
+            run_mode,
         )
     }
-    pub fn new_auth(new_auth: ConfigAuth) -> Self {
-        Self::new_full(new_auth, SysHostData::new(0, 0))
+    pub fn new_auth(new_auth: ConfigAuth, run_mode: ConfigMode) -> Self {
+        Self::new_full(new_auth, SysHostData::new(0, 0), run_mode)
     }
     #[cfg(test)]
     /// A test-mode default setting with the root password set to `password12345678`
@@ -78,6 +86,7 @@ impl SysConfig {
                 Default::default(),
             )),
             host_data: SysHostData::new(0, 0),
+            run_mode: ConfigMode::Dev,
         }
     }
     /// Returns a handle to the authentication data
@@ -141,6 +150,7 @@ impl SysAuth {
         Self { root_key, users }
     }
     /// Create a new user with the given details
+    #[allow(unused)]
     pub fn create_new_user(&mut self, username: &str, password: &str) -> QueryResult<()> {
         match self.users.entry(username.into()) {
             Entry::Vacant(ve) => {
@@ -155,7 +165,11 @@ impl SysAuth {
         }
     }
     /// Verify the user with the given details
-    pub fn verify_user(&self, username: &str, password: &str) -> QueryResult<()> {
+    pub fn verify_user<T: AsRef<[u8]> + ?Sized>(
+        &self,
+        username: &str,
+        password: &T,
+    ) -> QueryResult<()> {
         if username == "root" {
             if rcrypt::verify(password, self.root_key()).unwrap() {
                 return Ok(());

@@ -24,7 +24,9 @@
  *
 */
 
-mod protocol;
+use super::config::ConfigEndpointTcp;
+
+pub mod protocol;
 
 use {
     crate::engine::{error::RuntimeResult, fractal::error::ErrorContext, fractal::Global},
@@ -53,17 +55,18 @@ const CLIMIT: usize = 50000;
 
 static CLIM: Semaphore = Semaphore::const_new(CLIMIT);
 
+enum QueryLoopResult {
+    Fin,
+    Rst,
+    HSFailed,
+}
+
 /*
     socket definitions
 */
 
 impl Socket for TcpStream {}
 impl Socket for SslStream<TcpStream> {}
-
-pub enum QLoopReturn {
-    Fin,
-    ConnectionRst,
-}
 
 struct NetBackoff {
     at: Cell<u8>,
@@ -83,6 +86,9 @@ impl NetBackoff {
         self.at.get() >= Self::BACKOFF_MAX
     }
 }
+
+unsafe impl Send for NetBackoff {}
+unsafe impl Sync for NetBackoff {}
 
 /*
     listener
@@ -121,9 +127,20 @@ impl<S: Socket> ConnectionHandler<S> {
         } = self;
         loop {
             tokio::select! {
-                _ = protocol::query_loop(socket, buffer, global) => {},
-                _ = self.sig_terminate.recv() => {
+                ret = protocol::query_loop(socket, buffer, global) => {
+                    match ret {
+                        Ok(QueryLoopResult::Fin) => return Ok(()),
+                        Ok(QueryLoopResult::Rst) => error!("connection reset while talking to client"),
+                        Ok(QueryLoopResult::HSFailed) => error!("failed to handshake with client"),
+                        Err(e) => {
+                            error!("error while handling connection: {e}");
+                            return Err(e);
+                        }
+                    }
                     return Ok(())
+                },
+                _ = self.sig_terminate.recv() => {
+                    return Ok(());
                 }
             }
         }
@@ -140,15 +157,23 @@ pub struct Listener {
 }
 
 impl Listener {
+    pub async fn new_cfg(
+        tcp: &ConfigEndpointTcp,
+        global: Global,
+        sig_shutdown: broadcast::Sender<()>,
+    ) -> RuntimeResult<Self> {
+        Self::new(tcp.host(), tcp.port(), global, sig_shutdown).await
+    }
     pub async fn new(
-        binaddr: &str,
+        host: &str,
+        port: u16,
         global: Global,
         sig_shutdown: broadcast::Sender<()>,
     ) -> RuntimeResult<Self> {
         let (sig_inflight, sig_inflight_wait) = mpsc::channel(1);
-        let listener = TcpListener::bind(binaddr)
+        let listener = TcpListener::bind((host, port))
             .await
-            .set_dmsg(format!("failed to bind to port `{binaddr}`"))?;
+            .set_dmsg(format!("failed to bind to port `{host}:{port}`"))?;
         Ok(Self {
             global,
             listener,
@@ -183,7 +208,7 @@ impl Listener {
             backoff.spin().await;
         }
     }
-    async fn listen_tcp(&mut self) -> IoResult<()> {
+    pub async fn listen_tcp(&mut self) {
         loop {
             // acquire a permit
             let permit = CLIM.acquire().await.unwrap();
@@ -199,7 +224,7 @@ impl Listener {
             };
             let mut handler = ConnectionHandler::new(
                 stream,
-                self.global,
+                self.global.clone(),
                 self.sig_shutdown.subscribe(),
                 self.sig_inflight.clone(),
             );
@@ -212,12 +237,11 @@ impl Listener {
             drop(permit);
         }
     }
-    async fn listen_tls(
-        self: &mut Self,
-        tls_cert: String,
-        tls_priv_key: String,
-        tls_key_password: String,
-    ) -> RuntimeResult<()> {
+    pub fn init_tls(
+        tls_cert: &str,
+        tls_priv_key: &str,
+        tls_key_password: &str,
+    ) -> RuntimeResult<SslAcceptor> {
         let build_acceptor = || {
             let cert = X509::from_pem(tls_cert.as_bytes())?;
             let priv_key = PKey::private_key_from_pem_passphrase(
@@ -231,6 +255,9 @@ impl Listener {
             Ok::<_, openssl::error::ErrorStack>(builder.build())
         };
         let acceptor = build_acceptor().set_dmsg("failed to initialize TLS socket")?;
+        Ok(acceptor)
+    }
+    pub async fn listen_tls(&mut self, acceptor: &SslAcceptor) {
         loop {
             let stream = async {
                 let (stream, _) = self.accept().await?;
@@ -251,7 +278,7 @@ impl Listener {
             };
             let mut handler = ConnectionHandler::new(
                 stream,
-                self.global,
+                self.global.clone(),
                 self.sig_shutdown.subscribe(),
                 self.sig_inflight.clone(),
             );

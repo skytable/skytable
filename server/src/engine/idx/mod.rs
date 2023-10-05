@@ -43,10 +43,9 @@ pub use stord::iter::IndexSTSeqDllIterOrdKV;
 
 // re-exports
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;
+#[cfg(test)]
 pub type IndexSTSeqLib<K, V> = stord::IndexSTSeqDll<K, V, stord::config::LiberalConfig<K, V>>;
-pub type IndexMTRC<K, V> = mtchm::imp::ChmArc<K, V, mtchm::meta::DefConfig>;
 pub type IndexMTRaw<E> = mtchm::imp::Raw<E, mtchm::meta::DefConfig>;
-pub type IndexMTCp<K, V> = mtchm::imp::ChmCopy<K, V, mtchm::meta::DefConfig>;
 pub type IndexST<K, V, S = std::collections::hash_map::RandomState> =
     std::collections::hash_map::HashMap<K, V, S>;
 

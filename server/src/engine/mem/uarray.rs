@@ -53,10 +53,6 @@ impl<const N: usize, T> UArray<N, T> {
         self.l
     }
     #[inline(always)]
-    pub const fn capacity(&self) -> usize {
-        N
-    }
-    #[inline(always)]
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -70,6 +66,7 @@ impl<const N: usize, T> UArray<N, T> {
             self.push_unchecked(v);
         }
     }
+    #[allow(unused)]
     pub fn remove(&mut self, idx: usize) -> T {
         if idx >= self.len() {
             panic!("out of range. idx is `{idx}` but len is `{}`", self.len());

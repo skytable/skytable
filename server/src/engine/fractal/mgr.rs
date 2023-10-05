@@ -38,7 +38,10 @@ use {
     std::path::PathBuf,
     tokio::{
         fs,
-        sync::mpsc::{UnboundedReceiver, UnboundedSender},
+        sync::{
+            broadcast,
+            mpsc::{UnboundedReceiver, UnboundedSender},
+        },
         task::JoinHandle,
     },
 };
@@ -63,6 +66,7 @@ impl<T> Task<T> {
 
 /// A general task
 pub enum GenericTask {
+    #[allow(unused)]
     /// Delete a single file
     DeleteFile(PathBuf),
     /// Delete a directory (and all its children)
@@ -119,6 +123,7 @@ impl FractalRTStat {
             per_mdl_delta_max_size: per_model_limit as usize / sizeof!(DataDelta),
         }
     }
+    #[allow(unused)]
     pub(super) fn mem_free_bytes(&self) -> u64 {
         self.mem_free_bytes
     }
@@ -161,28 +166,60 @@ impl FractalMgr {
 }
 
 /// Handles to all the services that fractal needs. These are spawned on the default runtime
-pub struct FractalServiceHandles {
+pub struct FractalHandle {
     pub hp_handle: JoinHandle<()>,
     pub lp_handle: JoinHandle<()>,
+}
+
+#[must_use = "fractal engine won't boot unless you call boot"]
+pub struct FractalBoot {
+    global: super::Global,
+    lp_recv: UnboundedReceiver<Task<GenericTask>>,
+    hp_recv: UnboundedReceiver<Task<CriticalTask>>,
+}
+
+impl FractalBoot {
+    pub(super) fn prepare(
+        global: super::Global,
+        lp_recv: UnboundedReceiver<Task<GenericTask>>,
+        hp_recv: UnboundedReceiver<Task<CriticalTask>>,
+    ) -> Self {
+        Self {
+            global,
+            lp_recv,
+            hp_recv,
+        }
+    }
+    pub fn boot(self, sigterm: &broadcast::Sender<()>) -> FractalHandle {
+        let Self {
+            global,
+            lp_recv: lp_receiver,
+            hp_recv: hp_receiver,
+        } = self;
+        FractalMgr::start_all(global, sigterm, lp_receiver, hp_receiver)
+    }
 }
 
 impl FractalMgr {
     /// Start all background services, and return their handles
     pub(super) fn start_all(
         global: super::Global,
+        sigterm: &broadcast::Sender<()>,
         lp_receiver: UnboundedReceiver<Task<GenericTask>>,
         hp_receiver: UnboundedReceiver<Task<CriticalTask>>,
-    ) -> FractalServiceHandles {
+    ) -> FractalHandle {
         let fractal_mgr = global.get_state().fractal_mgr();
         let global_1 = global.clone();
         let global_2 = global.clone();
+        let sigterm_rx = sigterm.subscribe();
         let hp_handle = tokio::spawn(async move {
-            FractalMgr::hp_executor_svc(fractal_mgr, global_1, hp_receiver).await
+            FractalMgr::hp_executor_svc(fractal_mgr, global_1, hp_receiver, sigterm_rx).await
         });
+        let sigterm_rx = sigterm.subscribe();
         let lp_handle = tokio::spawn(async move {
-            FractalMgr::general_executor_svc(fractal_mgr, global_2, lp_receiver).await
+            FractalMgr::general_executor_svc(fractal_mgr, global_2, lp_receiver, sigterm_rx).await
         });
-        FractalServiceHandles {
+        FractalHandle {
             hp_handle,
             lp_handle,
         }
@@ -199,10 +236,23 @@ impl FractalMgr {
         &'static self,
         global: super::Global,
         mut receiver: UnboundedReceiver<Task<CriticalTask>>,
+        mut sigterm: broadcast::Receiver<()>,
     ) {
         loop {
-            let Some(Task { threshold, task }) = receiver.recv().await else {
-                return; // all handles closed; nothing left to do
+            let Task { threshold, task } = tokio::select! {
+                task = receiver.recv() => {
+                    match task {
+                        Some(t) => t,
+                        None => {
+                            info!("exiting fhp executor service because all tasks closed");
+                            break;
+                        }
+                    }
+                }
+                _ = sigterm.recv() => {
+                    info!("exited fhp executor service");
+                    break;
+                }
             };
             // TODO(@ohsayan): check threshold and update hooks
             match task {
@@ -257,9 +307,14 @@ impl FractalMgr {
         &'static self,
         global: super::Global,
         mut lpq: UnboundedReceiver<Task<GenericTask>>,
+        mut sigterm: broadcast::Receiver<()>,
     ) {
         loop {
             tokio::select! {
+                _ = sigterm.recv() => {
+                    info!("exited flp executor service");
+                    break;
+                },
                 _ = tokio::time::sleep(std::time::Duration::from_secs(Self::GENERAL_EXECUTOR_WINDOW)) => {
                     let mdl_drivers = global.get_state().get_mdl_drivers().read();
                     for (model_id, driver) in mdl_drivers.iter() {
@@ -284,8 +339,12 @@ impl FractalMgr {
                     }
                 }
                 task = lpq.recv() => {
-                    let Some(Task { threshold, task }) = task else {
-                        return;
+                    let Task { threshold, task } = match task {
+                        Some(t) => t,
+                        None => {
+                            info!("exiting flp executor service because all tasks closed");
+                            break;
+                        }
                     };
                     // TODO(@ohsayan): threshold
                     match task {

@@ -29,6 +29,7 @@ pub struct ByteStack<const N: usize> {
     array: [u8; N],
 }
 
+#[allow(dead_code)]
 impl<const N: usize> ByteStack<N> {
     #[inline(always)]
     pub const fn data_copy(&self) -> [u8; N] {

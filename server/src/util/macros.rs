@@ -227,38 +227,6 @@ macro_rules! do_sleep {
     }};
 }
 
-#[cfg(test)]
-macro_rules! tmut_bool {
-    ($e:expr) => {{
-        *(&$e as *const _ as *const bool)
-    }};
-    ($a:expr, $b:expr) => {
-        (tmut_bool!($a), tmut_bool!($b))
-    };
-}
-
-macro_rules! ucidx {
-    ($base:expr, $idx:expr) => {
-        *($base.as_ptr().add($idx as usize))
-    };
-}
-
-/// If you provide: [T; N] with M initialized elements, then you are given
-/// [MaybeUninit<T>; N] with M initialized elements and N-M uninit elements
-macro_rules! uninit_array {
-    ($($vis:vis const $id:ident: [$ty:ty; $len:expr] = [$($init_element:expr),*];)*) => {
-        $($vis const $id: [::core::mem::MaybeUninit<$ty>; $len] = {
-            let mut ret = [::core::mem::MaybeUninit::uninit(); $len];
-            let mut idx = 0;
-            $(
-                idx += 1;
-                ret[idx - 1] = ::core::mem::MaybeUninit::new($init_element);
-            )*
-            ret
-        };)*
-    };
-}
-
 #[macro_export]
 macro_rules! def {
     (

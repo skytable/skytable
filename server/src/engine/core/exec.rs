@@ -1,5 +1,5 @@
 /*
- * Created on Thu Sep 24 2020
+ * Created on Thu Oct 05 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,21 +24,12 @@
  *
 */
 
-use crate::dbnet::prelude::*;
+use crate::engine::{error::QueryResult, fractal::Global, net::protocol::SQuery};
 
-action!(
-    /// Returns the number of keys in the database
-    fn dbsize(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
-        ensure_length::<P>(act.len(), |len| len < 2)?;
-        if act.is_empty() {
-            let len = get_tbl_ref!(handle, con).count();
-            con.write_usize(len).await?;
-        } else {
-            let raw_entity = unsafe { act.next().unsafe_unwrap() };
-            let entity = handle_entity!(con, raw_entity);
-            con.write_usize(get_tbl!(&entity, handle, con).count())
-                .await?;
-        }
-        Ok(())
-    }
-);
+pub async fn execute_query<'a>(_global: &Global, query: SQuery<'a>) -> QueryResult<()> {
+    let tokens =
+        crate::engine::ql::lex::SecureLexer::new_with_segments(query.query(), query.params())
+            .lex()?;
+    let _ = crate::engine::ql::ast::compile(&tokens, crate::engine::ql::ast::InplaceData::new());
+    todo!()
+}

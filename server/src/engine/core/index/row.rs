@@ -70,9 +70,6 @@ impl RowData {
     pub fn get_txn_revised(&self) -> DeltaVersion {
         self.txn_revised_data
     }
-    pub fn set_restored_txn_revised(&mut self, new: DeltaVersion) {
-        self.restore_txn_id = new;
-    }
     pub fn get_restored_txn_revised(&self) -> DeltaVersion {
         self.restore_txn_id
     }
@@ -137,14 +134,6 @@ impl Row {
                 }))
             },
         }
-    }
-    pub fn with_data_read<T>(&self, f: impl Fn(&DcFieldIndex) -> T) -> T {
-        let data = self.__rc.data().read();
-        f(&data.fields)
-    }
-    pub fn with_data_write<T>(&self, f: impl Fn(&mut DcFieldIndex) -> T) -> T {
-        let mut data = self.__rc.data().write();
-        f(&mut data.fields)
     }
     pub fn d_key(&self) -> &PrimaryIndexKey {
         &self.__pk

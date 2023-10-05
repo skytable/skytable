@@ -258,6 +258,7 @@ pub struct LayerSpec<'a> {
 
 impl<'a> LayerSpec<'a> {
     //// Create a new layer
+    #[cfg(test)]
     pub const fn new(ty: Ident<'a>, props: DictGeneric) -> Self {
         Self { ty, props }
     }
@@ -267,7 +268,6 @@ states! {
     /// Layer fold state
     pub struct LayerFoldState: u8 {
         BEGIN_IDENT = 0x01,
-        IDENT_OR_CB = 0x02,
         FOLD_INCOMPLETE = 0x03,
         FINAL_OR_OB = 0x04,
         FINAL = 0xFF,
@@ -353,6 +353,7 @@ pub struct FieldSpec<'a> {
 }
 
 impl<'a> FieldSpec<'a> {
+    #[cfg(test)]
     pub fn new(
         field_name: Ident<'a>,
         layers: Vec<LayerSpec<'a>>,
@@ -408,6 +409,7 @@ pub struct ExpandedField<'a> {
 }
 
 impl<'a> ExpandedField<'a> {
+    #[cfg(test)]
     pub fn new(field_name: Ident<'a>, layers: Vec<LayerSpec<'a>>, props: DictGeneric) -> Self {
         Self {
             field_name,

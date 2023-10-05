@@ -24,26 +24,25 @@
  *
 */
 
+#[cfg(test)]
+use crate::engine::storage::v1::{
+    rw::{FileOpen, RawFSInterface},
+    JournalWriter,
+};
 use crate::engine::{
     core::GlobalNS,
     data::uuid::Uuid,
     error::RuntimeResult,
     fractal::error::ErrorContext,
     fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
-    storage::v1::{
-        batch_jrnl,
-        journal::{self, JournalWriter},
-        rw::{FileOpen, RawFSInterface},
-        spec, LocalFS,
-    },
+    storage::v1::{batch_jrnl, journal, spec, LocalFS},
     txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
 
 const GNS_FILE_PATH: &str = "gns.db-tlog";
-const GNS_LOG_VERSION_CODE: u32 = 0;
+const DATA_DIR: &str = "data";
 
 pub struct SEInitState {
-    pub new_instance: bool,
     pub txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
     pub model_drivers: ModelDrivers<LocalFS>,
     pub gns: GlobalNS,
@@ -51,24 +50,31 @@ pub struct SEInitState {
 
 impl SEInitState {
     pub fn new(
-        new_instance: bool,
         txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
         model_drivers: ModelDrivers<LocalFS>,
         gns: GlobalNS,
     ) -> Self {
         Self {
-            new_instance,
             txn_driver,
             model_drivers,
             gns,
         }
     }
-    pub fn try_init() -> RuntimeResult<Self> {
+    pub fn try_init(is_new: bool) -> RuntimeResult<Self> {
         let gns = GlobalNS::empty();
-        let gns_txn_driver = open_gns_driver(GNS_FILE_PATH, &gns)?;
-        let new_instance = gns_txn_driver.is_created();
+        let gns_txn_driver = if is_new {
+            journal::create_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(GNS_FILE_PATH)
+        } else {
+            journal::load_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(
+                GNS_FILE_PATH,
+                &gns,
+            )
+        }?;
+        if is_new {
+            std::fs::create_dir(DATA_DIR).inherit_set_dmsg("creating data directory")?;
+        }
         let mut model_drivers = ModelDrivers::new();
-        if !new_instance {
+        if !is_new {
             // this is an existing instance, so read in all data
             for (space_name, space) in gns.spaces().read().iter() {
                 let space_uuid = space.get_uuid();
@@ -86,8 +92,7 @@ impl SEInitState {
             }
         }
         Ok(SEInitState::new(
-            new_instance,
-            GNSTransactionDriverAnyFS::new(gns_txn_driver.into_inner()),
+            GNSTransactionDriverAnyFS::new(gns_txn_driver),
             model_drivers,
             gns,
         ))
@@ -116,9 +121,10 @@ impl SEInitState {
     }
 }
 
+#[cfg(test)]
 pub fn open_gns_driver<Fs: RawFSInterface>(
     path: &str,
     gns: &GlobalNS,
 ) -> RuntimeResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {
-    journal::open_journal::<GNSAdapter, Fs, spec::GNSTransactionLogV1>(path, gns)
+    journal::open_or_create_journal::<GNSAdapter, Fs, spec::GNSTransactionLogV1>(path, gns)
 }

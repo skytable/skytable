@@ -144,7 +144,7 @@ fn empty_multi_open_reopen() {
         ),
     );
     for _ in 0..100 {
-        let writer = open_batch_data("empty_multi_open_reopen.db-btlog", &mdl);
+        let mut writer = open_batch_data("empty_multi_open_reopen.db-btlog", &mdl);
         writer.close().unwrap();
     }
 }

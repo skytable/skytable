@@ -55,14 +55,6 @@ impl<T> fmt::Debug for Atomic<T> {
 }
 
 impl<T: Pointable> Atomic<T> {
-    /// Instantiates a new atomic
-    ///
-    /// **This will allocate**
-    pub fn new_alloc(t: T) -> Self {
-        Self {
-            a: CBAtomic::new(t),
-        }
-    }
     #[inline(always)]
     pub const fn null() -> Self {
         Self {
@@ -82,20 +74,6 @@ impl<T: Pointable> Atomic<T> {
         P: Pointer<T>,
     {
         self.a.compare_exchange(o, n, s, f, g)
-    }
-    #[inline(always)]
-    pub fn cx_weak<'g, P>(
-        &self,
-        o: Shared<'g, T>,
-        n: P,
-        s: Ordering,
-        f: Ordering,
-        g: &'g Guard,
-    ) -> CxResult<'g, T, P>
-    where
-        P: Pointer<T>,
-    {
-        self.a.compare_exchange_weak(o, n, s, f, g)
     }
     #[inline(always)]
     pub fn cx_rel<'g, P>(&self, o: Shared<'g, T>, n: P, g: &'g Guard) -> CxResult<'g, T, P>

@@ -54,9 +54,6 @@ impl<'a> DeleteStatement<'a> {
     pub const fn entity(&self) -> Entity<'a> {
         self.entity
     }
-    pub const fn clauses(&self) -> &WhereClause {
-        &self.wc
-    }
     pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
         &mut self.wc
     }
@@ -64,6 +61,7 @@ impl<'a> DeleteStatement<'a> {
 
 impl<'a> DeleteStatement<'a> {
     #[inline(always)]
+    #[cfg(test)]
     pub(super) fn new(entity: Entity<'a>, wc: WhereClause<'a>) -> Self {
         Self { entity, wc }
     }

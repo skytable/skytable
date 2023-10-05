@@ -71,13 +71,6 @@ pub fn exec_create_new_space(
     exec_create(global, create_stmt, true).map(|_| ())
 }
 
-pub fn exec_create_no_create(
-    global: &impl GlobalInstanceLike,
-    create_stmt: &str,
-) -> QueryResult<()> {
-    exec_create(global, create_stmt, false).map(|_| ())
-}
-
 fn with_space(global: &impl GlobalInstanceLike, space_name: &str, f: impl Fn(&Space)) {
     let rl = global.namespace().spaces().read();
     let space = rl.st_get(space_name).unwrap();

@@ -139,10 +139,6 @@ impl Model {
             Ok(())
         }
     }
-    pub fn is_empty_atomic(&self) -> bool {
-        // TODO(@ohsayan): change this!
-        true
-    }
     pub fn primary_index(&self) -> &PrimaryIndex {
         &self.data
     }
@@ -204,6 +200,7 @@ impl Model {
 }
 
 impl Model {
+    #[allow(unused)]
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         stmt: CreateModel,
@@ -254,6 +251,7 @@ impl Model {
             Ok(())
         })
     }
+    #[allow(unused)]
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         stmt: DropModel,
@@ -314,12 +312,19 @@ static LUT: [(&str, FullTag); 14] = [
     ("list", FullTag::LIST),
 ];
 
+#[cfg(test)]
 pub static TY_BOOL: &str = LUT[0].0;
+#[cfg(test)]
 pub static TY_UINT: [&str; 4] = [LUT[1].0, LUT[2].0, LUT[3].0, LUT[4].0];
+#[cfg(test)]
 pub static TY_SINT: [&str; 4] = [LUT[5].0, LUT[6].0, LUT[7].0, LUT[8].0];
+#[cfg(test)]
 pub static TY_FLOAT: [&str; 2] = [LUT[9].0, LUT[10].0];
+#[cfg(test)]
 pub static TY_BINARY: &str = LUT[11].0;
+#[cfg(test)]
 pub static TY_STRING: &str = LUT[12].0;
+#[cfg(test)]
 pub static TY_LIST: &str = LUT[13].0;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -426,6 +431,7 @@ pub struct Layer {
     tag: FullTag,
 }
 
+#[allow(unused)]
 impl Layer {
     pub const fn bool() -> Self {
         Self::empty(FullTag::BOOL)
@@ -477,10 +483,6 @@ impl Layer {
     }
     pub fn new_empty_props(tag: FullTag) -> Self {
         Self::new(tag)
-    }
-    #[inline(always)]
-    fn compute_index(&self, dc: &Datacell) -> usize {
-        self.tag.tag_class().value_word() * (dc.is_null() as usize)
     }
     const fn new(tag: FullTag) -> Self {
         Self { tag }

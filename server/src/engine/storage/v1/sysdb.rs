@@ -27,7 +27,7 @@
 use {
     super::rw::FileOpen,
     crate::engine::{
-        config::ConfigAuth,
+        config::{ConfigAuth, ConfigMode},
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
         error::{RuntimeResult, StorageError},
         fractal::config::{SysAuth, SysAuthUser, SysConfig, SysHostData},
@@ -57,6 +57,15 @@ pub enum SystemStoreInitState {
     UpdatedRoot,
 }
 
+impl SystemStoreInitState {
+    pub const fn is_created(&self) -> bool {
+        matches!(self, Self::Created)
+    }
+    pub const fn is_existing_updated_root(&self) -> bool {
+        matches!(self, Self::UpdatedRoot)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 /// Result of initializing the system store (sysdb)
 pub struct SystemStoreInit {
@@ -76,20 +85,22 @@ impl SystemStoreInit {
 /// - If it exists, look for config changes and sync them
 pub fn open_system_database<Fs: RawFSInterface>(
     auth: ConfigAuth,
+    mode: ConfigMode,
 ) -> RuntimeResult<SystemStoreInit> {
-    open_or_reinit_system_database::<Fs>(auth, SYSDB_PATH, SYSDB_COW_PATH)
+    open_or_reinit_system_database::<Fs>(auth, mode, SYSDB_PATH, SYSDB_COW_PATH)
 }
 
 /// Open or re-initialize the system database
 pub fn open_or_reinit_system_database<Fs: RawFSInterface>(
     auth: ConfigAuth,
+    run_mode: ConfigMode,
     sysdb_path: &str,
     sysdb_path_cow: &str,
 ) -> RuntimeResult<SystemStoreInit> {
     let sysdb_file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<spec::SysDBV1>(sysdb_path)? {
         FileOpen::Created(new) => {
             // init new syscfg
-            let new_syscfg = SysConfig::new_auth(auth);
+            let new_syscfg = SysConfig::new_auth(auth, run_mode);
             sync_system_database_to(&new_syscfg, new)?;
             return Ok(SystemStoreInit::new(
                 new_syscfg,
@@ -98,7 +109,7 @@ pub fn open_or_reinit_system_database<Fs: RawFSInterface>(
         }
         FileOpen::Existing((ex, _)) => ex,
     };
-    let prev_sysdb = decode_system_database(sysdb_file)?;
+    let prev_sysdb = decode_system_database(sysdb_file, run_mode)?;
     let state;
     // see if settings have changed
     if prev_sysdb
@@ -119,6 +130,7 @@ pub fn open_or_reinit_system_database<Fs: RawFSInterface>(
             prev_sysdb.host_data().settings_version()
                 + !matches!(state, SystemStoreInitState::Unchanged) as u32,
         ),
+        run_mode,
     );
     // sync
     sync_system_database_to(
@@ -185,6 +197,7 @@ fn rkey<T>(
 /// Decode the system database
 pub fn decode_system_database<Fs: RawFSInterface>(
     mut f: SDSSFileIO<Fs>,
+    run_mode: ConfigMode,
 ) -> RuntimeResult<SysConfig> {
     let mut sysdb_data =
         inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.load_remaining_into_buffer()?)?;
@@ -230,5 +243,6 @@ pub fn decode_system_database<Fs: RawFSInterface>(
     Ok(SysConfig::new(
         RwLock::new(sys_auth),
         SysHostData::new(sc, sv as u32),
+        run_mode,
     ))
 }

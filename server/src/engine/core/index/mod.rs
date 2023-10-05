@@ -49,9 +49,6 @@ impl PrimaryIndex {
             data: IndexMTRaw::idx_init(),
         }
     }
-    pub fn remove<'a>(&self, key: Lit<'a>, g: &Guard) -> bool {
-        self.data.mt_delete(&key, g)
-    }
     pub fn select<'a, 'v, 't: 'v, 'g: 't>(&'t self, key: Lit<'a>, g: &'g Guard) -> Option<&'v Row> {
         self.data.mt_get_element(&key, g)
     }

@@ -34,6 +34,7 @@ use crate::engine::{
     sync,
 };
 
+#[allow(unused)]
 pub fn select_custom<F>(
     global: &impl GlobalInstanceLike,
     mut select: SelectStatement,

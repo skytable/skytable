@@ -61,12 +61,6 @@ pub(super) enum VNode {
 }
 
 impl VNode {
-    const fn is_file(&self) -> bool {
-        matches!(self, Self::File(_))
-    }
-    const fn is_dir(&self) -> bool {
-        matches!(self, Self::Dir(_))
-    }
     fn as_dir_mut(&mut self) -> Option<&mut HashMap<Box<str>, Self>> {
         match self {
             Self::Dir(d) => Some(d),
@@ -309,25 +303,6 @@ fn handle_item_mut<T>(
     match current.entry(target.into()) {
         Entry::Occupied(item) => return f(item),
         Entry::Vacant(_) => return err_could_not_find_item(),
-    }
-}
-fn handle_item<T>(fpath: &str, f: impl Fn(&VNode) -> RuntimeResult<T>) -> RuntimeResult<T> {
-    let vfs = VFS.read();
-    let mut current = &*vfs;
-    // process components
-    let (target, components) = split_target_and_components(fpath);
-    for component in components {
-        match current.get(component) {
-            Some(VNode::Dir(dir)) => {
-                current = dir;
-            }
-            Some(VNode::File(_)) => return err_file_in_dir_path(),
-            None => return err_dir_missing_in_path(),
-        }
-    }
-    match current.get(target) {
-        Some(item) => return f(item),
-        None => return err_could_not_find_item(),
     }
 }
 fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> RuntimeResult<()> {

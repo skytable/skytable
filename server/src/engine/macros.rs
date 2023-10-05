@@ -40,18 +40,6 @@ macro_rules! extract {
 }
 
 #[cfg(test)]
-#[allow(unused_macros)]
-macro_rules! extract_safe {
-    ($src:expr, $what:pat => $ret:expr) => {
-        if let $what = $src {
-            $ret
-        } else {
-            panic!("expected one {}, found {:?}", stringify!($what), $src);
-        }
-    };
-}
-
-#[cfg(test)]
 macro_rules! multi_assert_eq {
     ($($lhs:expr),* => $rhs:expr) => {
         $(assert_eq!($lhs, $rhs);)*
@@ -70,14 +58,10 @@ macro_rules! direct_from {
     };
 }
 
-#[allow(unused_macros)]
-macro_rules! assertions {
-    ($($assert:expr),*$(,)?) => {$(const _:()=::core::assert!($assert);)*}
-}
-
 macro_rules! flags {
     ($(#[$attr:meta])* $vis:vis struct $group:ident: $ty:ty { $($const:ident = $expr:expr),+ $(,)?}) => (
         $(#[$attr])* #[repr(transparent)] $vis struct $group {r#const: $ty}
+        #[allow(unused)]
         impl $group {
             $(pub const $const: Self = Self { r#const: $expr };)*
             #[inline(always)] pub const fn d(&self) -> $ty { self.r#const }
@@ -104,7 +88,6 @@ macro_rules! flags {
     );
 }
 
-#[allow(unused_macros)]
 macro_rules! union {
     ($(#[$attr:meta])* $vis:vis union $name:ident $tail:tt) => (union!(@parse [$(#[$attr])* $vis union $name] [] $tail););
     ($(#[$attr:meta])* $vis:vis union $name:ident<$($lt:lifetime),*> $tail:tt) => (union!(@parse [$(#[$attr])* $vis union $name<$($lt),*>] [] $tail););
@@ -120,25 +103,18 @@ macro_rules! union {
 }
 
 macro_rules! dbgfn {
-    ($($vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block:block)*) => {
-        $(dbgfn!(@int $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block {panic!("called dbg symbol in non-dbg build")});)*
+    ($($(#[$attr:meta])* $vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block:block)*) => {
+        $(dbgfn!(@int $(#[$attr])* $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block {panic!("called dbg symbol in non-dbg build")});)*
     };
-    ($($vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block:block else $block_b:block)*) => {
-        $(dbgfn!(@int $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block $block_b);)*
+    ($($(#[$attr:meta])* $vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block:block else $block_b:block)*) => {
+        $(dbgfn!(@int $(#[$attr])*  $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block $block_b);)*
     };
-    (@int $vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block_a:block $block_b:block) => {
+    (@int $(#[$attr:meta])* $vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block_a:block $block_b:block) => {
         #[cfg(debug_assertions)]
-        $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block_a
+        $(#[$attr])* $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block_a
         #[cfg(not(debug_assertions))]
-        $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block_b
+        $(#[$attr])* $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block_b
     }
-}
-
-#[allow(unused_macros)]
-macro_rules! void {
-    () => {
-        ()
-    };
 }
 
 /// Convert all the KV pairs into an iterator and then turn it into an appropriate collection
