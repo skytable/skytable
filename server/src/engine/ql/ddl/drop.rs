@@ -97,7 +97,7 @@ pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResu
     match state.fw_read() {
         Token![model] => DropModel::parse(state).map(Statement::DropModel),
         Token![space] => return DropSpace::parse(state).map(Statement::DropSpace),
-        _ => Err(QueryError::QPUnknownStatement),
+        _ => Err(QueryError::QLUnknownStatement),
     }
 }
 

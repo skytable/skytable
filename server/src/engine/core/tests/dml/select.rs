@@ -97,6 +97,6 @@ fn select_nonexisting() {
             "select username, password from myspace.mymodel where username = 'notsayan'",
         )
         .unwrap_err(),
-        QueryError::QPDmlRowNotFound
+        QueryError::QExecDmlRowNotFound
     );
 }

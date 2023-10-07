@@ -80,28 +80,7 @@ pub fn resume<'a>(
     state: QueryTimeExchangeState,
 ) -> QueryTimeExchangeResult<'a> {
     match state {
-        QueryTimeExchangeState::Initial => {
-            if cfg!(debug_assertions) {
-                if !scanner.has_left(EXCHANGE_MIN_SIZE) {
-                    return STATE_READ_INITIAL;
-                }
-            } else {
-                assert!(scanner.has_left(EXCHANGE_MIN_SIZE));
-            }
-            // attempt to read atleast one byte
-            if cfg!(debug_assertions) {
-                match scanner.try_next_byte() {
-                    Some(b'S') => SQuery::resume_initial(scanner),
-                    Some(_) => return STATE_ERROR,
-                    None => return STATE_READ_INITIAL,
-                }
-            } else {
-                match unsafe { scanner.next_byte() } {
-                    b'S' => SQuery::resume_initial(scanner),
-                    _ => return STATE_ERROR,
-                }
-            }
-        }
+        QueryTimeExchangeState::Initial => SQuery::resume_initial(scanner),
         QueryTimeExchangeState::SQ1Meta1Partial { packet_size_part } => {
             SQuery::resume_at_sq1_meta1_partial(scanner, packet_size_part)
         }
@@ -199,6 +178,26 @@ impl<'a> SQuery<'a> {
 impl<'a> SQuery<'a> {
     /// We're touching this packet for the first time
     fn resume_initial(scanner: &mut BufferedScanner<'a>) -> QueryTimeExchangeResult<'a> {
+        if cfg!(debug_assertions) {
+            if !scanner.has_left(EXCHANGE_MIN_SIZE) {
+                return STATE_READ_INITIAL;
+            }
+        } else {
+            assert!(scanner.has_left(EXCHANGE_MIN_SIZE));
+        }
+        // attempt to read atleast one byte
+        if cfg!(debug_assertions) {
+            match scanner.try_next_byte() {
+                Some(b'S') => {}
+                Some(_) => return STATE_ERROR,
+                None => return STATE_READ_INITIAL,
+            }
+        } else {
+            match unsafe { scanner.next_byte() } {
+                b'S' => {}
+                _ => return STATE_ERROR,
+            }
+        }
         Self::resume_at_sq1_meta1_partial(scanner, 0)
     }
     /// We found some part of meta1, and need to resume
@@ -239,11 +238,11 @@ impl<'a> SQuery<'a> {
         match parse_lf_separated(scanner, prev_qw_buffered) {
             LFTIntParseResult::Value(q_window) => {
                 // we got the q window; can we complete the exchange?
-                Self::resume_at_final(
-                    scanner,
-                    q_window as usize,
-                    Self::compute_df_size(scanner, static_size, packet_size),
-                )
+                let df_size = Self::compute_df_size(scanner, static_size, packet_size);
+                if df_size == 0 {
+                    return QueryTimeExchangeResult::Error;
+                }
+                Self::resume_at_final(scanner, q_window as usize, df_size)
             }
             LFTIntParseResult::Partial(q_window_partial) => {
                 // not enough bytes for getting Q window
@@ -290,7 +289,7 @@ impl<'a> SQuery<'a> {
 
 impl<'a> SQuery<'a> {
     fn compute_df_size(scanner: &BufferedScanner, static_size: usize, packet_size: usize) -> usize {
-        packet_size - scanner.cursor() + static_size
+        (packet_size + static_size) - scanner.cursor()
     }
     fn compute_df_remaining(scanner: &BufferedScanner<'_>, df_size: usize) -> usize {
         (scanner.cursor() + df_size) - scanner.buffer_len()

@@ -515,7 +515,7 @@ impl<'a> ExpandedField<'a> {
                     Err(QueryError::QLInvalidSyntax)
                 }
             }
-            _ => Err(QueryError::QPExpectedStatement),
+            _ => Err(QueryError::QLExpectedStatement),
         }
     }
 }

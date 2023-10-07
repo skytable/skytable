@@ -31,71 +31,78 @@ pub type QueryResult<T> = Result<T, QueryError>;
 
 /// an enumeration of 'flat' errors that the server actually responds to the client with, since we do not want to send specific information
 /// about anything (as that will be a security hole). The variants correspond with their actual response codes
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, sky_macros::EnumMethods)]
 #[repr(u8)]
 pub enum QueryError {
+    // system
     /// I/O error
-    SysServerError,
+    SysServerError = 0,
     /// out of memory
-    SysOutOfMemory,
+    SysOutOfMemory = 1,
     /// unknown server error
-    SysUnknownError,
-    /// something like an integer that randomly has a character to attached to it like `1234q`
-    LexInvalidLiteral,
-    /// something like an invalid 'string" or a safe string with a bad length etc
-    LexInvalidEscapedLiteral,
-    /// unexpected byte
-    LexUnexpectedByte,
-    /// expected a longer statement
-    QLUnexpectedEndOfStatement,
-    /// incorrect syntax for "something"
-    QLInvalidSyntax,
-    /// invalid collection definition definition
-    QLInvalidCollectionSyntax,
-    /// invalid type definition syntax
-    QLInvalidTypeDefinitionSyntax,
-    /// expected a full entity definition
-    QPExpectedEntity,
-    /// expected a statement, found something else
-    QPExpectedStatement,
-    /// unknown statement
-    QPUnknownStatement,
-    /// this query needs a lock for execution, but that wasn't explicitly allowed anywhere
-    QPNeedLock,
-    /// the object to be used as the "query container" is missing (for example, insert when the model was missing)
-    QPObjectNotFound,
-    /// an unknown field was attempted to be accessed/modified/...
-    QPUnknownField,
-    /// invalid property for an object
-    QPDdlInvalidProperties,
-    /// create space/model, but the object already exists
-    QPDdlObjectAlreadyExists,
-    /// an object that was attempted to be removed is non-empty, and for this object, removals require it to be empty
-    QPDdlNotEmpty,
-    /// invalid type definition
-    QPDdlInvalidTypeDefinition,
-    /// bad model definition
-    QPDdlModelBadDefinition,
-    /// illegal alter model query
-    QPDdlModelAlterIllegal,
-    /// violated the uniqueness property
-    QPDmlDuplicate,
-    /// the data could not be validated for being accepted into a field/function/etc.
-    QPDmlValidationError,
-    /// the where expression has an unindexed column essentially implying that we can't run this query because of perf concerns
-    QPDmlWhereHasUnindexedColumn,
-    /// the row matching the given match expression was not found
-    QPDmlRowNotFound,
+    SysUnknownError = 2,
+    /// system auth error
+    SysAuthError = 3,
     /// transactional error
-    TransactionalError,
-    SysAuthError,
+    SysTransactionalError = 4,
+    // exchange
+    NetworkSubsystemCorruptedPacket = 24,
+    // QL
+    /// something like an integer that randomly has a character to attached to it like `1234q`
+    LexInvalidLiteral = 25,
+    /// something like an invalid 'string" or a safe string with a bad length etc
+    LexInvalidParameter = 26,
+    /// unexpected byte
+    LexUnexpectedByte = 27,
+    /// expected a longer statement
+    QLUnexpectedEndOfStatement = 28,
+    /// incorrect syntax for "something"
+    QLInvalidSyntax = 29,
+    /// invalid collection definition definition
+    QLInvalidCollectionSyntax = 30,
+    /// invalid type definition syntax
+    QLInvalidTypeDefinitionSyntax = 31,
+    /// expected a full entity definition
+    QLExpectedEntity = 32,
+    /// expected a statement, found something else
+    QLExpectedStatement = 33,
+    /// unknown statement
+    QLUnknownStatement = 34,
+    // exec
+    /// the object to be used as the "query container" is missing (for example, insert when the model was missing)
+    QExecObjectNotFound = 100,
+    /// an unknown field was attempted to be accessed/modified/...
+    QExecUnknownField = 101,
+    /// invalid property for an object
+    QExecDdlInvalidProperties = 102,
+    /// create space/model, but the object already exists
+    QExecDdlObjectAlreadyExists = 103,
+    /// an object that was attempted to be removed is non-empty, and for this object, removals require it to be empty
+    QExecDdlNotEmpty = 104,
+    /// invalid type definition
+    QExecDdlInvalidTypeDefinition = 105,
+    /// bad model definition
+    QExecDdlModelBadDefinition = 106,
+    /// illegal alter model query
+    QExecDdlModelAlterIllegal = 107,
+    // exec DML
+    /// violated the uniqueness property
+    QExecDmlDuplicate = 150,
+    /// the data could not be validated for being accepted into a field/function/etc.
+    QExecDmlValidationError = 151,
+    /// the where expression has an unindexed column essentially implying that we can't run this query because of perf concerns
+    QExecDmlWhereHasUnindexedColumn = 152,
+    /// the row matching the given match expression was not found
+    QExecDmlRowNotFound = 153,
+    /// this query needs a lock for execution, but that wasn't explicitly allowed anywhere
+    QExecNeedLock = 154,
 }
 
 impl From<super::fractal::error::Error> for QueryError {
     fn from(e: super::fractal::error::Error) -> Self {
         match e.kind() {
             ErrorKind::IoError(_) | ErrorKind::Storage(_) => QueryError::SysServerError,
-            ErrorKind::Txn(_) => QueryError::TransactionalError,
+            ErrorKind::Txn(_) => QueryError::SysTransactionalError,
             ErrorKind::Other(_) => QueryError::SysUnknownError,
             ErrorKind::Config(_) => unreachable!("config error cannot propagate here"),
         }

@@ -73,7 +73,7 @@ fn exec_create_space_with_bad_env_type() {
     let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_create(&global, "create space myspace with { env: 100 }", |_| {}).unwrap_err(),
-        QueryError::QPDdlInvalidProperties
+        QueryError::QExecDdlInvalidProperties
     );
 }
 
@@ -87,6 +87,6 @@ fn exec_create_space_with_random_property() {
             |_| {}
         )
         .unwrap_err(),
-        QueryError::QPDdlInvalidProperties
+        QueryError::QExecDdlInvalidProperties
     );
 }

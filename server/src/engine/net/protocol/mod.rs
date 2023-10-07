@@ -24,8 +24,6 @@
  *
 */
 
-use tokio::io::AsyncWriteExt;
-
 mod exchange;
 mod handshake;
 #[cfg(test)]
@@ -45,12 +43,18 @@ use {
     super::{IoResult, QueryLoopResult, Socket},
     crate::engine::{
         self,
+        error::QueryError,
         fractal::{Global, GlobalInstanceLike},
         mem::BufferedScanner,
     },
     bytes::{Buf, BytesMut},
-    tokio::io::{AsyncReadExt, BufWriter},
+    tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter},
 };
+
+#[derive(Debug, PartialEq)]
+pub enum Response {
+    Empty,
+}
 
 pub(super) async fn query_loop<S: Socket>(
     con: &mut BufWriter<S>,
@@ -64,13 +68,14 @@ pub(super) async fn query_loop<S: Socket>(
         PostHandshake::ConnectionClosedRst => return Ok(QueryLoopResult::Rst),
         PostHandshake::Error(e) => {
             // failed to handshake; we'll close the connection
-            let hs_err_packet = [b'H', b'1', 1, e.value_u8()];
+            let hs_err_packet = [b'H', 0, 1, e.value_u8()];
             con.write_all(&hs_err_packet).await?;
             return Ok(QueryLoopResult::HSFailed);
         }
     };
     // done handshaking
-    con.write_all(b"H1\x00\x00\x00").await?;
+    con.write_all(b"H\x00\x00\x00").await?;
+    con.flush().await?;
     let mut exchg_state = QueryTimeExchangeState::default();
     let mut expect_more = exchange::EXCHANGE_MIN_SIZE;
     let mut cursor = 0;
@@ -100,21 +105,27 @@ pub(super) async fn query_loop<S: Socket>(
             }
             QueryTimeExchangeResult::SQCompleted(sq) => sq,
             QueryTimeExchangeResult::Error => {
-                con.write_all(b"!\x00").await?;
+                let [a, b] =
+                    (QueryError::NetworkSubsystemCorruptedPacket.value_u8() as u16).to_le_bytes();
+                con.write_all(&[0x10, a, b]).await?;
+                con.flush().await?;
+                buf.clear();
                 exchg_state = QueryTimeExchangeState::default();
                 continue;
             }
         };
         // now execute query
-        match engine::core::exec::execute_query(global, sq).await {
-            Ok(()) => {
-                buf.clear();
+        match engine::core::exec::dispatch_to_executor(global, sq).await {
+            Ok(Response::Empty) => {
+                con.write_all(&[0x12]).await?;
             }
-            Err(_e) => {
-                // TOOD(@ohsayan): actual error codes! 
-                con.write_all(&[b'!', 1]).await?;
-            },
+            Err(e) => {
+                let [a, b] = (e.value_u8() as u16).to_le_bytes();
+                con.write_all(&[0x10, a, b]).await?;
+            }
         }
+        con.flush().await?;
+        buf.clear();
         exchg_state = QueryTimeExchangeState::default();
     }
 }
@@ -152,6 +163,7 @@ async fn do_handshake<S: Socket>(
         match handshake::CHandshake::resume_with(&mut scanner, state) {
             HandshakeResult::Completed(hs) => {
                 handshake = hs;
+                cursor = scanner.cursor();
                 break;
             }
             HandshakeResult::ChangeState { new_state, expect } => {

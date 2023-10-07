@@ -26,7 +26,7 @@
 
 use {
     super::{
-        core::GlobalNS,
+        core::{dml::QueryExecMeta, model::Model, GlobalNS},
         data::uuid::Uuid,
         storage::{
             self,
@@ -123,17 +123,26 @@ pub trait GlobalInstanceLike {
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>);
     // default impls
-    fn request_batch_resolve(
+    fn request_batch_resolve_if_cache_full(
         &self,
         space_name: &str,
         model_name: &str,
-        model_uuid: Uuid,
-        observed_len: usize,
+        model: &Model,
+        hint: QueryExecMeta,
     ) {
-        self.taskmgr_post_high_priority(Task::new(CriticalTask::WriteBatch(
-            ModelUniqueID::new(space_name, model_name, model_uuid),
-            observed_len,
-        )))
+        let current_delta_size = hint.delta_hint();
+        let index_size = model.primary_index().count();
+        let five = (index_size as f64 * 0.05) as usize;
+        let max_delta = five.max(self.get_max_delta_size());
+        if current_delta_size >= max_delta {
+            let obtained_delta_size = model
+                .delta_state()
+                .__fractal_take_full_from_data_delta(FractalToken::new());
+            self.taskmgr_post_high_priority(Task::new(CriticalTask::WriteBatch(
+                ModelUniqueID::new(space_name, model_name, model.get_uuid()),
+                obtained_delta_size,
+            )));
+        }
     }
     // config handle
     fn sys_cfg(&self) -> &config::SysConfig;

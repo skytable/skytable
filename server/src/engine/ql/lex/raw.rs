@@ -321,25 +321,26 @@ macro_rules! flattened_lut {
 }
 
 flattened_lut! {
-    static KW_LUT in kwlut;
+    static KW in kw;
     #[derive(Debug, PartialEq, Clone, Copy)]
     #[repr(u8)]
     pub enum Keyword {
         Statement => {
-            #[derive(Debug, PartialEq, Clone, Copy, sky_macros::EnumMethods)]
+            #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, sky_macros::EnumMethods)]
             #[repr(u8)]
             /// A statement keyword
             pub enum KeywordStmt {
-                // sys
+                // system
                 Sysctl = 0,
-                Describe = 1,
-                Inspect = 2,
-                // ddl
-                Use = 3,
-                Create = 4,
-                Alter = 5,
-                Drop = 6,
-                // dml
+                // DDL
+                Create = 1,
+                Alter = 2,
+                Drop = 3,
+                // system/DDL misc
+                Use = 4,
+                Inspect = 5,
+                Describe = 6,
+                // DML
                 Insert = 7,
                 Select = 8,
                 Update = 9,
@@ -425,18 +426,18 @@ impl Keyword {
         }
     }
     fn compute(key: &[u8]) -> Option<Self> {
-        static G: [u8; 67] = [
-            0, 42, 57, 0, 20, 61, 15, 46, 28, 0, 31, 2, 1, 44, 47, 10, 35, 53, 30, 28, 48, 9, 1,
-            51, 61, 20, 20, 47, 23, 31, 0, 52, 55, 59, 27, 45, 54, 49, 29, 0, 66, 54, 23, 58, 13,
-            31, 47, 56, 1, 30, 40, 0, 0, 42, 27, 63, 6, 24, 65, 45, 42, 63, 60, 14, 26, 4, 13,
+        static G: [u8; 64] = [
+            0, 27, 13, 56, 18, 0, 26, 30, 33, 56, 20, 41, 56, 39, 23, 34, 36, 23, 17, 40, 38, 45,
+            8, 25, 26, 24, 53, 59, 30, 14, 9, 60, 12, 29, 6, 47, 3, 38, 19, 5, 13, 51, 41, 34, 0,
+            22, 43, 13, 46, 33, 11, 12, 36, 58, 40, 0, 36, 2, 19, 49, 53, 23, 55, 0,
         ];
-        static M1: [u8; 11] = *b"wsE1pgJgJMO";
-        static M2: [u8; 11] = *b"fICAB04WegN";
+        static M1: [u8; 11] = *b"RtEMxHylmiZ";
+        static M2: [u8; 11] = *b"F1buDOZ2nzz";
         let h1 = Self::_sum(key, M1) % G.len();
         let h2 = Self::_sum(key, M2) % G.len();
         let h = (G[h1] + G[h2]) as usize % G.len();
-        if h < G.len() && KW_LUT[h].0.eq_ignore_ascii_case(key) {
-            Some(KW_LUT[h].1)
+        if h < KW.len() && KW[h].0.eq_ignore_ascii_case(key) {
+            Some(KW[h].1)
         } else {
             None
         }
@@ -451,5 +452,11 @@ impl Keyword {
             i += 1;
         }
         sum
+    }
+}
+
+impl KeywordStmt {
+    pub const fn is_blocking(&self) -> bool {
+        self.value_u8() <= Self::Drop.value_u8()
     }
 }

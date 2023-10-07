@@ -30,7 +30,10 @@ use std::cell::RefCell;
 use {
     crate::{
         engine::{
-            core::{self, model::delta::DataDeltaKind, query_meta::AssignmentOperator},
+            core::{
+                self, dml::QueryExecMeta, model::delta::DataDeltaKind,
+                query_meta::AssignmentOperator,
+            },
             data::{
                 cell::Datacell,
                 lit::Lit,
@@ -235,7 +238,7 @@ pub fn collect_trace_path() -> Vec<&'static str> {
 #[allow(unused)]
 pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, update.entity(), |mdl| {
-        let mut ret = Ok(());
+        let mut ret = Ok(QueryExecMeta::zero());
         // prepare row fetch
         let key = mdl.resolve_where(update.clauses_mut())?;
         // freeze schema
@@ -243,7 +246,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
         // fetch row
         let g = sync::atm::cpin();
         let Some(row) = mdl.primary_index().select(key, &g) else {
-            return Err(QueryError::QPDmlRowNotFound);
+            return Err(QueryError::QExecDmlRowNotFound);
         };
         // lock row
         let mut row_data_wl = row.d_data().write();
@@ -280,7 +283,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
                 _ => {
                     input_trace("fieldnotfound");
                     rollback_now = true;
-                    ret = Err(QueryError::QPUnknownField);
+                    ret = Err(QueryError::QExecUnknownField);
                     break;
                 }
             }
@@ -321,13 +324,13 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
                     } else {
                         input_trace("list;badtag");
                         rollback_now = true;
-                        ret = Err(QueryError::QPDmlValidationError);
+                        ret = Err(QueryError::QExecDmlValidationError);
                         break;
                     }
                 }
                 _ => {
                     input_trace("unknown_reason;exitmainloop");
-                    ret = Err(QueryError::QPDmlValidationError);
+                    ret = Err(QueryError::QExecDmlValidationError);
                     rollback_now = true;
                     break;
                 }
@@ -344,13 +347,14 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
             // update revised tag
             row_data_wl.set_txn_revised(new_version);
             // publish delta
-            ds.append_new_data_delta_with(
+            let dp = ds.append_new_data_delta_with(
                 DataDeltaKind::Update,
                 row.clone(),
                 ds.schema_current_version(),
                 new_version,
                 &g,
             );
+            ret = Ok(QueryExecMeta::new(dp))
         }
         ret
     })

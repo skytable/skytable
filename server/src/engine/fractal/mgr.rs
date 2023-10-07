@@ -271,11 +271,6 @@ impl FractalMgr {
                                 // branch returning. but it is okay
                                 return Ok(());
                             }
-                            // mark that we're taking these deltas
-                            model.delta_state().__fractal_take_from_data_delta(
-                                observed_size,
-                                super::FractalToken::new(),
-                            );
                             Self::try_write_model_data_batch(model, observed_size, mdl_driver)
                         },
                     );

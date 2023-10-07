@@ -83,6 +83,6 @@ fn insert_duplicate() {
     assert_eq!(
         super::exec_insert_only(&global, "insert into myspace.mymodel('sayan', 'pass123')")
             .unwrap_err(),
-        QueryError::QPDmlDuplicate
+        QueryError::QExecDmlDuplicate
     );
 }

@@ -57,13 +57,13 @@ pub struct GlobalNS {
     index_space: RWLIdx<Box<str>, Space>,
 }
 
-pub(self) fn with_model_for_data_update<'a, T, E, F>(
+pub(self) fn with_model_for_data_update<'a, E, F>(
     global: &impl GlobalInstanceLike,
     entity: E,
     f: F,
-) -> QueryResult<T>
+) -> QueryResult<()>
 where
-    F: FnOnce(&Model) -> QueryResult<T>,
+    F: FnOnce(&Model) -> QueryResult<dml::QueryExecMeta>,
     E: 'a + EntityLocator<'a>,
 {
     let (space_name, model_name) = entity.parse_entity()?;
@@ -71,11 +71,15 @@ where
         .namespace()
         .with_model((space_name, model_name), |mdl| {
             let r = f(mdl);
-            // see if this task local delta is full
-            if r.is_ok() {
-                model::DeltaState::guard_delta_overflow(global, space_name, model_name, mdl);
+            match r {
+                Ok(dhint) => {
+                    model::DeltaState::guard_delta_overflow(
+                        global, space_name, model_name, mdl, dhint,
+                    );
+                    Ok(())
+                }
+                Err(e) => Err(e),
             }
-            r
         })
 }
 
@@ -101,7 +105,7 @@ impl GlobalNS {
     ) -> QueryResult<T> {
         let sread = self.index_space.read();
         let Some(space) = sread.st_get(space) else {
-            return Err(QueryError::QPObjectNotFound);
+            return Err(QueryError::QExecObjectNotFound);
         };
         f(space)
     }

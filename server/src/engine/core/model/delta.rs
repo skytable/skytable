@@ -30,7 +30,7 @@ use {
     super::{Fields, Model},
     crate::{
         engine::{
-            core::index::Row,
+            core::{dml::QueryExecMeta, index::Row},
             fractal::{FractalToken, GlobalInstanceLike},
             sync::atm::Guard,
             sync::queue::Queue,
@@ -186,19 +186,9 @@ impl DeltaState {
         space_name: &str,
         model_name: &str,
         model: &Model,
+        hint: QueryExecMeta,
     ) {
-        let current_deltas_size = model.delta_state().data_deltas_size.load(Ordering::Acquire);
-        let max_len = global
-            .get_max_delta_size()
-            .min((model.primary_index().count() as f64 * 0.05) as usize);
-        if compiler::unlikely(current_deltas_size >= max_len) {
-            global.request_batch_resolve(
-                space_name,
-                model_name,
-                model.get_uuid(),
-                current_deltas_size,
-            );
-        }
+        global.request_batch_resolve_if_cache_full(space_name, model_name, model, hint)
     }
 }
 
@@ -211,12 +201,12 @@ impl DeltaState {
         schema_version: DeltaVersion,
         data_version: DeltaVersion,
         g: &Guard,
-    ) {
-        self.append_new_data_delta(DataDelta::new(schema_version, data_version, row, kind), g);
+    ) -> usize {
+        self.append_new_data_delta(DataDelta::new(schema_version, data_version, row, kind), g)
     }
-    pub fn append_new_data_delta(&self, delta: DataDelta, g: &Guard) {
+    pub fn append_new_data_delta(&self, delta: DataDelta, g: &Guard) -> usize {
         self.data_deltas.blocking_enqueue(delta, g);
-        self.data_deltas_size.fetch_add(1, Ordering::Release);
+        self.data_deltas_size.fetch_add(1, Ordering::Release) + 1
     }
     pub fn create_new_data_delta_version(&self) -> DeltaVersion {
         DeltaVersion(self.__data_delta_step())

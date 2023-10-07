@@ -426,7 +426,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             let nb = slf.param_buffer.next_byte();
             slf.l.push_token(Token::Lit(Lit::new_bool(nb == 1)));
             if nb > 1 {
-                slf.l.set_error(QueryError::LexInvalidEscapedLiteral);
+                slf.l.set_error(QueryError::LexInvalidParameter);
             }
         },
         // uint
@@ -435,7 +435,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             .try_next_ascii_u64_lf_separated_or_restore_cursor()
         {
             Some(int) => slf.l.push_token(Lit::new_uint(int)),
-            None => slf.l.set_error(QueryError::LexInvalidEscapedLiteral),
+            None => slf.l.set_error(QueryError::LexInvalidParameter),
         },
         // sint
         |slf| {
@@ -452,7 +452,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .param_buffer
                 .try_next_ascii_u64_lf_separated_or_restore_cursor()
             else {
-                slf.l.set_error(QueryError::LexInvalidEscapedLiteral);
+                slf.l.set_error(QueryError::LexInvalidParameter);
                 return;
             };
             let body = match slf
@@ -461,13 +461,13 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             {
                 Some(body) => body,
                 None => {
-                    slf.l.set_error(QueryError::LexInvalidEscapedLiteral);
+                    slf.l.set_error(QueryError::LexInvalidParameter);
                     return;
                 }
             };
             match core::str::from_utf8(body).map(core::str::FromStr::from_str) {
                 Ok(Ok(fp)) => slf.l.push_token(Lit::new_float(fp)),
-                _ => slf.l.set_error(QueryError::LexInvalidEscapedLiteral),
+                _ => slf.l.set_error(QueryError::LexInvalidParameter),
             }
         },
         // binary
@@ -476,7 +476,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .param_buffer
                 .try_next_ascii_u64_lf_separated_or_restore_cursor()
             else {
-                slf.l.set_error(QueryError::LexInvalidEscapedLiteral);
+                slf.l.set_error(QueryError::LexInvalidParameter);
                 return;
             };
             match slf
@@ -484,7 +484,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .try_next_variable_block(size_of_body as usize)
             {
                 Some(block) => slf.l.push_token(Lit::new_bin(block)),
-                None => slf.l.set_error(QueryError::LexInvalidEscapedLiteral),
+                None => slf.l.set_error(QueryError::LexInvalidParameter),
             }
         },
         // string
@@ -493,7 +493,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .param_buffer
                 .try_next_ascii_u64_lf_separated_or_restore_cursor()
             else {
-                slf.l.set_error(QueryError::LexInvalidEscapedLiteral);
+                slf.l.set_error(QueryError::LexInvalidParameter);
                 return;
             };
             match slf
@@ -503,10 +503,10 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             {
                 // TODO(@ohsayan): obliterate this alloc
                 Some(Ok(s)) => slf.l.push_token(Lit::new_string(s.to_owned())),
-                _ => slf.l.set_error(QueryError::LexInvalidEscapedLiteral),
+                _ => slf.l.set_error(QueryError::LexInvalidParameter),
             }
         },
         // ecc
-        |s| s.l.set_error(QueryError::LexInvalidEscapedLiteral),
+        |s| s.l.set_error(QueryError::LexInvalidParameter),
     ]
 };

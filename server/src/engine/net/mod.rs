@@ -24,12 +24,13 @@
  *
 */
 
-use super::config::ConfigEndpointTcp;
-
 pub mod protocol;
 
 use {
-    crate::engine::{error::RuntimeResult, fractal::error::ErrorContext, fractal::Global},
+    crate::engine::{
+        config::ConfigEndpointTcp, error::RuntimeResult, fractal::error::ErrorContext,
+        fractal::Global,
+    },
     bytes::BytesMut,
     openssl::{
         pkey::PKey,
@@ -39,7 +40,7 @@ use {
     },
     std::{cell::Cell, net::SocketAddr, pin::Pin, time::Duration},
     tokio::{
-        io::{AsyncRead, AsyncWrite, BufWriter},
+        io::{AsyncRead, AsyncWrite, BufWriter, AsyncWriteExt},
         net::{TcpListener, TcpStream},
         sync::{broadcast, mpsc, Semaphore},
     },
@@ -128,6 +129,7 @@ impl<S: Socket> ConnectionHandler<S> {
         loop {
             tokio::select! {
                 ret = protocol::query_loop(socket, buffer, global) => {
+                    socket.flush().await?;
                     match ret {
                         Ok(QueryLoopResult::Fin) => return Ok(()),
                         Ok(QueryLoopResult::Rst) => error!("connection reset while talking to client"),

@@ -164,7 +164,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            QueryError::QPUnknownField
+            QueryError::QExecUnknownField
         );
     }
     #[test]
@@ -176,7 +176,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            QueryError::QPDdlModelAlterIllegal
+            QueryError::QExecDdlModelAlterIllegal
         );
     }
     #[test]
@@ -188,7 +188,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            QueryError::QPDdlModelAlterIllegal
+            QueryError::QExecDdlModelAlterIllegal
         );
     }
     #[test]
@@ -200,7 +200,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            QueryError::QPDdlModelAlterIllegal
+            QueryError::QExecDdlModelAlterIllegal
         );
     }
     #[test]
@@ -212,7 +212,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            QueryError::QPDdlModelAlterIllegal
+            QueryError::QExecDdlModelAlterIllegal
         );
     }
     #[test]
@@ -224,7 +224,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            QueryError::QPUnknownField
+            QueryError::QExecUnknownField
         );
     }
     fn bad_type_cast(orig_ty: &str, new_ty: &str) {
@@ -235,7 +235,7 @@ mod plan {
             super::with_plan(&create, &alter, |_| {}).expect_err(&format!(
                 "found no error in transformation: {orig_ty} -> {new_ty}"
             )),
-            QueryError::QPDdlInvalidTypeDefinition,
+            QueryError::QExecDdlInvalidTypeDefinition,
             "failed to match error in transformation: {orig_ty} -> {new_ty}",
         )
     }
@@ -445,7 +445,7 @@ mod exec {
                 |_| {},
             )
             .unwrap_err(),
-            QueryError::QPNeedLock
+            QueryError::QExecNeedLock
         );
     }
 }

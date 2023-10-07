@@ -134,7 +134,7 @@ impl Model {
     }
     fn guard_pk(&self, new: &str) -> QueryResult<()> {
         if self.is_pk(new) {
-            Err(QueryError::QPDdlModelAlterIllegal)
+            Err(QueryError::QExecDdlModelAlterIllegal)
         } else {
             Ok(())
         }
@@ -195,12 +195,11 @@ impl Model {
                 return Ok(Self::new_restore(Uuid::new(), last_pk.into(), tag, fields));
             }
         }
-        Err(QueryError::QPDdlModelBadDefinition)
+        Err(QueryError::QExecDdlModelBadDefinition)
     }
 }
 
 impl Model {
-    #[allow(unused)]
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         stmt: CreateModel,
@@ -210,7 +209,7 @@ impl Model {
         global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             if w_space.st_contains(model_name) {
-                return Err(QueryError::QPDdlObjectAlreadyExists);
+                return Err(QueryError::QExecDdlObjectAlreadyExists);
             }
             if G::FS_IS_NON_NULL {
                 let irm = model.intent_read_model();
@@ -251,7 +250,6 @@ impl Model {
             Ok(())
         })
     }
-    #[allow(unused)]
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         stmt: DropModel,
@@ -260,7 +258,7 @@ impl Model {
         global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             let Some(model) = w_space.get(model_name) else {
-                return Err(QueryError::QPObjectNotFound);
+                return Err(QueryError::QExecObjectNotFound);
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -366,7 +364,7 @@ impl Field {
                 nullable,
             })
         } else {
-            Err(QueryError::QPDdlInvalidTypeDefinition)
+            Err(QueryError::QExecDdlInvalidTypeDefinition)
         }
     }
     #[inline(always)]

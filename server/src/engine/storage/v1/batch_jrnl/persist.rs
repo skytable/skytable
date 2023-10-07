@@ -134,9 +134,9 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
             Ok(()) => Ok(()),
             Err(_) => {
                 // republish changes since we failed to commit
-                restore_list
-                    .into_iter()
-                    .for_each(|delta| model.delta_state().append_new_data_delta(delta, &g));
+                restore_list.into_iter().for_each(|delta| {
+                    model.delta_state().append_new_data_delta(delta, &g);
+                });
                 // now attempt to fix the file
                 return self.attempt_fix_data_batchfile();
             }

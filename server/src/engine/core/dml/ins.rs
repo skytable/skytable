@@ -27,6 +27,7 @@
 use crate::engine::{
     core::{
         self,
+        dml::QueryExecMeta,
         index::{DcFieldIndex, PrimaryIndexKey, Row},
         model::{delta::DataDeltaKind, Fields, Model},
     },
@@ -49,16 +50,16 @@ pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> Quer
         let row = Row::new(pk, data, ds.schema_current_version(), new_version);
         if mdl.primary_index().__raw_index().mt_insert(row.clone(), &g) {
             // append delta for new version
-            ds.append_new_data_delta_with(
+            let dp = ds.append_new_data_delta_with(
                 DataDeltaKind::Insert,
                 row,
                 ds.schema_current_version(),
                 new_version,
                 &g,
             );
-            Ok(())
+            Ok(QueryExecMeta::new(dp))
         } else {
-            Err(QueryError::QPDmlDuplicate)
+            Err(QueryError::QExecDmlDuplicate)
         }
     })
 }
@@ -114,6 +115,6 @@ fn prepare_insert(
         };
         Ok((primary_key, prepared_data))
     } else {
-        Err(QueryError::QPDmlValidationError)
+        Err(QueryError::QExecDmlValidationError)
     }
 }

@@ -123,7 +123,7 @@ impl<'a> AlterModel<'a> {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),
             Token![update] => AlterKind::alter_update(state),
-            _ => Err(QueryError::QPExpectedStatement),
+            _ => Err(QueryError::QLExpectedStatement),
         };
         kind.map(|kind| AlterModel::new(model_name, kind))
     }

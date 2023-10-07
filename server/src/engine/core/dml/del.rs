@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::{self, model::delta::DataDeltaKind},
+    core::{self, dml::QueryExecMeta, model::delta::DataDeltaKind},
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::MTIndex,
@@ -47,16 +47,16 @@ pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> 
             .mt_delete_return_entry(&model.resolve_where(delete.clauses_mut())?, &g)
         {
             Some(row) => {
-                delta_state.append_new_data_delta_with(
+                let dp = delta_state.append_new_data_delta_with(
                     DataDeltaKind::Delete,
                     row.clone(),
                     schema_version,
                     new_version,
                     &g,
                 );
-                Ok(())
+                Ok(QueryExecMeta::new(dp))
             }
-            None => Err(QueryError::QPDmlRowNotFound),
+            None => Err(QueryError::QExecDmlRowNotFound),
         }
     })
 }

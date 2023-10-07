@@ -96,7 +96,7 @@ fn fail_operation_on_null() {
             "select * from myspace.mymodel where username='sayan'"
         )
         .unwrap_err(),
-        QueryError::QPDmlValidationError
+        QueryError::QExecDmlValidationError
     );
     assert_eq!(
         dml::update_flow_trace(),
@@ -116,7 +116,7 @@ fn fail_unknown_fields() {
             "select * from myspace.mymodel where username='sayan'"
         )
         .unwrap_err(),
-        QueryError::QPUnknownField
+        QueryError::QExecUnknownField
     );
     assert_eq!(dml::update_flow_trace(), ["fieldnotfound", "rollback"]);
     // verify integrity
@@ -142,7 +142,7 @@ fn fail_typedef_violation() {
             "select * from myspace.mymodel where username = 'sayan'"
         )
         .unwrap_err(),
-        QueryError::QPDmlValidationError
+        QueryError::QExecDmlValidationError
     );
     assert_eq!(
         dml::update_flow_trace(),

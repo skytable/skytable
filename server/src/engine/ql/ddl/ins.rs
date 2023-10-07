@@ -65,7 +65,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
         }
         _ => {
             state.cursor_back();
-            Err(QueryError::QPExpectedStatement)
+            Err(QueryError::QLExpectedStatement)
         }
     }
 }

@@ -64,7 +64,7 @@ mod layer_spec_validation {
     fn invalid_list() {
         assert_eq!(
             layerview("list").unwrap_err(),
-            QueryError::QPDdlInvalidTypeDefinition
+            QueryError::QExecDdlInvalidTypeDefinition
         );
     }
 
@@ -72,7 +72,7 @@ mod layer_spec_validation {
     fn invalid_flat() {
         assert_eq!(
             layerview("string { type: string }").unwrap_err(),
-            QueryError::QPDdlInvalidTypeDefinition
+            QueryError::QExecDdlInvalidTypeDefinition
         );
     }
 }

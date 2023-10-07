@@ -52,7 +52,7 @@ where
             match fields.st_get(key) {
                 Some(dc) => cellfn(dc),
                 None if key == mdl.p_key() => cellfn(&pkdc),
-                None => return Err(QueryError::QPUnknownField),
+                None => return Err(QueryError::QExecUnknownField),
             }
             Ok(())
         };
@@ -69,7 +69,7 @@ where
                     }
                 }
             }
-            None => return Err(QueryError::QPDmlRowNotFound),
+            None => return Err(QueryError::QExecDmlRowNotFound),
         }
         Ok(())
     })

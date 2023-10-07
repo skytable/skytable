@@ -318,7 +318,7 @@ fn drop_model() {
                     .namespace()
                     .with_model(("myspace", "mymodel"), |_| { Ok(()) })
                     .unwrap_err(),
-                QueryError::QPObjectNotFound
+                QueryError::QExecObjectNotFound
             );
         })
     })

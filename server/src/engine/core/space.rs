@@ -93,7 +93,7 @@ impl Space {
         {
             Ok(())
         } else {
-            Err(QueryError::QPDdlObjectAlreadyExists)
+            Err(QueryError::QExecDdlObjectAlreadyExists)
         }
     }
     pub fn get_uuid(&self) -> Uuid {
@@ -112,7 +112,7 @@ impl Space {
     ) -> QueryResult<T> {
         let mread = self.mns.read();
         let Some(model) = mread.st_get(model) else {
-            return Err(QueryError::QPObjectNotFound);
+            return Err(QueryError::QExecObjectNotFound);
         };
         f(model)
     }
@@ -161,7 +161,7 @@ impl Space {
             None if props.is_empty() => IndexST::default(),
             _ => {
                 // unknown properties
-                return Err(QueryError::QPDdlInvalidProperties);
+                return Err(QueryError::QExecDdlInvalidProperties);
             }
         };
         Ok(ProcedureCreate {
@@ -178,7 +178,6 @@ impl Space {
 }
 
 impl Space {
-    #[allow(unused)]
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         space: CreateSpace,
@@ -188,7 +187,7 @@ impl Space {
         // acquire access
         let mut wl = global.namespace().spaces().write();
         if wl.st_contains(&space_name) {
-            return Err(QueryError::QPDdlObjectAlreadyExists);
+            return Err(QueryError::QExecDdlObjectAlreadyExists);
         }
         // commit txn
         if G::FS_IS_NON_NULL {
@@ -229,13 +228,13 @@ impl Space {
                 Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
                 Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
                 None if updated_props.is_empty() => return Ok(()),
-                _ => return Err(QueryError::QPDdlInvalidProperties),
+                _ => return Err(QueryError::QExecDdlInvalidProperties),
             }
             let mut space_props = space.meta.dict().write();
             // create patch
             let patch = match dict::rprepare_metadata_patch(&space_props, updated_props) {
                 Some(patch) => patch,
-                None => return Err(QueryError::QPDdlInvalidProperties),
+                None => return Err(QueryError::QExecDdlInvalidProperties),
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -255,7 +254,6 @@ impl Space {
             Ok(())
         })
     }
-    #[allow(unused)]
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         DropSpace { space, force: _ }: DropSpace,
@@ -266,11 +264,11 @@ impl Space {
         let mut wgns = global.namespace().spaces().write();
         let space = match wgns.get(space_name.as_str()) {
             Some(space) => space,
-            None => return Err(QueryError::QPObjectNotFound),
+            None => return Err(QueryError::QExecObjectNotFound),
         };
         let space_w = space.mns.write();
         if space_w.st_len() != 0 {
-            return Err(QueryError::QPDdlNotEmpty);
+            return Err(QueryError::QExecDdlNotEmpty);
         }
         // we can remove this
         if G::FS_IS_NON_NULL {

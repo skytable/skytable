@@ -51,6 +51,6 @@ fn delete_nonexisting() {
             "sayan",
         )
         .unwrap_err(),
-        QueryError::QPDmlRowNotFound
+        QueryError::QExecDmlRowNotFound
     );
 }

@@ -122,7 +122,7 @@ fn alter_nx() {
             |_| {},
         )
         .unwrap_err(),
-        QueryError::QPObjectNotFound
+        QueryError::QExecObjectNotFound
     );
 }
 

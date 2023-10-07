@@ -84,7 +84,7 @@ fn no_field(mr: &IWModel, new: &str) -> bool {
 fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> QueryResult<bool> {
     match props.remove("nullable") {
         Some(DictEntryGeneric::Data(b)) if b.kind() == TagClass::Bool => Ok(b.bool()),
-        Some(_) => Err(QueryError::QPDdlInvalidProperties),
+        Some(_) => Err(QueryError::QExecDdlInvalidProperties),
         None => Ok(false),
     }
 }
@@ -101,7 +101,7 @@ impl<'a> AlterPlan<'a> {
             AlterKind::Remove(r) => {
                 let mut x = HashSet::new();
                 if !r.iter().all(|id| x.insert(id.as_str())) {
-                    return Err(QueryError::QPDdlModelAlterIllegal);
+                    return Err(QueryError::QExecDdlModelAlterIllegal);
                 }
                 let mut not_found = false;
                 if r.iter().all(|id| {
@@ -112,9 +112,9 @@ impl<'a> AlterPlan<'a> {
                 }) {
                     can_ignore!(AlterAction::Remove(r))
                 } else if not_found {
-                    return Err(QueryError::QPUnknownField);
+                    return Err(QueryError::QExecUnknownField);
                 } else {
-                    return Err(QueryError::QPDdlModelAlterIllegal);
+                    return Err(QueryError::QExecDdlModelAlterIllegal);
                 }
             }
             AlterKind::Add(new_fields) => {
@@ -148,7 +148,7 @@ impl<'a> AlterPlan<'a> {
                     mv.guard_pk(&field_name)?;
                     // get the current field
                     let Some(current_field) = wm.fields().st_get(field_name.as_str()) else {
-                        return Err(QueryError::QPUnknownField);
+                        return Err(QueryError::QExecUnknownField);
                     };
                     // check props
                     let is_nullable = check_nullable(&mut props)?;
@@ -174,7 +174,7 @@ impl<'a> AlterPlan<'a> {
                 no_lock,
             })
         } else {
-            Err(QueryError::QPDdlModelAlterIllegal)
+            Err(QueryError::QExecDdlModelAlterIllegal)
         }
     }
     fn ldeltas(
@@ -197,7 +197,7 @@ impl<'a> AlterPlan<'a> {
         }
         if layers.len() > current.layers().len() {
             // simply a dumb tomato; ELIMINATE THESE DUMB TOMATOES
-            return Err(QueryError::QPDdlModelAlterIllegal);
+            return Err(QueryError::QExecDdlModelAlterIllegal);
         }
         let mut no_lock = !(current.is_nullable() & !nullable);
         let mut deltasize = (current.is_nullable() ^ nullable) as usize;
@@ -216,7 +216,7 @@ impl<'a> AlterPlan<'a> {
             // actually parse the new layer
             okay &= props.is_empty();
             let Some(new_parsed_layer) = Layer::get_layer(&ty) else {
-                return Err(QueryError::QPDdlInvalidTypeDefinition);
+                return Err(QueryError::QExecDdlInvalidTypeDefinition);
             };
             match (
                 current_layer.tag.tag_selector(),
@@ -233,7 +233,7 @@ impl<'a> AlterPlan<'a> {
                 }
                 _ => {
                     // can't cast this directly
-                    return Err(QueryError::QPDdlInvalidTypeDefinition);
+                    return Err(QueryError::QExecDdlInvalidTypeDefinition);
                 }
             }
             *new_layer = new_parsed_layer;
@@ -243,13 +243,12 @@ impl<'a> AlterPlan<'a> {
         if okay {
             Ok((deltasize != 0, new_field))
         } else {
-            Err(QueryError::QPDdlModelAlterIllegal)
+            Err(QueryError::QExecDdlModelAlterIllegal)
         }
     }
 }
 
 impl Model {
-    #[allow(unused)]
     pub fn transactional_exec_alter<G: GlobalInstanceLike>(
         global: &G,
         alter: AlterModel,
@@ -264,7 +263,7 @@ impl Model {
                 // we have a legal plan; acquire exclusive if we need it
                 if !plan.no_lock {
                     // TODO(@ohsayan): allow this later on, once we define the syntax
-                    return Err(QueryError::QPNeedLock);
+                    return Err(QueryError::QExecNeedLock);
                 }
                 // fine, we're good
                 let mut iwm = iwm;

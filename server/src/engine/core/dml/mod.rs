@@ -55,7 +55,23 @@ impl Model {
             {
                 Ok(clause.rhs())
             }
-            _ => compiler::cold_rerr(QueryError::QPDmlWhereHasUnindexedColumn),
+            _ => compiler::cold_rerr(QueryError::QExecDmlWhereHasUnindexedColumn),
         }
+    }
+}
+
+pub struct QueryExecMeta {
+    delta_hint: usize,
+}
+
+impl QueryExecMeta {
+    pub fn new(delta_hint: usize) -> Self {
+        Self { delta_hint }
+    }
+    pub fn zero() -> Self {
+        Self::new(0)
+    }
+    pub fn delta_hint(&self) -> usize {
+        self.delta_hint
     }
 }

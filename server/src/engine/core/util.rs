@@ -46,6 +46,6 @@ impl<'a> EntityLocator<'a> for Entity<'a> {
     where
         Self: 'a,
     {
-        self.into_full_str().ok_or(QueryError::QPExpectedEntity)
+        self.into_full_str().ok_or(QueryError::QLExpectedEntity)
     }
 }
