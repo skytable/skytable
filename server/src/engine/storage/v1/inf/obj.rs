@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{PersistObject, PersistTypeDscr, VecU8},
+    super::{PersistObject, VecU8},
     crate::{
         engine::{
             core::{
@@ -33,7 +33,6 @@ use {
                 space::{Space, SpaceMeta},
             },
             data::{
-                cell::Datacell,
                 tag::{DataTag, TagClass, TagSelector},
                 uuid::Uuid,
                 DictGeneric,
@@ -46,34 +45,202 @@ use {
     },
 };
 
-pub fn encode_element(buf: &mut VecU8, dc: &Datacell) {
-    unsafe {
-        use TagClass::*;
-        match dc.tag().tag_class() {
-            Bool if dc.is_init() => buf.push(dc.read_bool() as u8),
-            Bool => {}
-            UnsignedInt | SignedInt | Float => buf.extend(dc.read_uint().to_le_bytes()),
-            Str | Bin => {
-                let slc = dc.read_bin();
-                buf.extend(slc.len().u64_bytes_le());
-                buf.extend(slc);
+/*
+    generic cells
+*/
+
+pub mod cell {
+    use crate::{
+        engine::{
+            data::{
+                cell::Datacell,
+                tag::{DataTag, TagClass, TagSelector},
+            },
+            storage::v1::inf::{DataSource, VecU8},
+        },
+        util::EndianQW,
+    };
+
+    #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, sky_macros::EnumMethods)]
+    #[repr(u8)]
+    #[allow(dead_code)]
+    pub enum StorageCellTypeID {
+        Null = 0x00,
+        Bool = 0x01,
+        UInt8 = 0x02,
+        UInt16 = 0x03,
+        UInt32 = 0x04,
+        UInt64 = 0x05,
+        SInt8 = 0x06,
+        SInt16 = 0x07,
+        SInt32 = 0x08,
+        SInt64 = 0x09,
+        Float32 = 0x0A,
+        Float64 = 0x0B,
+        Bin = 0x0C,
+        Str = 0x0D,
+        List = 0x0E,
+        Dict = 0x0F,
+    }
+    impl StorageCellTypeID {
+        pub const unsafe fn from_raw(v: u8) -> Self {
+            core::mem::transmute(v)
+        }
+        pub const fn try_from_raw(v: u8) -> Option<Self> {
+            if Self::is_valid(v) {
+                Some(unsafe { Self::from_raw(v) })
+            } else {
+                None
             }
-            List => {
-                let lst = dc.read_list().read();
-                buf.extend(lst.len().u64_bytes_le());
-                for item in lst.iter() {
-                    encode_element(buf, item);
+        }
+        #[inline(always)]
+        pub const fn is_valid(d: u8) -> bool {
+            d <= Self::MAX
+        }
+        const unsafe fn into_selector(self) -> TagSelector {
+            debug_assert!(self.value_u8() != Self::Null.value_u8());
+            core::mem::transmute(self.value_u8() - 1)
+        }
+        #[inline(always)]
+        pub fn expect_atleast(d: u8) -> usize {
+            [0u8, 1, 8, 8][d.min(3) as usize] as usize
+        }
+    }
+    pub fn encode(buf: &mut VecU8, dc: &Datacell) {
+        buf.push(encode_tag(dc));
+        encode_cell(buf, dc)
+    }
+    pub fn encode_tag(dc: &Datacell) -> u8 {
+        (dc.tag().tag_selector().value_u8() + 1) * (dc.is_init() as u8)
+    }
+    pub fn encode_cell(buf: &mut VecU8, dc: &Datacell) {
+        if dc.is_null() {
+            return;
+        }
+        unsafe {
+            use TagClass::*;
+            match dc.tag().tag_class() {
+                Bool if dc.is_init() => buf.push(dc.read_bool() as u8),
+                Bool => {}
+                UnsignedInt | SignedInt | Float => buf.extend(dc.read_uint().to_le_bytes()),
+                Str | Bin => {
+                    let slc = dc.read_bin();
+                    buf.extend(slc.len().u64_bytes_le());
+                    buf.extend(slc);
+                }
+                List => {
+                    let lst = dc.read_list().read();
+                    buf.extend(lst.len().u64_bytes_le());
+                    for item in lst.iter() {
+                        encode(buf, item);
+                    }
                 }
             }
         }
     }
-}
-
-pub fn encode_datacell_tag(buf: &mut VecU8, dc: &Datacell) {
-    buf.push(
-        PersistTypeDscr::translate_from_class(dc.tag().tag_class()).value_u8()
-            * (!dc.is_null() as u8),
-    )
+    pub trait ElementYield {
+        type Yield;
+        type Error;
+        const CAN_YIELD_DICT: bool = false;
+        fn yield_data(dc: Datacell) -> Result<Self::Yield, Self::Error>;
+        fn yield_dict() -> Result<Self::Yield, Self::Error> {
+            panic!()
+        }
+        fn error() -> Result<Self::Yield, Self::Error>;
+    }
+    impl ElementYield for Datacell {
+        type Yield = Self;
+        type Error = ();
+        fn yield_data(dc: Datacell) -> Result<Self::Yield, Self::Error> {
+            Ok(dc)
+        }
+        fn error() -> Result<Self::Yield, Self::Error> {
+            Err(())
+        }
+    }
+    #[derive(Debug, PartialEq)]
+    pub enum CanYieldDict {
+        Data(Datacell),
+        Dict,
+    }
+    impl ElementYield for CanYieldDict {
+        type Yield = Self;
+        type Error = ();
+        const CAN_YIELD_DICT: bool = true;
+        fn error() -> Result<Self::Yield, Self::Error> {
+            Err(())
+        }
+        fn yield_data(dc: Datacell) -> Result<Self::Yield, Self::Error> {
+            Ok(CanYieldDict::Data(dc))
+        }
+        fn yield_dict() -> Result<Self::Yield, Self::Error> {
+            Ok(CanYieldDict::Dict)
+        }
+    }
+    pub unsafe fn decode_element<EY: ElementYield, DS: DataSource>(
+        s: &mut DS,
+        dscr: StorageCellTypeID,
+    ) -> Result<EY::Yield, DS::Error>
+    where
+        DS::Error: From<EY::Error>,
+        DS::Error: From<()>,
+    {
+        if dscr == StorageCellTypeID::Dict {
+            if EY::CAN_YIELD_DICT {
+                return Ok(EY::yield_dict()?);
+            } else {
+                return Ok(EY::error()?);
+            }
+        }
+        if dscr == StorageCellTypeID::Null {
+            return Ok(EY::yield_data(Datacell::null())?);
+        }
+        let tag = dscr.into_selector().into_full();
+        let d = match tag.tag_class() {
+            TagClass::Bool => {
+                let nx = s.read_next_byte()?;
+                if nx > 1 {
+                    return Ok(EY::error()?);
+                }
+                Datacell::new_bool(nx == 1)
+            }
+            TagClass::UnsignedInt | TagClass::SignedInt | TagClass::Float => {
+                let nx = s.read_next_u64_le()?;
+                Datacell::new_qw(nx, tag)
+            }
+            TagClass::Bin | TagClass::Str => {
+                let len = s.read_next_u64_le()? as usize;
+                let block = s.read_next_variable_block(len)?;
+                if tag.tag_class() == TagClass::Str {
+                    match String::from_utf8(block).map(|s| Datacell::new_str(s.into_boxed_str())) {
+                        Ok(s) => s,
+                        Err(_) => return Ok(EY::error()?),
+                    }
+                } else {
+                    Datacell::new_bin(block.into())
+                }
+            }
+            TagClass::List => {
+                let len = s.read_next_u64_le()? as usize;
+                let mut l = vec![];
+                while (l.len() != len) & s.has_remaining(1) {
+                    let Some(dscr) = StorageCellTypeID::try_from_raw(s.read_next_byte()?) else {
+                        return Ok(EY::error()?);
+                    };
+                    // FIXME(@ohsayan): right now, a list cannot contain a dict!
+                    if !s.has_remaining(StorageCellTypeID::expect_atleast(dscr.value_u8())) {
+                        return Ok(EY::error()?);
+                    }
+                    l.push(self::decode_element::<Datacell, DS>(s, dscr)?);
+                }
+                if l.len() != len {
+                    return Ok(EY::error()?);
+                }
+                Datacell::new_list(l)
+            }
+        };
+        Ok(EY::yield_data(d)?)
+    }
 }
 
 /*

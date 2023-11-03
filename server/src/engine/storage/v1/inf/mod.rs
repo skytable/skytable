@@ -26,77 +26,46 @@
 
 //! High level interfaces
 
-use crate::engine::idx::STIndex;
-
 pub mod map;
 pub mod obj;
 // tests
 #[cfg(test)]
 mod tests;
 
-use {
-    crate::engine::{
-        data::tag::TagClass,
-        error::{RuntimeResult, StorageError},
-        idx::{AsKey, AsValue},
-        mem::BufferedScanner,
-    },
-    std::mem,
+use crate::engine::{
+    error::{RuntimeResult, StorageError},
+    idx::{AsKey, AsValue, STIndex},
+    mem::BufferedScanner,
 };
 
 type VecU8 = Vec<u8>;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, sky_macros::EnumMethods)]
-#[repr(u8)]
-#[allow(unused)]
-/// Disambiguation for data
-pub enum PersistTypeDscr {
-    Null = 0,
-    Bool = 1,
-    UnsignedInt = 2,
-    SignedInt = 3,
-    Float = 4,
-    Bin = 5,
-    Str = 6,
-    List = 7,
-    Dict = 8,
+pub trait DataSource {
+    type Error;
+    const RELIABLE_SOURCE: bool = true;
+    fn has_remaining(&self, cnt: usize) -> bool;
+    unsafe fn read_next_byte(&mut self) -> Result<u8, Self::Error>;
+    unsafe fn read_next_block<const N: usize>(&mut self) -> Result<[u8; N], Self::Error>;
+    unsafe fn read_next_u64_le(&mut self) -> Result<u64, Self::Error>;
+    unsafe fn read_next_variable_block(&mut self, size: usize) -> Result<Vec<u8>, Self::Error>;
 }
 
-#[allow(unused)]
-impl PersistTypeDscr {
-    /// translates the tag class definition into the dscr definition
-    pub const fn translate_from_class(class: TagClass) -> Self {
-        unsafe { Self::from_raw(class.value_u8() + 1) }
+impl<'a> DataSource for BufferedScanner<'a> {
+    type Error = ();
+    fn has_remaining(&self, cnt: usize) -> bool {
+        self.has_left(cnt)
     }
-    pub const fn try_from_raw(v: u8) -> Option<Self> {
-        if v > Self::MAX {
-            None
-        } else {
-            unsafe { Some(Self::from_raw(v)) }
-        }
+    unsafe fn read_next_byte(&mut self) -> Result<u8, Self::Error> {
+        Ok(self.next_byte())
     }
-    pub const unsafe fn from_raw(v: u8) -> Self {
-        core::mem::transmute(v)
+    unsafe fn read_next_block<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
+        Ok(self.next_chunk())
     }
-    /// The data in question is null (well, can we call that data afterall?)
-    pub const fn is_null(&self) -> bool {
-        self.value_u8() == Self::Null.value_u8()
+    unsafe fn read_next_u64_le(&mut self) -> Result<u64, Self::Error> {
+        Ok(self.next_u64_le())
     }
-    /// The data in question is a scalar
-    pub const fn is_scalar(&self) -> bool {
-        self.value_u8() <= Self::Float.value_u8()
-    }
-    /// The data is composite
-    pub const fn is_composite(&self) -> bool {
-        self.value_u8() > Self::Float.value_u8()
-    }
-    /// Recursive data
-    pub const fn is_recursive(&self) -> bool {
-        self.value_u8() >= Self::List.value_u8()
-    }
-    fn into_class(&self) -> TagClass {
-        debug_assert!(*self != Self::Null);
-        unsafe { mem::transmute(self.value_u8() - 1) }
+    unsafe fn read_next_variable_block(&mut self, size: usize) -> Result<Vec<u8>, Self::Error> {
+        Ok(self.next_chunk_variable(size).into())
     }
 }
 

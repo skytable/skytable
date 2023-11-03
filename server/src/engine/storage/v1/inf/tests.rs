@@ -47,7 +47,7 @@ fn dict() {
         "hello" => Datacell::new_str("world".into()),
         "omg a null?" => Datacell::null(),
         "a big fat dict" => DictEntryGeneric::Map(into_dict!(
-            "with a value" => Datacell::new_uint(1002),
+            "with a value" => Datacell::new_uint_default(1002),
             "and a null" => Datacell::null(),
         ))
     };

@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::storage::v1::inf::obj::cell;
+
 use {
     super::{
         MARKER_ACTUAL_BATCH_EVENT, MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN, MARKER_END_OF_BATCH,
@@ -40,14 +42,11 @@ use {
             },
             data::{
                 cell::Datacell,
-                tag::{DataTag, TagClass, TagUnique},
+                tag::{DataTag, TagUnique},
             },
             error::{RuntimeResult, StorageError},
             idx::STIndexSeq,
-            storage::v1::{
-                inf::PersistTypeDscr,
-                rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedWriter},
-            },
+            storage::v1::rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedWriter},
         },
         util::EndianQW,
     },
@@ -224,49 +223,9 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     }
     /// Encode a single cell
     fn encode_cell(&mut self, value: &Datacell) -> RuntimeResult<()> {
-        let ref mut buf = self.f;
-        buf.unfsynced_write(&[
-            PersistTypeDscr::translate_from_class(value.tag().tag_class()).value_u8(),
-        ])?;
-        match value.tag().tag_class() {
-            TagClass::Bool if value.is_null() => {}
-            TagClass::Bool => {
-                let bool = unsafe {
-                    // UNSAFE(@ohsayan): +tagck
-                    value.read_bool()
-                } as u8;
-                buf.unfsynced_write(&[bool])?;
-            }
-            TagClass::SignedInt | TagClass::UnsignedInt | TagClass::Float => {
-                let chunk = unsafe {
-                    // UNSAFE(@ohsayan): +tagck
-                    value.read_uint()
-                }
-                .to_le_bytes();
-                buf.unfsynced_write(&chunk)?;
-            }
-            TagClass::Str | TagClass::Bin => {
-                let slice = unsafe {
-                    // UNSAFE(@ohsayan): +tagck
-                    value.read_bin()
-                };
-                let slice_l = slice.len().u64_bytes_le();
-                buf.unfsynced_write(&slice_l)?;
-                buf.unfsynced_write(slice)?;
-            }
-            TagClass::List => {
-                let list = unsafe {
-                    // UNSAFE(@ohsayan): +tagck
-                    value.read_list()
-                }
-                .read();
-                let list_l = list.len().u64_bytes_le();
-                buf.unfsynced_write(&list_l)?;
-                for item in list.iter() {
-                    self.encode_cell(item)?;
-                }
-            }
-        }
+        let mut buf = vec![];
+        cell::encode(&mut buf, value);
+        self.f.unfsynced_write(&buf)?;
         Ok(())
     }
     /// Encode row data

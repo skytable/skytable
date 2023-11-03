@@ -24,6 +24,11 @@
  *
 */
 
+use crate::engine::storage::v1::inf::{
+    obj::cell::{self, StorageCellTypeID},
+    DataSource,
+};
+
 use {
     super::{
         MARKER_ACTUAL_BATCH_EVENT, MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN, MARKER_END_OF_BATCH,
@@ -34,16 +39,10 @@ use {
             index::{DcFieldIndex, PrimaryIndexKey, Row},
             model::{delta::DeltaVersion, Model},
         },
-        data::{
-            cell::Datacell,
-            tag::{CUTag, TagClass, TagUnique},
-        },
+        data::{cell::Datacell, tag::TagUnique},
         error::{RuntimeResult, StorageError},
         idx::{MTIndex, STIndex, STIndexSeq},
-        storage::v1::{
-            inf::PersistTypeDscr,
-            rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedReader},
-        },
+        storage::v1::rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedReader},
     },
     crossbeam_epoch::pin,
     std::{
@@ -500,58 +499,43 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         })
     }
     fn decode_cell(&mut self) -> RuntimeResult<Datacell> {
-        let cell_type_sig = self.f.read_byte()?;
-        let Some(cell_type) = PersistTypeDscr::try_from_raw(cell_type_sig) else {
+        let Some(dscr) = StorageCellTypeID::try_from_raw(self.f.read_byte()?) else {
             return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
         };
-        Ok(match cell_type {
-            PersistTypeDscr::Null => Datacell::null(),
-            PersistTypeDscr::Bool => {
-                let bool = self.f.read_byte()?;
-                if bool > 1 {
-                    return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
-                }
-                Datacell::new_bool(bool == 1)
-            }
-            PersistTypeDscr::UnsignedInt | PersistTypeDscr::SignedInt | PersistTypeDscr::Float => {
-                let qw = self.f.read_u64_le()?;
-                unsafe {
-                    // UNSAFE(@ohsayan): choosing the correct type and tag
-                    let tc = TagClass::from_raw(cell_type.value_u8() - 1);
-                    Datacell::new_qw(qw, CUTag::new(tc, tc.tag_unique()))
-                }
-            }
-            PersistTypeDscr::Str | PersistTypeDscr::Bin => {
-                let len = self.f.read_u64_le()? as usize;
-                let mut data = vec![0; len];
-                self.f.read_into_buffer(&mut data)?;
-                unsafe {
-                    // UNSAFE(@ohsayan): +tagck
-                    if cell_type == PersistTypeDscr::Str {
-                        if core::str::from_utf8(&data).is_err() {
-                            return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
-                        }
-                        Datacell::new_str(String::from_utf8_unchecked(data).into_boxed_str())
-                    } else {
-                        Datacell::new_bin(data.into_boxed_slice())
-                    }
-                }
-            }
-            PersistTypeDscr::List => {
-                let len = self.f.read_u64_le()?;
-                let mut list = Vec::new();
-                while !self.f.is_eof() && list.len() as u64 != len {
-                    list.push(self.decode_cell()?);
-                }
-                if len != list.len() as u64 {
-                    return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
-                }
-                Datacell::new_list(list)
-            }
-            PersistTypeDscr::Dict => {
-                // we don't support dicts just yet
-                return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
-            }
-        })
+        unsafe { cell::decode_element::<Datacell, SDSSFileTrackedReader<F>>(&mut self.f, dscr) }
+            .map_err(|e| e.0)
+    }
+}
+
+pub struct ErrorHack(crate::engine::fractal::error::Error);
+impl From<crate::engine::fractal::error::Error> for ErrorHack {
+    fn from(value: crate::engine::fractal::error::Error) -> Self {
+        Self(value)
+    }
+}
+impl From<()> for ErrorHack {
+    fn from(_: ()) -> Self {
+        Self(StorageError::DataBatchRestoreCorruptedEntry.into())
+    }
+}
+impl<F: RawFSInterface> DataSource for SDSSFileTrackedReader<F> {
+    const RELIABLE_SOURCE: bool = false;
+    type Error = ErrorHack;
+    fn has_remaining(&self, cnt: usize) -> bool {
+        self.remaining() >= cnt as u64
+    }
+    unsafe fn read_next_byte(&mut self) -> Result<u8, Self::Error> {
+        Ok(self.read_byte()?)
+    }
+    unsafe fn read_next_block<const N: usize>(&mut self) -> Result<[u8; N], Self::Error> {
+        Ok(self.read_block()?)
+    }
+    unsafe fn read_next_u64_le(&mut self) -> Result<u64, Self::Error> {
+        Ok(self.read_u64_le()?)
+    }
+    unsafe fn read_next_variable_block(&mut self, size: usize) -> Result<Vec<u8>, Self::Error> {
+        let mut buf = vec![0; size];
+        self.read_into_buffer(&mut buf)?;
+        Ok(buf)
     }
 }

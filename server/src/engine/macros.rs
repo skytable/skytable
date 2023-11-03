@@ -29,6 +29,10 @@ macro_rules! into_array {
     ($($e:expr),* $(,)?) => { [$($e.into()),*] };
 }
 
+macro_rules! as_array {
+    ($($e:expr),* $(,)?) => { [$($e as _),*] };
+}
+
 macro_rules! extract {
     ($src:expr, $what:pat => $ret:expr) => {
         if let $what = $src {

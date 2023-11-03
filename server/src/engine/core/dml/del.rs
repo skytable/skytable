@@ -29,11 +29,18 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::MTIndex,
+    net::protocol::Response,
     ql::dml::del::DeleteStatement,
     sync,
 };
 
-#[allow(unused)]
+pub fn delete_resp(
+    global: &impl GlobalInstanceLike,
+    delete: DeleteStatement,
+) -> QueryResult<Response> {
+    self::delete(global, delete).map(|_| Response::Empty)
+}
+
 pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, delete.entity(), |model| {
         let g = sync::atm::cpin();

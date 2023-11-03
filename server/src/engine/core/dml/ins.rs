@@ -34,11 +34,18 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{IndexBaseSpec, MTIndex, STIndex, STIndexSeq},
+    net::protocol::Response,
     ql::dml::ins::{InsertData, InsertStatement},
     sync::atm::cpin,
 };
 
-#[allow(unused)]
+pub fn insert_resp(
+    global: &impl GlobalInstanceLike,
+    insert: InsertStatement,
+) -> QueryResult<Response> {
+    self::insert(global, insert).map(|_| Response::Empty)
+}
+
 pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, insert.entity(), |mdl| {
         let irmwd = mdl.intent_write_new_data();
@@ -77,7 +84,7 @@ fn prepare_insert(
             let mut fields = fields.stseq_ord_kv();
             let mut tuple = tuple.into_iter();
             while (tuple.len() != 0) & okay {
-                let data;
+                let mut data;
                 let field;
                 unsafe {
                     // UNSAFE(@ohsayan): safe because of invariant
@@ -86,14 +93,14 @@ fn prepare_insert(
                     field = fields.next().unwrap_unchecked();
                 }
                 let (field_id, field) = field;
-                okay &= field.validate_data_fpath(&data);
+                okay &= field.vt_data_fpath(&mut data);
                 okay &= prepared_data.st_insert(field_id.clone(), data);
             }
         }
         InsertData::Map(map) => {
             let mut map = map.into_iter();
             while (map.len() != 0) & okay {
-                let (field_id, field_data) = unsafe {
+                let (field_id, mut field_data) = unsafe {
                     // UNSAFE(@ohsayan): safe because of loop invariant
                     map.next().unwrap_unchecked()
                 };
@@ -101,7 +108,7 @@ fn prepare_insert(
                     okay = false;
                     break;
                 };
-                okay &= field.validate_data_fpath(&field_data);
+                okay &= field.vt_data_fpath(&mut field_data);
                 prepared_data.st_insert(field_id.boxed_str(), field_data);
             }
         }

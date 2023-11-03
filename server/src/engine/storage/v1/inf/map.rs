@@ -26,18 +26,16 @@
 
 use {
     super::{
-        obj::{self, FieldMD},
-        PersistMapSpec, PersistObject, PersistTypeDscr, VecU8,
+        obj::{
+            cell::{self, CanYieldDict, StorageCellTypeID},
+            FieldMD,
+        },
+        PersistMapSpec, PersistObject, VecU8,
     },
     crate::{
         engine::{
             core::model::Field,
-            data::{
-                cell::Datacell,
-                dict::DictEntryGeneric,
-                tag::{CUTag, TagUnique},
-                DictGeneric,
-            },
+            data::{dict::DictEntryGeneric, DictGeneric},
             error::{RuntimeResult, StorageError},
             idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
             mem::BufferedScanner,
@@ -175,9 +173,8 @@ impl PersistMapSpec for GenericDictSpec {
         scanner.has_left(9)
     }
     fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
-        static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
-        let lbound_rem = md.klen + EXPECT_ATLEAST[md.dscr.min(3) as usize] as usize;
-        scanner.has_left(lbound_rem) & (md.dscr <= PersistTypeDscr::Dict.value_u8())
+        StorageCellTypeID::is_valid(md.dscr)
+            & scanner.has_left(StorageCellTypeID::expect_atleast(md.dscr))
     }
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
         buf.extend(key.len().u64_bytes_le());
@@ -188,14 +185,14 @@ impl PersistMapSpec for GenericDictSpec {
     fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
         match val {
             DictEntryGeneric::Map(map) => {
-                buf.push(PersistTypeDscr::Dict.value_u8());
+                buf.push(StorageCellTypeID::Dict.value_u8());
                 buf.extend(key.as_bytes());
                 <PersistMapImpl<Self> as PersistObject>::default_full_enc(buf, map);
             }
             DictEntryGeneric::Data(dc) => {
-                obj::encode_datacell_tag(buf, dc);
+                buf.push(cell::encode_tag(dc));
                 buf.extend(key.as_bytes());
-                obj::encode_element(buf, dc);
+                cell::encode_cell(buf, dc);
             }
         }
     }
@@ -205,85 +202,20 @@ impl PersistMapSpec for GenericDictSpec {
             .ok()
     }
     unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
-        unsafe fn decode_element(
-            scanner: &mut BufferedScanner,
-            dscr: PersistTypeDscr,
-            dg_top_element: bool,
-        ) -> Option<DictEntryGeneric> {
-            let r = match dscr {
-                PersistTypeDscr::Null => DictEntryGeneric::Data(Datacell::null()),
-                PersistTypeDscr::Bool => {
-                    DictEntryGeneric::Data(Datacell::new_bool(scanner.next_byte() == 1))
-                }
-                PersistTypeDscr::UnsignedInt
-                | PersistTypeDscr::SignedInt
-                | PersistTypeDscr::Float => DictEntryGeneric::Data(Datacell::new_qw(
-                    scanner.next_u64_le(),
-                    CUTag::new(
-                        dscr.into_class(),
-                        [
-                            TagUnique::UnsignedInt,
-                            TagUnique::SignedInt,
-                            TagUnique::Illegal,
-                            TagUnique::Illegal, // pad
-                        ][(dscr.value_u8() - 2) as usize],
-                    ),
-                )),
-                PersistTypeDscr::Str | PersistTypeDscr::Bin => {
-                    let slc_len = scanner.next_u64_le() as usize;
-                    if !scanner.has_left(slc_len) {
-                        return None;
-                    }
-                    let slc = scanner.next_chunk_variable(slc_len);
-                    DictEntryGeneric::Data(if dscr == PersistTypeDscr::Str {
-                        if core::str::from_utf8(slc).is_err() {
-                            return None;
-                        }
-                        Datacell::new_str(
-                            String::from_utf8_unchecked(slc.to_owned()).into_boxed_str(),
-                        )
-                    } else {
-                        Datacell::new_bin(slc.to_owned().into_boxed_slice())
-                    })
-                }
-                PersistTypeDscr::List => {
-                    let list_len = scanner.next_u64_le() as usize;
-                    let mut v = Vec::with_capacity(list_len);
-                    while (!scanner.eof()) & (v.len() < list_len) {
-                        let dscr = scanner.next_byte();
-                        if dscr > PersistTypeDscr::Dict.value_u8() {
-                            return None;
-                        }
-                        v.push(
-                            match decode_element(scanner, PersistTypeDscr::from_raw(dscr), false) {
-                                Some(DictEntryGeneric::Data(l)) => l,
-                                None => return None,
-                                _ => unreachable!("found top-level dict item in datacell"),
-                            },
-                        );
-                    }
-                    if v.len() == list_len {
-                        DictEntryGeneric::Data(Datacell::new_list(v))
-                    } else {
-                        return None;
-                    }
-                }
-                PersistTypeDscr::Dict => {
-                    if dg_top_element {
-                        DictEntryGeneric::Map(
-                            <PersistMapImpl<GenericDictSpec> as PersistObject>::default_full_dec(
-                                scanner,
-                            )
-                            .ok()?,
-                        )
-                    } else {
-                        unreachable!("found top-level dict item in datacell")
-                    }
-                }
-            };
-            Some(r)
-        }
-        decode_element(scanner, PersistTypeDscr::from_raw(md.dscr), true)
+        Some(
+            match cell::decode_element::<CanYieldDict, BufferedScanner>(
+                scanner,
+                StorageCellTypeID::from_raw(md.dscr),
+            )
+            .ok()?
+            {
+                CanYieldDict::Data(d) => DictEntryGeneric::Data(d),
+                CanYieldDict::Dict => DictEntryGeneric::Map(
+                    <PersistMapImpl<GenericDictSpec> as PersistObject>::default_full_dec(scanner)
+                        .ok()?,
+                ),
+            },
+        )
     }
     // not implemented
     fn enc_key(_: &mut VecU8, _: &Self::Key) {

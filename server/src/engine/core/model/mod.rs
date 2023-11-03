@@ -36,7 +36,7 @@ use {
     crate::engine::{
         data::{
             cell::Datacell,
-            tag::{DataTag, FullTag, TagClass, TagSelector},
+            tag::{DataTag, FloatSpec, FullTag, SIntSpec, TagClass, TagSelector, UIntSpec},
             uuid::Uuid,
         },
         error::{QueryError, QueryResult},
@@ -379,44 +379,39 @@ impl Field {
             dc.kind().value_word()
         }
     }
-    pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
-        // if someone sends a PR with an added check, I'll personally come to your house and throw a brick on your head
-        if (self.layers.len() == 1) | data.is_null() {
+    pub fn vt_data_fpath(&self, data: &mut Datacell) -> bool {
+        if (self.layers.len() == 1) | (data.is_null()) {
             layertrace("fpath");
-            unsafe {
-                // UNSAFE(@ohsayan): checked for non-null, and used correct class
-                LVERIFY[self.compute_index(data)](self.layers()[0], data)
-            }
+            unsafe { VTFN[self.compute_index(data)](self.layers()[0], data) }
         } else {
-            Self::rverify_layers(self.layers(), data)
+            Self::rvt_data(self.layers(), data)
         }
     }
-    // TODO(@ohsayan): improve algo with dfs
-    fn rverify_layers(layers: &[Layer], data: &Datacell) -> bool {
+    fn rvt_data(layers: &[Layer], data: &mut Datacell) -> bool {
         let layer = layers[0];
         let layers = &layers[1..];
-        match (layer.tag.tag_class(), data.kind()) {
-            (TagClass::List, TagClass::List) if !layers.is_empty() => {
+        match (layer.tag().tag_class(), data.kind()) {
+            (TagClass::List, TagClass::List) => {
                 let mut okay = unsafe {
-                    // UNSAFE(@ohsayan): we've verified this
-                    LVERIFY[TagClass::List.value_word()](layer, data)
+                    // UNSAFE(@ohsayan): +tagck
+                    VTFN[TagClass::List.value_word()](layer, data)
                 };
                 let list = unsafe {
-                    // UNSAFE(@ohsayan): we verified tags
+                    // UNSAFE(@ohsayan): +tagck
                     data.read_list()
                 };
-                let lread = list.read();
+                let mut lread = list.write();
                 let mut i = 0;
                 while (i < lread.len()) & okay {
-                    okay &= Self::rverify_layers(layers, &lread[i]);
+                    okay &= Self::rvt_data(layers, &mut lread[i]);
                     i += 1;
                 }
                 okay
             }
             (tag_a, tag_b) if tag_a == tag_b => {
                 unsafe {
-                    // UNSAFE(@ohsayan): same tags; not-null for now so no extra handling required here
-                    LVERIFY[tag_a.value_word()](layer, data)
+                    // UNSAFE(@ohsayan): same tags and lists have non-null elements
+                    VTFN[tag_a.value_word()](layer, data)
                 }
             }
             _ => false,
@@ -510,17 +505,6 @@ impl Layer {
     }
 }
 
-static LVERIFY: [unsafe fn(Layer, &Datacell) -> bool; 8] = [
-    lverify_bool,
-    lverify_uint,
-    lverify_sint,
-    lverify_float,
-    lverify_bin,
-    lverify_str,
-    lverify_list,
-    |_, _| false,
-];
-
 #[cfg(test)]
 thread_local! {
     static LAYER_TRACE: RefCell<Vec<Box<str>>> = RefCell::new(Vec::new());
@@ -544,41 +528,44 @@ pub(super) fn layer_traces() -> Box<[Box<str>]> {
     })
 }
 
-unsafe fn lverify_bool(_: Layer, _: &Datacell) -> bool {
+static VTFN: [unsafe fn(Layer, &mut Datacell) -> bool; 8] = [
+    vt_bool,
+    vt_uint,
+    vt_sint,
+    vt_float,
+    vt_bin,
+    vt_str,
+    vt_list,
+    |_, _| false,
+];
+unsafe fn vt_bool(_: Layer, _: &mut Datacell) -> bool {
     layertrace("bool");
     true
 }
-unsafe fn lverify_uint(l: Layer, d: &Datacell) -> bool {
+unsafe fn vt_uint(l: Layer, dc: &mut Datacell) -> bool {
     layertrace("uint");
-    const MX: [u64; 4] = [u8::MAX as _, u16::MAX as _, u32::MAX as _, u64::MAX];
-    d.read_uint() <= MX[l.tag.tag_selector().value_word() - 1]
+    dc.set_tag(l.tag());
+    UIntSpec::from_full(l.tag()).check(dc.read_uint())
 }
-unsafe fn lverify_sint(l: Layer, d: &Datacell) -> bool {
+unsafe fn vt_sint(l: Layer, dc: &mut Datacell) -> bool {
     layertrace("sint");
-    const MN_MX: [(i64, i64); 4] = [
-        (i8::MIN as _, i8::MAX as _),
-        (i16::MIN as _, i16::MAX as _),
-        (i32::MIN as _, i32::MAX as _),
-        (i64::MIN, i64::MAX),
-    ];
-    let (mn, mx) = MN_MX[l.tag.tag_selector().value_word() - 5];
-    (d.read_sint() >= mn) & (d.read_sint() <= mx)
+    dc.set_tag(l.tag());
+    SIntSpec::from_full(l.tag()).check(dc.read_sint())
 }
-unsafe fn lverify_float(l: Layer, d: &Datacell) -> bool {
+unsafe fn vt_float(l: Layer, dc: &mut Datacell) -> bool {
     layertrace("float");
-    const MN_MX: [(f64, f64); 2] = [(f32::MIN as _, f32::MAX as _), (f64::MIN, f64::MAX)];
-    let (mn, mx) = MN_MX[l.tag.tag_selector().value_word() - 9];
-    (d.read_float() >= mn) & (d.read_float() <= mx)
+    dc.set_tag(l.tag());
+    FloatSpec::from_full(l.tag()).check(dc.read_float())
 }
-unsafe fn lverify_bin(_: Layer, _: &Datacell) -> bool {
+unsafe fn vt_bin(_: Layer, _: &mut Datacell) -> bool {
     layertrace("binary");
     true
 }
-unsafe fn lverify_str(_: Layer, _: &Datacell) -> bool {
+unsafe fn vt_str(_: Layer, _: &mut Datacell) -> bool {
     layertrace("string");
     true
 }
-unsafe fn lverify_list(_: Layer, _: &Datacell) -> bool {
+unsafe fn vt_list(_: Layer, _: &mut Datacell) -> bool {
     layertrace("list");
     true
 }

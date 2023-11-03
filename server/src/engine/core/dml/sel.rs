@@ -30,9 +30,17 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{STIndex, STIndexSeq},
+    net::protocol::Response,
     ql::dml::sel::SelectStatement,
     sync,
 };
+
+pub fn select_resp(
+    global: &impl GlobalInstanceLike,
+    select: SelectStatement,
+) -> QueryResult<Response> {
+    todo!()
+}
 
 #[allow(unused)]
 pub fn select_custom<F>(

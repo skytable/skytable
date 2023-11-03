@@ -149,8 +149,8 @@ pub fn sync_system_database_to<Fs: RawFSInterface>(
     // prepare our flat file
     let mut map: DictGeneric = into_dict!(
         SYS_KEY_SYS => DictEntryGeneric::Map(into_dict!(
-            SYS_KEY_SYS_SETTINGS_VERSION => Datacell::new_uint(cfg.host_data().settings_version() as _),
-            SYS_KEY_SYS_STARTUP_COUNTER => Datacell::new_uint(cfg.host_data().startup_counter() as _),
+            SYS_KEY_SYS_SETTINGS_VERSION => Datacell::new_uint_default(cfg.host_data().settings_version() as _),
+            SYS_KEY_SYS_STARTUP_COUNTER => Datacell::new_uint_default(cfg.host_data().startup_counter() as _),
         )),
         SYS_KEY_AUTH => DictGeneric::new(),
     );

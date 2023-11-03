@@ -36,23 +36,6 @@ pub enum TagClass {
     List = 6,
 }
 
-impl TagClass {
-    pub const unsafe fn from_raw(v: u8) -> Self {
-        core::mem::transmute(v)
-    }
-    pub const fn tag_unique(&self) -> TagUnique {
-        [
-            TagUnique::Illegal,
-            TagUnique::UnsignedInt,
-            TagUnique::SignedInt,
-            TagUnique::Illegal,
-            TagUnique::Bin,
-            TagUnique::Str,
-            TagUnique::Illegal,
-        ][self.value_word()]
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum TagSelector {
@@ -206,57 +189,69 @@ impl DataTag for FullTag {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct CUTag {
-    class: TagClass,
-    unique: TagUnique,
-}
-
-impl PartialEq for CUTag {
-    fn eq(&self, other: &Self) -> bool {
-        self.class == other.class
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[repr(transparent)]
+pub struct UIntSpec(FullTag);
+impl UIntSpec {
+    pub const LIM_MAX: [u64; 4] = as_array![u8::MAX, u16::MAX, u32::MAX, u64::MAX];
+    pub const DEFAULT: Self = Self::UINT64;
+    pub const UINT64: Self = Self(FullTag::new_uint(TagSelector::UInt64));
+    pub const unsafe fn from_full(f: FullTag) -> Self {
+        Self(f)
+    }
+    pub fn check(&self, v: u64) -> bool {
+        v <= Self::LIM_MAX[self.0.tag_selector().value_word() - 1]
     }
 }
 
-macro_rules! cutag {
-    ($class:ident, $unique:ident) => {
-        CUTag::new(TagClass::$class, TagUnique::$unique)
-    };
-    ($class:ident) => {
-        CUTag::new(TagClass::$class, TagUnique::Illegal)
-    };
-}
-
-impl CUTag {
-    pub const fn new(class: TagClass, unique: TagUnique) -> Self {
-        Self { class, unique }
+impl From<UIntSpec> for FullTag {
+    fn from(value: UIntSpec) -> Self {
+        value.0
     }
 }
 
-impl DataTag for CUTag {
-    const BOOL: Self = cutag!(Bool);
-    const UINT: Self = cutag!(UnsignedInt, UnsignedInt);
-    const SINT: Self = cutag!(SignedInt, SignedInt);
-    const FLOAT: Self = cutag!(Float);
-    const BIN: Self = cutag!(Bin, Bin);
-    const STR: Self = cutag!(Str, Str);
-    const LIST: Self = cutag!(List);
-
-    fn tag_class(&self) -> TagClass {
-        self.class
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[repr(transparent)]
+pub struct SIntSpec(FullTag);
+impl SIntSpec {
+    pub const LIM_MIN: [i64; 4] = as_array![i8::MIN, i16::MIN, i32::MIN, i64::MIN];
+    pub const LIM_MAX: [i64; 4] = as_array![i8::MAX, i16::MAX, i32::MAX, i64::MAX];
+    pub const DEFAULT: Self = Self::SINT64;
+    pub const SINT64: Self = Self(FullTag::new_sint(TagSelector::SInt64));
+    pub const unsafe fn from_full(f: FullTag) -> Self {
+        Self(f)
     }
-
-    fn tag_selector(&self) -> TagSelector {
-        unimplemented!()
-    }
-
-    fn tag_unique(&self) -> TagUnique {
-        self.unique
+    pub fn check(&self, i: i64) -> bool {
+        let tag = self.0.tag_selector().value_word() - 5;
+        (i >= Self::LIM_MIN[tag]) & (i <= Self::LIM_MAX[tag])
     }
 }
 
-impl From<FullTag> for CUTag {
-    fn from(f: FullTag) -> Self {
-        Self::new(f.tag_class(), f.tag_unique())
+impl From<SIntSpec> for FullTag {
+    fn from(value: SIntSpec) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[repr(transparent)]
+pub struct FloatSpec(FullTag);
+impl FloatSpec {
+    pub const LIM_MIN: [f64; 2] = as_array![f32::MIN, f64::MIN];
+    pub const LIM_MAX: [f64; 2] = as_array![f32::MAX, f64::MAX];
+    pub const DEFAULT: Self = Self::F64;
+    pub const F64: Self = Self(FullTag::new_float(TagSelector::Float64));
+    pub const unsafe fn from_full(f: FullTag) -> Self {
+        Self(f)
+    }
+    pub fn check(&self, f: f64) -> bool {
+        let tag = self.0.tag_selector().value_word() - 9;
+        (f >= Self::LIM_MIN[tag]) & (f <= Self::LIM_MAX[tag])
+    }
+}
+
+impl From<FloatSpec> for FullTag {
+    fn from(value: FloatSpec) -> Self {
+        value.0
     }
 }

@@ -58,7 +58,7 @@ fn exec_create_space_with_env() {
                 &Space::new_with_uuid(
                     into_dict! {},
                     SpaceMeta::with_env(into_dict! {
-                        "MAX_MODELS" => Datacell::new_uint(100)
+                        "MAX_MODELS" => Datacell::new_uint_default(100)
                     }),
                     space.get_uuid()
                 )

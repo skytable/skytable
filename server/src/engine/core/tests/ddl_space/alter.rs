@@ -43,7 +43,7 @@ fn alter_add_prop_env_var() {
                 space,
                 &Space::new_with_uuid(
                     into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(100))),
+                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint_default(100))),
                     space.get_uuid()
                 )
             );
@@ -62,7 +62,7 @@ fn alter_update_prop_env_var() {
             let rl = space.meta.dict().read();
             assert_eq!(
                 SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
-                &(Datacell::new_uint(100).into())
+                &(Datacell::new_uint_default(100).into())
             )
         },
     )
@@ -75,7 +75,7 @@ fn alter_update_prop_env_var() {
                 space,
                 &Space::new_with_uuid(
                     into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(200))),
+                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint_default(200))),
                     uuid,
                 )
             )
@@ -94,7 +94,7 @@ fn alter_remove_prop_env_var() {
             let rl = space.meta.dict().read();
             assert_eq!(
                 SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
-                &(Datacell::new_uint(100).into())
+                &(Datacell::new_uint_default(100).into())
             )
         },
     )
@@ -136,7 +136,7 @@ fn alter_remove_all_env() {
             let rl = space.meta.dict().read();
             assert_eq!(
                 SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
-                &(Datacell::new_uint(100).into())
+                &(Datacell::new_uint_default(100).into())
             )
         },
     )

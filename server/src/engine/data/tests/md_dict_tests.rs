@@ -36,7 +36,7 @@ fn t_simple_flatten() {
         "a_null_key" => Datacell::null(),
     };
     let expected: DictGeneric = into_dict!(
-        "a_valid_key" => Datacell::new_uint(100)
+        "a_valid_key" => Datacell::new_uint_default(100)
     );
     let ret = dict::rflatten_metadata(generic_dict);
     assert_eq!(ret, expected);
@@ -45,18 +45,18 @@ fn t_simple_flatten() {
 #[test]
 fn t_simple_patch() {
     let mut current: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(2),
-        "b" => Datacell::new_uint(3),
-        "z" => Datacell::new_sint(-100),
+        "a" => Datacell::new_uint_default(2),
+        "b" => Datacell::new_uint_default(3),
+        "z" => Datacell::new_sint_default(-100),
     };
     let new: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(1),
-        "b" => Datacell::new_uint(2),
+        "a" => Datacell::new_uint_default(1),
+        "b" => Datacell::new_uint_default(2),
         "z" => Datacell::null(),
     };
     let expected: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(1),
-        "b" => Datacell::new_uint(2),
+        "a" => Datacell::new_uint_default(1),
+        "b" => Datacell::new_uint_default(2),
     };
     assert!(dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, expected);
@@ -65,14 +65,14 @@ fn t_simple_patch() {
 #[test]
 fn t_bad_patch() {
     let mut current: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(2),
-        "b" => Datacell::new_uint(3),
-        "z" => Datacell::new_sint(-100),
+        "a" => Datacell::new_uint_default(2),
+        "b" => Datacell::new_uint_default(3),
+        "z" => Datacell::new_sint_default(-100),
     };
     let backup = current.clone();
     let new: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(1),
-        "b" => Datacell::new_uint(2),
+        "a" => Datacell::new_uint_default(1),
+        "b" => Datacell::new_uint_default(2),
         "z" => Datacell::new_str("omg".into()),
     };
     assert!(!dict::rmerge_metadata(&mut current, new));
@@ -82,20 +82,20 @@ fn t_bad_patch() {
 #[test]
 fn patch_null_out_dict() {
     let mut current: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(2),
-        "b" => Datacell::new_uint(3),
+        "a" => Datacell::new_uint_default(2),
+        "b" => Datacell::new_uint_default(3),
         "z" => DictEntryGeneric::Map(into_dict!(
-            "c" => Datacell::new_uint(1),
-            "d" => Datacell::new_uint(2)
+            "c" => Datacell::new_uint_default(1),
+            "d" => Datacell::new_uint_default(2)
         )),
     };
     let expected: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(2),
-        "b" => Datacell::new_uint(3),
+        "a" => Datacell::new_uint_default(2),
+        "b" => Datacell::new_uint_default(3),
     };
     let new: DictGeneric = into_dict! {
-        "a" => Datacell::new_uint(2),
-        "b" => Datacell::new_uint(3),
+        "a" => Datacell::new_uint_default(2),
+        "b" => Datacell::new_uint_default(3),
         "z" => Datacell::null(),
     };
     assert!(dict::rmerge_metadata(&mut current, new));

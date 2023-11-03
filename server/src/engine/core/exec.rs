@@ -171,14 +171,14 @@ fn run_nb(
     stmt: KeywordStmt,
 ) -> QueryResult<Response> {
     let stmt = stmt.value_u8() - KeywordStmt::Use.value_u8();
-    static F: [fn(&Global, &mut State<'static, InplaceData>) -> QueryResult<()>; 8] = [
+    static F: [fn(&Global, &mut State<'static, InplaceData>) -> QueryResult<Response>; 8] = [
         |_, _| panic!("use not implemented"),
         |_, _| panic!("inspect not implemented"),
         |_, _| panic!("describe not implemented"),
-        |g, s| _call(g, s, dml::insert),
+        |g, s| _call(g, s, dml::insert_resp),
         |_, _| panic!("select not implemented"),
-        |g, s| _call(g, s, dml::update),
-        |g, s| _call(g, s, dml::delete),
+        |g, s| _call(g, s, dml::update_resp),
+        |g, s| _call(g, s, dml::delete_resp),
         |_, _| panic!("exists not implemented"),
     ];
     {
@@ -186,7 +186,6 @@ fn run_nb(
             // UNSAFE(@ohsayan): this is a lifetime issue with the token handle
             core::mem::transmute(state)
         };
-        F[stmt as usize](global, &mut state)?;
+        F[stmt as usize](global, &mut state)
     }
-    Ok(Response::Empty)
 }

@@ -37,11 +37,12 @@ use {
             data::{
                 cell::Datacell,
                 lit::Lit,
-                tag::{DataTag, TagClass},
+                tag::{DataTag, FloatSpec, SIntSpec, TagClass, UIntSpec},
             },
             error::{QueryError, QueryResult},
             fractal::GlobalInstanceLike,
             idx::STIndex,
+            net::protocol::Response,
             ql::dml::upd::{AssignmentExpression, UpdateStatement},
             sync,
         },
@@ -59,44 +60,56 @@ unsafe fn dc_op_bool_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
     (true, Datacell::new_bool(rhs.bool()))
 }
 // uint
-unsafe fn dc_op_uint_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    (true, Datacell::new_uint(rhs.uint()))
+unsafe fn dc_op_uint_ass(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let uint = rhs.uint();
+    let kind = UIntSpec::from_full(dc.tag());
+    (kind.check(uint), Datacell::new_uint(uint, kind))
 }
 unsafe fn dc_op_uint_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (sum, of) = dc.read_uint().overflowing_add(rhs.uint());
-    (of, Datacell::new_uint(sum))
+    let kind = UIntSpec::from_full(dc.tag());
+    let (uint, did_of) = dc.uint().overflowing_add(rhs.uint());
+    (kind.check(uint) & !did_of, Datacell::new_uint(uint, kind))
 }
 unsafe fn dc_op_uint_sub(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (diff, of) = dc.read_uint().overflowing_sub(rhs.uint());
-    (of, Datacell::new_uint(diff))
+    let kind = UIntSpec::from_full(dc.tag());
+    let (uint, did_of) = dc.uint().overflowing_sub(rhs.uint());
+    (kind.check(uint) & !did_of, Datacell::new_uint(uint, kind))
 }
 unsafe fn dc_op_uint_mul(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (prod, of) = dc.read_uint().overflowing_mul(rhs.uint());
-    (of, Datacell::new_uint(prod))
+    let kind = UIntSpec::from_full(dc.tag());
+    let (uint, did_of) = dc.uint().overflowing_mul(rhs.uint());
+    (kind.check(uint) & !did_of, Datacell::new_uint(uint, kind))
 }
 unsafe fn dc_op_uint_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (quo, of) = dc.read_uint().overflowing_div(rhs.uint());
-    (of, Datacell::new_uint(quo))
+    let kind = UIntSpec::from_full(dc.tag());
+    let (uint, did_of) = dc.uint().overflowing_div(rhs.uint());
+    (kind.check(uint) & !did_of, Datacell::new_uint(uint, kind))
 }
 // sint
-unsafe fn dc_op_sint_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    (true, Datacell::new_sint(rhs.sint()))
+unsafe fn dc_op_sint_ass(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let sint = rhs.sint();
+    let kind = SIntSpec::from_full(dc.tag());
+    (kind.check(sint), Datacell::new_sint(sint, kind))
 }
 unsafe fn dc_op_sint_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (sum, of) = dc.read_sint().overflowing_add(rhs.sint());
-    (of, Datacell::new_sint(sum))
+    let kind = SIntSpec::from_full(dc.tag());
+    let (sint, did_of) = dc.sint().overflowing_add(rhs.sint());
+    (kind.check(sint) & !did_of, Datacell::new_sint(sint, kind))
 }
 unsafe fn dc_op_sint_sub(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (diff, of) = dc.read_sint().overflowing_sub(rhs.sint());
-    (of, Datacell::new_sint(diff))
+    let kind = SIntSpec::from_full(dc.tag());
+    let (sint, did_of) = dc.sint().overflowing_sub(rhs.sint());
+    (kind.check(sint) & !did_of, Datacell::new_sint(sint, kind))
 }
 unsafe fn dc_op_sint_mul(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (prod, of) = dc.read_sint().overflowing_mul(rhs.sint());
-    (of, Datacell::new_sint(prod))
+    let kind = SIntSpec::from_full(dc.tag());
+    let (sint, did_of) = dc.sint().overflowing_mul(rhs.sint());
+    (kind.check(sint) & !did_of, Datacell::new_sint(sint, kind))
 }
 unsafe fn dc_op_sint_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let (quo, of) = dc.read_sint().overflowing_div(rhs.sint());
-    (of, Datacell::new_sint(quo))
+    let kind = SIntSpec::from_full(dc.tag());
+    let (sint, did_of) = dc.sint().overflowing_div(rhs.sint());
+    (kind.check(sint) & !did_of, Datacell::new_sint(sint, kind))
 }
 /*
     float
@@ -108,24 +121,30 @@ unsafe fn dc_op_sint_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
     --
     TODO(@ohsayan): account for float32 overflow
 */
-unsafe fn dc_op_float_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    (true, Datacell::new_float(rhs.float()))
+unsafe fn dc_op_float_ass(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let float = rhs.float();
+    let kind = FloatSpec::from_full(dc.tag());
+    (kind.check(float), Datacell::new_float(float, kind))
 }
 unsafe fn dc_op_float_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let sum = dc.read_float() + rhs.float();
-    (true, Datacell::new_float(sum))
+    let result = dc.read_float() + rhs.float();
+    let kind = FloatSpec::from_full(dc.tag());
+    (kind.check(result), Datacell::new_float(result, kind))
 }
 unsafe fn dc_op_float_sub(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let diff = dc.read_float() - rhs.float();
-    (true, Datacell::new_float(diff))
+    let result = dc.read_float() - rhs.float();
+    let kind = FloatSpec::from_full(dc.tag());
+    (kind.check(result), Datacell::new_float(result, kind))
 }
 unsafe fn dc_op_float_mul(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let prod = dc.read_float() - rhs.float();
-    (true, Datacell::new_float(prod))
+    let result = dc.read_float() * rhs.float();
+    let kind = FloatSpec::from_full(dc.tag());
+    (kind.check(result), Datacell::new_float(result, kind))
 }
 unsafe fn dc_op_float_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
-    let quo = dc.read_float() * rhs.float();
-    (true, Datacell::new_float(quo))
+    let result = dc.read_float() / rhs.float();
+    let kind = FloatSpec::from_full(dc.tag());
+    (kind.check(result), Datacell::new_float(result, kind))
 }
 // binary
 unsafe fn dc_op_bin_ass(_dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
@@ -235,7 +254,13 @@ pub fn collect_trace_path() -> Vec<&'static str> {
     ROUTE_TRACE.with(|v| v.borrow().iter().cloned().collect())
 }
 
-#[allow(unused)]
+pub fn update_resp(
+    global: &impl GlobalInstanceLike,
+    update: UpdateStatement,
+) -> QueryResult<Response> {
+    self::update(global, update).map(|_| Response::Empty)
+}
+
 pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, update.entity(), |mdl| {
         let mut ret = Ok(QueryExecMeta::zero());

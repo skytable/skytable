@@ -345,7 +345,7 @@ fn check_pk_lit_eq_hash() {
 #[test]
 fn check_pk_extremes() {
     let state = test_utils::randomstate();
-    let d1 = PrimaryIndexKey::try_from_dc(Datacell::new_uint(u64::MAX)).unwrap();
+    let d1 = PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(u64::MAX)).unwrap();
     let d2 = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_uint(u64::MAX))).unwrap();
     assert_eq!(d1, d2);
     assert_eq!(d1.uint().unwrap(), u64::MAX);

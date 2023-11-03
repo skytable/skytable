@@ -72,7 +72,7 @@ fn pfnbase_uuid() -> Uuid {
 // impl
 #[inline(always)]
 fn pfn_timesec() -> Datacell {
-    Datacell::new_uint(pfnbase_time().as_secs())
+    Datacell::new_uint_default(pfnbase_time().as_secs())
 }
 #[inline(always)]
 fn pfn_uuidstr() -> Datacell {

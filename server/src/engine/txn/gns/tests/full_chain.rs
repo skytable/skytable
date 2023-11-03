@@ -80,7 +80,7 @@ fn create_space() {
                 global.namespace().spaces().read().get("myspace").unwrap(),
                 &Space::new_restore_empty(
                     SpaceMeta::with_env(
-                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint(65536)))
+                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
                     ),
                     uuid
                 )
@@ -108,7 +108,7 @@ fn alter_space() {
                 global.namespace().spaces().read().get("myspace").unwrap(),
                 &Space::new_restore_empty(
                     SpaceMeta::with_env(
-                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint(65536)))
+                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
                     ),
                     uuid
                 )
