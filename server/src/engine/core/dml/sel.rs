@@ -26,7 +26,10 @@
 
 use crate::engine::{
     core::index::DcFieldIndex,
-    data::cell::{Datacell, VirtualDatacell},
+    data::{
+        cell::{Datacell, VirtualDatacell},
+        tag::{DataTag, TagClass},
+    },
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{STIndex, STIndexSeq},
@@ -39,10 +42,57 @@ pub fn select_resp(
     global: &impl GlobalInstanceLike,
     select: SelectStatement,
 ) -> QueryResult<Response> {
-    todo!()
+    let mut resp_b = vec![];
+    let mut resp_a = vec![];
+    let mut i = 0u64;
+    self::select_custom(global, select, |item| {
+        encode_cell(&mut resp_b, item);
+        i += 1;
+    })?;
+    resp_a.push(0x11);
+    resp_a.extend(i.to_string().as_bytes());
+    resp_a.push(b'\n');
+    Ok(Response::EncodedAB(
+        resp_a.into_boxed_slice(),
+        resp_b.into_boxed_slice(),
+    ))
 }
 
-#[allow(unused)]
+fn encode_cell(resp: &mut Vec<u8>, item: &Datacell) {
+    resp.push((item.tag().tag_selector().value_u8() + 1) * (item.is_init() as u8));
+    if item.is_null() {
+        return;
+    }
+    unsafe {
+        // UNSAFE(@ohsayan): +tagck
+        // NOTE(@ohsayan): optimize out unwanted alloc
+        match item.tag().tag_class() {
+            TagClass::Bool => resp.push(item.read_bool() as _),
+            TagClass::UnsignedInt => resp.extend(item.read_uint().to_string().as_bytes()),
+            TagClass::SignedInt => resp.extend(item.read_sint().to_string().as_bytes()),
+            TagClass::Float => resp.extend(item.read_float().to_string().as_bytes()),
+            TagClass::Bin | TagClass::Str => {
+                let slc = item.read_bin();
+                resp.extend(slc.len().to_string().as_bytes());
+                resp.push(b'\n');
+                resp.extend(slc);
+                return;
+            }
+            TagClass::List => {
+                let list = item.read_list();
+                let ls = list.read();
+                resp.extend(ls.len().to_string().as_bytes());
+                resp.push(b'\n');
+                for item in ls.iter() {
+                    encode_cell(resp, item);
+                }
+                return;
+            }
+        }
+    }
+    resp.push(b'\n');
+}
+
 pub fn select_custom<F>(
     global: &impl GlobalInstanceLike,
     mut select: SelectStatement,

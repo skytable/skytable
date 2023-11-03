@@ -44,7 +44,7 @@ pub use upd::collect_trace_path as update_flow_trace;
 pub use {
     del::{delete, delete_resp},
     ins::{insert, insert_resp},
-    sel::select_custom,
+    sel::{select_custom, select_resp},
     upd::{update, update_resp},
 };
 
@@ -65,6 +65,7 @@ impl Model {
     }
 }
 
+#[derive(Debug)]
 pub struct QueryExecMeta {
     delta_hint: usize,
 }

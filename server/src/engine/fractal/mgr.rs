@@ -228,7 +228,7 @@ impl FractalMgr {
 
 // services
 impl FractalMgr {
-    const GENERAL_EXECUTOR_WINDOW: u64 = 5 * 60;
+    const GENERAL_EXECUTOR_WINDOW: u64 = 5;
     /// The high priority executor service runs in the background to take care of high priority tasks and take any
     /// appropriate action. It will exclusively own the high priority queue since it is the only broker that is
     /// allowed to perform HP tasks

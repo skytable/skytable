@@ -172,14 +172,14 @@ fn run_nb(
 ) -> QueryResult<Response> {
     let stmt = stmt.value_u8() - KeywordStmt::Use.value_u8();
     static F: [fn(&Global, &mut State<'static, InplaceData>) -> QueryResult<Response>; 8] = [
-        |_, _| panic!("use not implemented"),
-        |_, _| panic!("inspect not implemented"),
-        |_, _| panic!("describe not implemented"),
+        |_, _| Err(QueryError::QLUnknownStatement), // use
+        |_, _| Err(QueryError::QLUnknownStatement), // inspect
+        |_, _| Err(QueryError::QLUnknownStatement), // describe
         |g, s| _call(g, s, dml::insert_resp),
-        |_, _| panic!("select not implemented"),
+        |g, s| _call(g, s, dml::select_resp),
         |g, s| _call(g, s, dml::update_resp),
         |g, s| _call(g, s, dml::delete_resp),
-        |_, _| panic!("exists not implemented"),
+        |_, _| Err(QueryError::QLUnknownStatement), // exists
     ];
     {
         let mut state = unsafe {

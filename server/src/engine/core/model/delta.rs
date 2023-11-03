@@ -221,13 +221,7 @@ impl DeltaState {
         self.data_current_version.fetch_add(1, Ordering::AcqRel)
     }
     pub fn __data_delta_dequeue(&self, g: &Guard) -> Option<DataDelta> {
-        match self.data_deltas.blocking_try_dequeue(g) {
-            Some(d) => {
-                self.data_deltas_size.fetch_sub(1, Ordering::Release);
-                Some(d)
-            }
-            None => None,
-        }
+        self.data_deltas.blocking_try_dequeue(g)
     }
 }
 
@@ -284,9 +278,6 @@ impl DeltaState {
 
 // fractal
 impl DeltaState {
-    pub fn __fractal_take_from_data_delta(&self, cnt: usize, _token: FractalToken) {
-        let _ = self.data_deltas_size.fetch_sub(cnt, Ordering::Release);
-    }
     pub fn __fractal_take_full_from_data_delta(&self, _token: FractalToken) -> usize {
         self.data_deltas_size.swap(0, Ordering::AcqRel)
     }

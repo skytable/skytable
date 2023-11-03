@@ -54,6 +54,7 @@ use {
 #[derive(Debug, PartialEq)]
 pub enum Response {
     Empty,
+    EncodedAB(Box<[u8]>, Box<[u8]>),
 }
 
 pub(super) async fn query_loop<S: Socket>(
@@ -118,6 +119,10 @@ pub(super) async fn query_loop<S: Socket>(
         match engine::core::exec::dispatch_to_executor(global, sq).await {
             Ok(Response::Empty) => {
                 con.write_all(&[0x12]).await?;
+            }
+            Ok(Response::EncodedAB(a, b)) => {
+                con.write_all(&a).await?;
+                con.write_all(&b).await?;
             }
             Err(e) => {
                 let [a, b] = (e.value_u8() as u16).to_le_bytes();
