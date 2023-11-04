@@ -36,7 +36,7 @@ use {
     },
     crate::engine::error::RuntimeResult,
     parking_lot::{Mutex, RwLock},
-    std::{collections::HashMap, mem::MaybeUninit},
+    std::{collections::HashMap, fmt, mem::MaybeUninit},
     tokio::sync::mpsc::unbounded_channel,
 };
 
@@ -240,15 +240,17 @@ impl Global {
     }
     pub unsafe fn unload_all(self) {
         // TODO(@ohsayan): handle errors
-        self.namespace_txn_driver()
-            .lock()
-            .__journal_mut()
-            .__append_journal_close_and_close()
-            .unwrap();
-        for (_, driver) in self.get_state().mdl_driver.write().iter_mut() {
-            driver.batch_driver().lock().close().unwrap();
+        let GlobalState {
+            gns_driver,
+            mdl_driver,
+            ..
+        } = Self::__gref_raw().assume_init_read();
+        let gns_driver = gns_driver.txn_driver.into_inner().into_inner();
+        let mdl_drivers = mdl_driver.into_inner();
+        gns_driver.close().unwrap();
+        for (_, driver) in mdl_drivers {
+            driver.close().unwrap();
         }
-        core::ptr::drop_in_place(Self::__gref_raw().as_mut_ptr());
     }
 }
 
@@ -300,6 +302,12 @@ pub struct ModelUniqueID {
     space: Box<str>,
     model: Box<str>,
     uuid: Uuid,
+}
+
+impl fmt::Display for ModelUniqueID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "model-{}@{}", self.model(), self.space())
+    }
 }
 
 impl ModelUniqueID {

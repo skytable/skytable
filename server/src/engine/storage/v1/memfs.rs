@@ -28,8 +28,9 @@ use {
     crate::engine::{
         error::RuntimeResult,
         storage::v1::rw::{
-            FileOpen, RawFSInterface, RawFileInterface, RawFileInterfaceExt, RawFileInterfaceRead,
-            RawFileInterfaceWrite, RawFileInterfaceWriteExt,
+            FileOpen, RawFSInterface, RawFileInterface, RawFileInterfaceBufferedWriter,
+            RawFileInterfaceExt, RawFileInterfaceRead, RawFileInterfaceWrite,
+            RawFileInterfaceWriteExt,
         },
         sync::cell::Lazy,
     },
@@ -119,7 +120,7 @@ impl RawFSInterface for VirtualFS {
                 c.fw_write_all(&data)?;
             }
             FileOpen::Existing(mut e) => {
-                e.fw_truncate_to(0)?;
+                e.fwext_truncate_to(0)?;
                 e.fw_write_all(&data)?;
             }
         }
@@ -386,15 +387,23 @@ fn with_file<T>(fpath: &str, mut f: impl FnMut(&VFile) -> RuntimeResult<T>) -> R
 }
 
 impl RawFileInterface for VFileDescriptor {
-    type Reader = Self;
-    type Writer = Self;
-    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader> {
+    type BufReader = Self;
+    type BufWriter = Self;
+    fn into_buffered_reader(self) -> RuntimeResult<Self::BufReader> {
         Ok(self)
     }
-    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer> {
+    fn downgrade_reader(r: Self::BufReader) -> RuntimeResult<Self> {
+        Ok(r)
+    }
+    fn into_buffered_writer(self) -> RuntimeResult<Self::BufWriter> {
         Ok(self)
+    }
+    fn downgrade_writer(w: Self::BufWriter) -> RuntimeResult<Self> {
+        Ok(w)
     }
 }
+
+impl RawFileInterfaceBufferedWriter for VFileDescriptor {}
 
 impl RawFileInterfaceRead for VFileDescriptor {
     fn fr_read_exact(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
@@ -434,10 +443,10 @@ impl RawFileInterfaceWrite for VFileDescriptor {
 }
 
 impl RawFileInterfaceWriteExt for VFileDescriptor {
-    fn fw_fsync_all(&mut self) -> RuntimeResult<()> {
+    fn fwext_fsync_all(&mut self) -> RuntimeResult<()> {
         with_file(&self.0, |_| Ok(()))
     }
-    fn fw_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
+    fn fwext_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
         with_file_mut(&self.0, |file| {
             if !file.write {
                 return Err(
@@ -532,10 +541,10 @@ impl RawFileInterfaceWrite for NullFile {
     }
 }
 impl RawFileInterfaceWriteExt for NullFile {
-    fn fw_fsync_all(&mut self) -> RuntimeResult<()> {
+    fn fwext_fsync_all(&mut self) -> RuntimeResult<()> {
         Ok(())
     }
-    fn fw_truncate_to(&mut self, _: u64) -> RuntimeResult<()> {
+    fn fwext_truncate_to(&mut self, _: u64) -> RuntimeResult<()> {
         Ok(())
     }
 }
@@ -553,12 +562,20 @@ impl RawFileInterfaceExt for NullFile {
     }
 }
 impl RawFileInterface for NullFile {
-    type Reader = Self;
-    type Writer = Self;
-    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader> {
+    type BufReader = Self;
+    type BufWriter = Self;
+    fn into_buffered_reader(self) -> RuntimeResult<Self::BufReader> {
         Ok(self)
     }
-    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer> {
+    fn downgrade_reader(r: Self::BufReader) -> RuntimeResult<Self> {
+        Ok(r)
+    }
+    fn into_buffered_writer(self) -> RuntimeResult<Self::BufWriter> {
         Ok(self)
+    }
+    fn downgrade_writer(w: Self::BufWriter) -> RuntimeResult<Self> {
+        Ok(w)
     }
 }
+
+impl RawFileInterfaceBufferedWriter for NullFile {}

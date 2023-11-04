@@ -56,7 +56,7 @@ pub fn reinit<Fs: RawFSInterface>(
     // restore
     let mut restore_driver = DataBatchRestoreDriver::new(f)?;
     restore_driver.read_data_batch_into_model(model)?;
-    DataBatchPersistDriver::new(restore_driver.into_file(), false)
+    DataBatchPersistDriver::new(restore_driver.into_file()?, false)
 }
 
 /// Create a new batch journal

@@ -101,17 +101,28 @@ pub trait RawFSInterface {
 }
 
 /// A file (well, probably) that can be used for RW operations along with advanced write and extended operations (such as seeking)
-pub trait RawFileInterface
+pub trait RawFileInterface: Sized
 where
     Self: RawFileInterfaceRead
         + RawFileInterfaceWrite
         + RawFileInterfaceWriteExt
         + RawFileInterfaceExt,
 {
-    type Reader: RawFileInterfaceRead + RawFileInterfaceExt;
-    type Writer: RawFileInterfaceWrite + RawFileInterfaceExt;
-    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader>;
-    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer>;
+    type BufReader: RawFileInterfaceBufferedReader;
+    type BufWriter: RawFileInterfaceBufferedWriter;
+    fn into_buffered_reader(self) -> RuntimeResult<Self::BufReader>;
+    fn downgrade_reader(r: Self::BufReader) -> RuntimeResult<Self>;
+    fn into_buffered_writer(self) -> RuntimeResult<Self::BufWriter>;
+    fn downgrade_writer(w: Self::BufWriter) -> RuntimeResult<Self>;
+}
+
+pub trait RawFileInterfaceBufferedReader: RawFileInterfaceRead + RawFileInterfaceExt {}
+impl<R: RawFileInterfaceRead + RawFileInterfaceExt> RawFileInterfaceBufferedReader for R {}
+
+pub trait RawFileInterfaceBufferedWriter: RawFileInterfaceWrite + RawFileInterfaceExt {
+    fn sync_write_cache(&mut self) -> RuntimeResult<()> {
+        Ok(())
+    }
 }
 
 /// A file interface that supports read operations
@@ -138,8 +149,8 @@ impl<W: Write> RawFileInterfaceWrite for W {
 
 /// A file interface that supports advanced write operations
 pub trait RawFileInterfaceWriteExt {
-    fn fw_fsync_all(&mut self) -> RuntimeResult<()>;
-    fn fw_truncate_to(&mut self, to: u64) -> RuntimeResult<()>;
+    fn fwext_fsync_all(&mut self) -> RuntimeResult<()>;
+    fn fwext_truncate_to(&mut self, to: u64) -> RuntimeResult<()>;
 }
 
 /// A file interface that supports advanced file operations
@@ -206,21 +217,37 @@ impl RawFSInterface for LocalFS {
 }
 
 impl RawFileInterface for File {
-    type Reader = BufReader<Self>;
-    type Writer = BufWriter<Self>;
-    fn into_buffered_reader(self) -> RuntimeResult<Self::Reader> {
+    type BufReader = BufReader<Self>;
+    type BufWriter = BufWriter<Self>;
+    fn into_buffered_reader(self) -> RuntimeResult<Self::BufReader> {
         Ok(BufReader::new(self))
     }
-    fn into_buffered_writer(self) -> RuntimeResult<Self::Writer> {
+    fn downgrade_reader(r: Self::BufReader) -> RuntimeResult<Self> {
+        Ok(r.into_inner())
+    }
+    fn into_buffered_writer(self) -> RuntimeResult<Self::BufWriter> {
         Ok(BufWriter::new(self))
+    }
+    fn downgrade_writer(mut w: Self::BufWriter) -> RuntimeResult<Self> {
+        w.flush()?; // TODO(@ohsayan): handle rare case where writer does panic
+        let (w, _) = w.into_parts();
+        Ok(w)
+    }
+}
+
+impl RawFileInterfaceBufferedWriter for BufWriter<File> {
+    fn sync_write_cache(&mut self) -> RuntimeResult<()> {
+        self.flush()?;
+        self.get_mut().sync_all()?;
+        Ok(())
     }
 }
 
 impl RawFileInterfaceWriteExt for File {
-    fn fw_fsync_all(&mut self) -> RuntimeResult<()> {
+    fn fwext_fsync_all(&mut self) -> RuntimeResult<()> {
         cvt(self.sync_all())
     }
-    fn fw_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
+    fn fwext_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
         cvt(self.set_len(to))
     }
 }
@@ -270,40 +297,44 @@ impl<F: LocalFSFile> RawFileInterfaceExt for F {
 }
 
 pub struct SDSSFileTrackedWriter<Fs: RawFSInterface> {
-    f: SDSSFileIO<Fs>,
+    f: SDSSFileIO<Fs, <Fs::File as RawFileInterface>::BufWriter>,
     cs: SCrc,
 }
 
 impl<Fs: RawFSInterface> SDSSFileTrackedWriter<Fs> {
-    pub fn new(f: SDSSFileIO<Fs>) -> Self {
-        Self { f, cs: SCrc::new() }
+    pub fn new(f: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
+        Ok(Self {
+            f: f.into_buffered_sdss_writer()?,
+            cs: SCrc::new(),
+        })
     }
-    pub fn unfsynced_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
+    pub fn write_unfsynced(&mut self, block: &[u8]) -> RuntimeResult<()> {
+        self.untracked_write(block)
+            .map(|_| self.cs.recompute_with_new_var_block(block))
+    }
+    pub fn untracked_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
         match self.f.unfsynced_write(block) {
-            Ok(()) => {
-                self.cs.recompute_with_new_var_block(block);
-                Ok(())
-            }
+            Ok(()) => Ok(()),
             e => e,
         }
     }
-    pub fn fsync_all(&mut self) -> RuntimeResult<()> {
-        self.f.fsync_all()
+    pub fn sync_writes(&mut self) -> RuntimeResult<()> {
+        self.f.f.sync_write_cache()
     }
     pub fn reset_and_finish_checksum(&mut self) -> u64 {
         let mut scrc = SCrc::new();
         core::mem::swap(&mut self.cs, &mut scrc);
         scrc.finish()
     }
-    pub fn inner_file(&mut self) -> &mut SDSSFileIO<Fs> {
-        &mut self.f
+    pub fn into_inner_file(self) -> RuntimeResult<SDSSFileIO<Fs>> {
+        self.f.downgrade_writer()
     }
 }
 
 /// [`SDSSFileLenTracked`] simply maintains application level length and checksum tracking to avoid frequent syscalls because we
 /// do not expect (even though it's very possible) users to randomly modify file lengths while we're reading them
 pub struct SDSSFileTrackedReader<Fs: RawFSInterface> {
-    f: SDSSFileIO<Fs>,
+    f: SDSSFileIO<Fs, <Fs::File as RawFileInterface>::BufReader>,
     len: u64,
     pos: u64,
     cs: SCrc,
@@ -314,6 +345,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
     pub fn new(mut f: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
         let len = f.file_length()?;
         let pos = f.retrieve_cursor()?;
+        let f = f.into_buffered_sdss_reader()?;
         Ok(Self {
             f,
             len,
@@ -331,18 +363,8 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
         self.remaining() >= v
     }
     pub fn read_into_buffer(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
-        if self.remaining() >= buf.len() as u64 {
-            match self.f.read_to_buffer(buf) {
-                Ok(()) => {
-                    self.pos += buf.len() as u64;
-                    self.cs.recompute_with_new_var_block(buf);
-                    Ok(())
-                }
-                Err(e) => return Err(e),
-            }
-        } else {
-            Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into())
-        }
+        self.untracked_read(buf)
+            .map(|_| self.cs.recompute_with_new_var_block(buf))
     }
     pub fn read_byte(&mut self) -> RuntimeResult<u8> {
         let mut buf = [0u8; 1];
@@ -353,14 +375,21 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
         core::mem::swap(&mut crc, &mut self.cs);
         crc.finish()
     }
-    pub fn inner_file(&mut self) -> &mut SDSSFileIO<Fs> {
-        &mut self.f
+    pub fn untracked_read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
+        if self.remaining() >= buf.len() as u64 {
+            match self.f.read_to_buffer(buf) {
+                Ok(()) => {
+                    self.pos += buf.len() as u64;
+                    Ok(())
+                }
+                Err(e) => return Err(e),
+            }
+        } else {
+            Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into())
+        }
     }
-    pub fn into_inner_file(self) -> SDSSFileIO<Fs> {
-        self.f
-    }
-    pub fn __cursor_ahead_by(&mut self, sizeof: usize) {
-        self.pos += sizeof as u64;
+    pub fn into_inner_file(self) -> RuntimeResult<SDSSFileIO<Fs>> {
+        self.f.downgrade_reader()
     }
     pub fn read_block<const N: usize>(&mut self) -> RuntimeResult<[u8; N]> {
         if !self.has_left(N as _) {
@@ -376,8 +405,8 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
 }
 
 #[derive(Debug)]
-pub struct SDSSFileIO<Fs: RawFSInterface> {
-    f: Fs::File,
+pub struct SDSSFileIO<Fs: RawFSInterface, F = <Fs as RawFSInterface>::File> {
+    f: F,
     _fs: PhantomData<Fs>,
 }
 
@@ -408,28 +437,50 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
             }
         }
     }
+    pub fn into_buffered_sdss_reader(
+        self,
+    ) -> RuntimeResult<SDSSFileIO<Fs, <Fs::File as RawFileInterface>::BufReader>> {
+        self.f.into_buffered_reader().map(SDSSFileIO::_new)
+    }
+    pub fn into_buffered_sdss_writer(
+        self,
+    ) -> RuntimeResult<SDSSFileIO<Fs, <Fs::File as RawFileInterface>::BufWriter>> {
+        self.f.into_buffered_writer().map(SDSSFileIO::_new)
+    }
 }
 
-impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
-    pub fn _new(f: Fs::File) -> Self {
+impl<Fs: RawFSInterface> SDSSFileIO<Fs, <Fs::File as RawFileInterface>::BufReader> {
+    pub fn downgrade_reader(self) -> RuntimeResult<SDSSFileIO<Fs, Fs::File>> {
+        let me = <Fs::File as RawFileInterface>::downgrade_reader(self.f)?;
+        Ok(SDSSFileIO::_new(me))
+    }
+}
+
+impl<Fs: RawFSInterface> SDSSFileIO<Fs, <Fs::File as RawFileInterface>::BufWriter> {
+    pub fn downgrade_writer(self) -> RuntimeResult<SDSSFileIO<Fs>> {
+        let me = <Fs::File as RawFileInterface>::downgrade_writer(self.f)?;
+        Ok(SDSSFileIO::_new(me))
+    }
+}
+
+impl<Fs: RawFSInterface, F> SDSSFileIO<Fs, F> {
+    pub fn _new(f: F) -> Self {
         Self {
             f,
             _fs: PhantomData,
         }
     }
-    pub fn unfsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
-        self.f.fw_write_all(data)
-    }
-    pub fn fsync_all(&mut self) -> RuntimeResult<()> {
-        self.f.fw_fsync_all()?;
-        Ok(())
-    }
-    pub fn fsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
-        self.f.fw_write_all(data)?;
-        self.f.fw_fsync_all()
-    }
+}
+
+impl<Fs: RawFSInterface, F: RawFileInterfaceRead> SDSSFileIO<Fs, F> {
     pub fn read_to_buffer(&mut self, buffer: &mut [u8]) -> RuntimeResult<()> {
         self.f.fr_read_exact(buffer)
+    }
+}
+
+impl<Fs: RawFSInterface, F: RawFileInterfaceExt> SDSSFileIO<Fs, F> {
+    pub fn retrieve_cursor(&mut self) -> RuntimeResult<u64> {
+        self.f.fext_cursor()
     }
     pub fn file_length(&self) -> RuntimeResult<u64> {
         self.f.fext_file_length()
@@ -437,17 +488,30 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
     pub fn seek_from_start(&mut self, by: u64) -> RuntimeResult<()> {
         self.f.fext_seek_ahead_from_start_by(by)
     }
-    pub fn retrieve_cursor(&mut self) -> RuntimeResult<u64> {
-        self.f.fext_cursor()
-    }
-    pub fn read_byte(&mut self) -> RuntimeResult<u8> {
-        let mut r = [0; 1];
-        self.read_to_buffer(&mut r).map(|_| r[0])
-    }
+}
+
+impl<Fs: RawFSInterface, F: RawFileInterfaceRead + RawFileInterfaceExt> SDSSFileIO<Fs, F> {
     pub fn load_remaining_into_buffer(&mut self) -> RuntimeResult<Vec<u8>> {
         let len = self.file_length()? - self.retrieve_cursor()?;
         let mut buf = vec![0; len as usize];
         self.read_to_buffer(&mut buf)?;
         Ok(buf)
+    }
+}
+
+impl<Fs: RawFSInterface, F: RawFileInterfaceWrite> SDSSFileIO<Fs, F> {
+    pub fn unfsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
+        self.f.fw_write_all(data)
+    }
+}
+
+impl<Fs: RawFSInterface, F: RawFileInterfaceWrite + RawFileInterfaceWriteExt> SDSSFileIO<Fs, F> {
+    pub fn fsync_all(&mut self) -> RuntimeResult<()> {
+        self.f.fwext_fsync_all()?;
+        Ok(())
+    }
+    pub fn fsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
+        self.f.fw_write_all(data)?;
+        self.f.fwext_fsync_all()
     }
 }

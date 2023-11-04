@@ -142,7 +142,7 @@ fn first_boot_second_readonly() {
         let mut log = open_log("testtxn.log", &db1)?;
         db1.txn_set(0, 20, &mut log)?;
         db1.txn_set(9, 21, &mut log)?;
-        log.append_journal_close_and_close()
+        log.close()
     };
     x().unwrap();
     // backup original data
@@ -151,7 +151,7 @@ fn first_boot_second_readonly() {
     let empty_db2 = Database::new();
     open_log("testtxn.log", &empty_db2)
         .unwrap()
-        .append_journal_close_and_close()
+        .close()
         .unwrap();
     assert_eq!(original_data, empty_db2.copy_data());
 }
@@ -164,7 +164,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
         for i in 0..10 {
             db1.txn_set(i, 1, &mut log)?;
         }
-        log.append_journal_close_and_close()
+        log.close()
     };
     x().unwrap();
     let bkp_db1 = db1.copy_data();
@@ -178,7 +178,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
             let current_val = db2.data.borrow()[i];
             db2.txn_set(i, current_val + i as u8, &mut log)?;
         }
-        log.append_journal_close_and_close()
+        log.close()
     };
     x().unwrap();
     let bkp_db2 = db2.copy_data();
@@ -186,7 +186,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
     // third boot
     let db3 = Database::new();
     let log = open_log("duatxn.db-tlog", &db3).unwrap();
-    log.append_journal_close_and_close().unwrap();
+    log.close().unwrap();
     assert_eq!(bkp_db2, db3.copy_data());
     assert_eq!(
         db3.copy_data(),

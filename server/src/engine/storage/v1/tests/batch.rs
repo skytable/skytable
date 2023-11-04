@@ -67,7 +67,7 @@ fn open_batch_data(fpath: &str, mdl: &Model) -> DataBatchPersistDriver<VirtualFS
         FileOpen::Existing((f, _header)) => {
             let mut dbr = DataBatchRestoreDriver::new(f).unwrap();
             dbr.read_data_batch_into_model(mdl).unwrap();
-            DataBatchPersistDriver::new(dbr.into_file(), false)
+            DataBatchPersistDriver::new(dbr.into_file().unwrap(), false)
         }
     }
     .unwrap()
@@ -144,7 +144,7 @@ fn empty_multi_open_reopen() {
         ),
     );
     for _ in 0..100 {
-        let mut writer = open_batch_data("empty_multi_open_reopen.db-btlog", &mdl);
+        let writer = open_batch_data("empty_multi_open_reopen.db-btlog", &mdl);
         writer.close().unwrap();
     }
 }

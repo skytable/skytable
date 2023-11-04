@@ -146,9 +146,6 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
 impl<Fs: RawFSInterface> Drop for TestGlobal<Fs> {
     fn drop(&mut self) {
         let mut txn_driver = self.txn_driver.lock();
-        txn_driver
-            .__journal_mut()
-            .__append_journal_close_and_close()
-            .unwrap();
+        txn_driver.__journal_mut().__close_mut().unwrap();
     }
 }

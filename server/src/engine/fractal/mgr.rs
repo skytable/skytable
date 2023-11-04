@@ -24,14 +24,13 @@
  *
 */
 
-use crate::engine::storage::v1::LocalFS;
-
 use {
     super::ModelUniqueID,
     crate::{
         engine::{
             core::model::{delta::DataDelta, Model},
             data::uuid::Uuid,
+            storage::v1::LocalFS,
         },
         util::os,
     },
@@ -228,7 +227,7 @@ impl FractalMgr {
 
 // services
 impl FractalMgr {
-    const GENERAL_EXECUTOR_WINDOW: u64 = 5;
+    const GENERAL_EXECUTOR_WINDOW: u64 = 5 * 60;
     /// The high priority executor service runs in the background to take care of high priority tasks and take any
     /// appropriate action. It will exclusively own the high priority queue since it is the only broker that is
     /// allowed to perform HP tasks
@@ -239,56 +238,76 @@ impl FractalMgr {
         mut sigterm: broadcast::Receiver<()>,
     ) {
         loop {
-            let Task { threshold, task } = tokio::select! {
+            let task = tokio::select! {
                 task = receiver.recv() => {
                     match task {
                         Some(t) => t,
                         None => {
-                            info!("exiting fhp executor service because all tasks closed");
+                            info!("fhp: exiting executor service because all tasks closed");
                             break;
                         }
                     }
                 }
                 _ = sigterm.recv() => {
-                    info!("exited fhp executor service");
+                    info!("fhp: finishing pending tasks");
+                    while let Ok(task) = receiver.try_recv() {
+                        let global = global.clone();
+                        tokio::task::spawn_blocking(move || self.hp_executor(global, task)).await.unwrap()
+                    }
+                    info!("fhp: exited executor service");
                     break;
                 }
             };
-            // TODO(@ohsayan): check threshold and update hooks
-            match task {
-                CriticalTask::WriteBatch(model_id, observed_size) => {
-                    let mdl_drivers = global.get_state().get_mdl_drivers().read();
-                    let Some(mdl_driver) = mdl_drivers.get(&model_id) else {
-                        // because we maximize throughput, the model driver may have been already removed but this task
-                        // was way behind in the queue
-                        continue;
-                    };
-                    let res = global._namespace().with_model(
-                        (model_id.space(), model_id.model()),
-                        |model| {
+            let global = global.clone();
+            tokio::task::spawn_blocking(move || self.hp_executor(global, task))
+                .await
+                .unwrap()
+        }
+    }
+    fn hp_executor(
+        &'static self,
+        global: super::Global,
+        Task { threshold, task }: Task<CriticalTask>,
+    ) {
+        // TODO(@ohsayan): check threshold and update hooks
+        match task {
+            CriticalTask::WriteBatch(model_id, observed_size) => {
+                info!("fhp: {model_id} has reached cache capacity. writing to disk");
+                let mdl_drivers = global.get_state().get_mdl_drivers().read();
+                let Some(mdl_driver) = mdl_drivers.get(&model_id) else {
+                    // because we maximize throughput, the model driver may have been already removed but this task
+                    // was way behind in the queue
+                    return;
+                };
+                let res =
+                    global
+                        ._namespace()
+                        .with_model((model_id.space(), model_id.model()), |model| {
                             if model.get_uuid() != model_id.uuid() {
                                 // once again, throughput maximization will lead to, in extremely rare cases, this
                                 // branch returning. but it is okay
                                 return Ok(());
                             }
                             Self::try_write_model_data_batch(model, observed_size, mdl_driver)
-                        },
-                    );
-                    match res {
-                        Ok(()) => {}
-                        Err(_) => {
-                            log::error!(
-                                "Error writing data batch for model {}. Retrying...",
-                                model_id.uuid()
-                            );
-                            // enqueue again for retrying
-                            self.hp_dispatcher
-                                .send(Task::with_threshold(
-                                    CriticalTask::WriteBatch(model_id, observed_size),
-                                    threshold - 1,
-                                ))
-                                .unwrap();
+                        });
+                match res {
+                    Ok(()) => {
+                        if observed_size != 0 {
+                            info!("fhp: completed maintenance task for {model_id}, synced={observed_size}")
                         }
+                    }
+                    Err(_) => {
+                        log::error!(
+                            "fhp: error writing data batch for model {}. Retrying...",
+                            model_id.uuid()
+                        );
+                        // enqueue again for retrying
+                        self.hp_dispatcher
+                            .send(Task::with_threshold(
+                                CriticalTask::WriteBatch(model_id, observed_size),
+                                threshold - 1,
+                            ))
+                            .unwrap();
                     }
                 }
             }
@@ -307,37 +326,21 @@ impl FractalMgr {
         loop {
             tokio::select! {
                 _ = sigterm.recv() => {
-                    info!("exited flp executor service");
+                    info!("flp: finishing any pending maintenance tasks");
+                    let global = global.clone();
+                    tokio::task::spawn_blocking(|| self.general_executor_model_maintenance(global)).await.unwrap();
+                    info!("flp: exited executor service");
                     break;
                 },
                 _ = tokio::time::sleep(std::time::Duration::from_secs(Self::GENERAL_EXECUTOR_WINDOW)) => {
-                    let mdl_drivers = global.get_state().get_mdl_drivers().read();
-                    for (model_id, driver) in mdl_drivers.iter() {
-                        let mut observed_len = 0;
-                        let res = global._namespace().with_model((model_id.space(), model_id.model()), |model| {
-                            if model.get_uuid() != model_id.uuid() {
-                                // once again, throughput maximization will lead to, in extremely rare cases, this
-                                // branch returning. but it is okay
-                                return Ok(());
-                            }
-                            // mark that we're taking these deltas
-                            observed_len = model.delta_state().__fractal_take_full_from_data_delta(super::FractalToken::new());
-                            Self::try_write_model_data_batch(model, observed_len, driver)
-                        });
-                        match res {
-                            Ok(()) => {}
-                            Err(_) => {
-                                // this failure is *not* good, so we want to promote this to a critical task
-                                self.hp_dispatcher.send(Task::new(CriticalTask::WriteBatch(model_id.clone(), observed_len))).unwrap()
-                            }
-                        }
-                    }
+                    let global = global.clone();
+                    tokio::task::spawn_blocking(|| self.general_executor_model_maintenance(global)).await.unwrap()
                 }
                 task = lpq.recv() => {
                     let Task { threshold, task } = match task {
                         Some(t) => t,
                         None => {
-                            info!("exiting flp executor service because all tasks closed");
+                            info!("flp: exiting executor service because all tasks closed");
                             break;
                         }
                     };
@@ -358,6 +361,45 @@ impl FractalMgr {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+    fn general_executor_model_maintenance(&'static self, global: super::Global) {
+        let mdl_drivers = global.get_state().get_mdl_drivers().read();
+        for (model_id, driver) in mdl_drivers.iter() {
+            let mut observed_len = 0;
+            let res =
+                global
+                    ._namespace()
+                    .with_model((model_id.space(), model_id.model()), |model| {
+                        if model.get_uuid() != model_id.uuid() {
+                            // once again, throughput maximization will lead to, in extremely rare cases, this
+                            // branch returning. but it is okay
+                            return Ok(());
+                        }
+                        // mark that we're taking these deltas
+                        observed_len = model
+                            .delta_state()
+                            .__fractal_take_full_from_data_delta(super::FractalToken::new());
+                        Self::try_write_model_data_batch(model, observed_len, driver)
+                    });
+            match res {
+                Ok(()) => {
+                    if observed_len != 0 {
+                        info!(
+                            "flp: completed maintenance task for {model_id}, synced={observed_len}"
+                        )
+                    }
+                }
+                Err(_) => {
+                    // this failure is *not* good, so we want to promote this to a critical task
+                    self.hp_dispatcher
+                        .send(Task::new(CriticalTask::WriteBatch(
+                            model_id.clone(),
+                            observed_len,
+                        )))
+                        .unwrap()
                 }
             }
         }

@@ -65,6 +65,9 @@ impl<Fs: RawFSInterface> GNSTransactionDriverAnyFS<Fs> {
     pub fn new(journal: JournalWriter<Fs, GNSAdapter>) -> Self {
         Self { journal }
     }
+    pub fn into_inner(self) -> JournalWriter<Fs, GNSAdapter> {
+        self.journal
+    }
     pub fn __journal_mut(&mut self) -> &mut JournalWriter<Fs, GNSAdapter> {
         &mut self.journal
     }

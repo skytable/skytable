@@ -114,7 +114,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
             f: SDSSFileTrackedReader::new(f)?,
         })
     }
-    pub fn into_file(self) -> SDSSFileIO<F> {
+    pub fn into_file(self) -> RuntimeResult<SDSSFileIO<F>> {
         self.f.into_inner_file()
     }
     pub(in crate::engine::storage::v1) fn read_data_batch_into_model(
@@ -312,11 +312,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         let actual_checksum = self.f.__reset_checksum();
         // find hardcoded checksum
         let mut hardcoded_checksum = [0; sizeof!(u64)];
-        self.f
-            .inner_file()
-            .read_to_buffer(&mut hardcoded_checksum)?;
-        // move file cursor ahead
-        self.f.__cursor_ahead_by(sizeof!(u64));
+        self.f.untracked_read(&mut hardcoded_checksum)?;
         if actual_checksum == u64::from_le_bytes(hardcoded_checksum) {
             Ok(actual_commit)
         } else {
@@ -414,7 +410,9 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         )))
     }
     fn attempt_recover_data_batch(&mut self) -> RuntimeResult<()> {
-        if let Ok(MARKER_RECOVERY_EVENT) = self.f.inner_file().read_byte() {
+        let mut buf = [0u8; 1];
+        self.f.untracked_read(&mut buf)?;
+        if let [MARKER_RECOVERY_EVENT] = buf {
             return Ok(());
         }
         Err(StorageError::DataBatchRestoreCorruptedBatch.into())

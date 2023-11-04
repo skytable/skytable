@@ -70,26 +70,36 @@ impl SEInitState {
                 &gns,
             )
         }?;
-        if is_new {
-            std::fs::create_dir(DATA_DIR).inherit_set_dmsg("creating data directory")?;
-        }
         let mut model_drivers = ModelDrivers::new();
-        if !is_new {
-            // this is an existing instance, so read in all data
-            for (space_name, space) in gns.spaces().read().iter() {
-                let space_uuid = space.get_uuid();
-                for (model_name, model) in space.models().read().iter() {
-                    let path =
-                        Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                    let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(
-                        format!("failed to restore model data from journal in `{path}`"),
-                    )?;
-                    let _ = model_drivers.insert(
-                        ModelUniqueID::new(space_name, model_name, model.get_uuid()),
-                        FractalModelDriver::init(persist_driver),
-                    );
+        let mut driver_guard = || {
+            if is_new {
+                std::fs::create_dir(DATA_DIR).inherit_set_dmsg("creating data directory")?;
+            }
+            if !is_new {
+                // this is an existing instance, so read in all data
+                for (space_name, space) in gns.spaces().read().iter() {
+                    let space_uuid = space.get_uuid();
+                    for (model_name, model) in space.models().read().iter() {
+                        let path =
+                            Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
+                        let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(
+                            format!("failed to restore model data from journal in `{path}`"),
+                        )?;
+                        let _ = model_drivers.insert(
+                            ModelUniqueID::new(space_name, model_name, model.get_uuid()),
+                            FractalModelDriver::init(persist_driver),
+                        );
+                    }
                 }
             }
+            RuntimeResult::Ok(())
+        };
+        if let Err(e) = driver_guard() {
+            gns_txn_driver.close().unwrap();
+            for (_, driver) in model_drivers {
+                driver.close().unwrap();
+            }
+            return Err(e);
         }
         Ok(SEInitState::new(
             GNSTransactionDriverAnyFS::new(gns_txn_driver),

@@ -27,6 +27,7 @@
 use {
     super::util,
     crate::engine::{
+        error::RuntimeResult,
         storage::v1::{data_batch::DataBatchPersistDriver, RawFSInterface},
         txn::gns::GNSTransactionDriverAnyFS,
     },
@@ -38,7 +39,7 @@ use {
 pub(super) struct FractalGNSDriver<Fs: RawFSInterface> {
     #[allow(unused)]
     status: util::Status,
-    txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
+    pub(super) txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
 }
 
 impl<Fs: RawFSInterface> FractalGNSDriver<Fs> {
@@ -71,6 +72,9 @@ impl<Fs: RawFSInterface> FractalModelDriver<Fs> {
     /// Returns a reference to the batch persist driver
     pub fn batch_driver(&self) -> &Mutex<DataBatchPersistDriver<Fs>> {
         &self.batch_driver
+    }
+    pub fn close(self) -> RuntimeResult<()> {
+        self.batch_driver.into_inner().close()
     }
 }
 

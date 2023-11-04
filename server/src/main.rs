@@ -83,6 +83,7 @@ fn main() {
     match runtime.block_on(async move { engine::start(config, global).await }) {
         Ok(()) => {
             engine::finish(g);
+            info!("finished all pending tasks. Goodbye!");
         }
         Err(e) => {
             error!("{e}");

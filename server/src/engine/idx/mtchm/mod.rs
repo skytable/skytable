@@ -108,6 +108,12 @@ impl CHTRuntimeLog {
     }
 }
 
+impl Drop for CHTRuntimeLog {
+    fn drop(&mut self) {
+        let _ = self.data;
+    }
+}
+
 pub struct Node<C: Config> {
     branch: [Atomic<Self>; <DefConfig as Config>::BRANCH_MX],
 }
