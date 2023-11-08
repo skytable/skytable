@@ -46,23 +46,23 @@ mod space_tests {
     };
     #[test]
     fn create() {
-        let orig_space = Space::empty();
-        let space_r = orig_space.metadata().dict().read();
+        let orig_space = Space::new_auto_all();
+        let space_r = orig_space.props();
         let txn = CreateSpaceTxn::new(&space_r, "myspace", &orig_space);
         let encoded = enc::enc_full_self(txn);
         let decoded = dec::dec_full::<CreateSpaceTxn>(&encoded).unwrap();
         assert_eq!(
             CreateSpaceTxnRestorePL {
                 space_name: "myspace".into(),
-                space: Space::empty_with_uuid(orig_space.get_uuid())
+                space: Space::new_restore_empty(orig_space.get_uuid(), Default::default())
             },
             decoded
         );
     }
     #[test]
     fn alter() {
-        let space = Space::empty();
-        let space_r = space.metadata().dict().read();
+        let space = Space::new_auto_all();
+        let space_r = space.props();
         let txn = AlterSpaceTxn::new(SpaceIDRef::new("myspace", &space), &space_r);
         let encoded = enc::enc_full_self(txn);
         let decoded = dec::dec_full::<AlterSpaceTxn>(&encoded).unwrap();
@@ -76,7 +76,7 @@ mod space_tests {
     }
     #[test]
     fn drop() {
-        let space = Space::empty();
+        let space = Space::new_auto_all();
         let txn = DropSpaceTxn::new(super::SpaceIDRef::new("myspace", &space));
         let encoded = enc::enc_full_self(txn);
         let decoded = dec::dec_full::<DropSpaceTxn>(&encoded).unwrap();
@@ -103,7 +103,7 @@ mod model_tests {
         },
     };
     fn default_space_model() -> (Space, Model) {
-        let space = Space::empty();
+        let space = Space::new_auto_all();
         let model = Model::new_restore(
             Uuid::new(),
             "username".into(),

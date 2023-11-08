@@ -28,7 +28,6 @@ use {
     super::{Field, IWModel, Layer, Model},
     crate::{
         engine::{
-            core::util::EntityLocator,
             data::{
                 tag::{DataTag, TagClass},
                 DictEntryGeneric,
@@ -253,9 +252,10 @@ impl Model {
         global: &G,
         alter: AlterModel,
     ) -> QueryResult<()> {
-        let (space_name, model_name) = EntityLocator::parse_entity(alter.model)?;
-        global.namespace().with_space(space_name, |space| {
-            space.with_model(model_name, |model| {
+        let (space_name, model_name) = alter.model.into_full_result()?;
+        global
+            .namespace()
+            .with_model_space(alter.model, |space, model| {
                 // make intent
                 let iwm = model.intent_write_model();
                 // prepare plan
@@ -275,7 +275,12 @@ impl Model {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelAddTxn::new(
-                                gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
+                                gnstxn::ModelIDRef::new_ref(
+                                    &space_name,
+                                    &space,
+                                    &model_name,
+                                    model,
+                                ),
                                 &new_fields,
                             );
                             // commit txn
@@ -296,7 +301,7 @@ impl Model {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelRemoveTxn::new(
-                                gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
+                                gnstxn::ModelIDRef::new_ref(&space_name, space, &model_name, model),
                                 &removed,
                             );
                             // commit txn
@@ -314,7 +319,7 @@ impl Model {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelUpdateTxn::new(
-                                gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
+                                gnstxn::ModelIDRef::new_ref(&space_name, space, &model_name, model),
                                 &updated,
                             );
                             // commit txn
@@ -327,6 +332,5 @@ impl Model {
                 }
                 Ok(())
             })
-        })
     }
 }

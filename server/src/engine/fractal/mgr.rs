@@ -30,6 +30,7 @@ use {
         engine::{
             core::model::{delta::DataDelta, Model},
             data::uuid::Uuid,
+            ql::ast::Entity,
             storage::v1::LocalFS,
         },
         util::os,
@@ -279,17 +280,17 @@ impl FractalMgr {
                     // was way behind in the queue
                     return;
                 };
-                let res =
-                    global
-                        ._namespace()
-                        .with_model((model_id.space(), model_id.model()), |model| {
-                            if model.get_uuid() != model_id.uuid() {
-                                // once again, throughput maximization will lead to, in extremely rare cases, this
-                                // branch returning. but it is okay
-                                return Ok(());
-                            }
-                            Self::try_write_model_data_batch(model, observed_size, mdl_driver)
-                        });
+                let res = global._namespace().with_model(
+                    Entity::Full(model_id.space().into(), model_id.model().into()),
+                    |model| {
+                        if model.get_uuid() != model_id.uuid() {
+                            // once again, throughput maximization will lead to, in extremely rare cases, this
+                            // branch returning. but it is okay
+                            return Ok(());
+                        }
+                        Self::try_write_model_data_batch(model, observed_size, mdl_driver)
+                    },
+                );
                 match res {
                     Ok(()) => {
                         if observed_size != 0 {
@@ -298,7 +299,7 @@ impl FractalMgr {
                     }
                     Err(_) => {
                         log::error!(
-                            "fhp: error writing data batch for model {}. Retrying...",
+                            "fhp: error writing data batch for model {}. retrying ...",
                             model_id.uuid()
                         );
                         // enqueue again for retrying
@@ -369,21 +370,21 @@ impl FractalMgr {
         let mdl_drivers = global.get_state().get_mdl_drivers().read();
         for (model_id, driver) in mdl_drivers.iter() {
             let mut observed_len = 0;
-            let res =
-                global
-                    ._namespace()
-                    .with_model((model_id.space(), model_id.model()), |model| {
-                        if model.get_uuid() != model_id.uuid() {
-                            // once again, throughput maximization will lead to, in extremely rare cases, this
-                            // branch returning. but it is okay
-                            return Ok(());
-                        }
-                        // mark that we're taking these deltas
-                        observed_len = model
-                            .delta_state()
-                            .__fractal_take_full_from_data_delta(super::FractalToken::new());
-                        Self::try_write_model_data_batch(model, observed_len, driver)
-                    });
+            let res = global._namespace().with_model(
+                Entity::Full(model_id.space().into(), model_id.model().into()),
+                |model| {
+                    if model.get_uuid() != model_id.uuid() {
+                        // once again, throughput maximization will lead to, in extremely rare cases, this
+                        // branch returning. but it is okay
+                        return Ok(());
+                    }
+                    // mark that we're taking these deltas
+                    observed_len = model
+                        .delta_state()
+                        .__fractal_take_full_from_data_delta(super::FractalToken::new());
+                    Self::try_write_model_data_batch(model, observed_len, driver)
+                },
+            );
             match res {
                 Ok(()) => {
                     if observed_len != 0 {

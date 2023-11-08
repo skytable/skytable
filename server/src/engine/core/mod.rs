@@ -24,6 +24,9 @@
  *
 */
 
+use self::dml::QueryExecMeta;
+pub use self::util::{EntityID, EntityIDRef};
+use super::{fractal::GlobalInstanceLike, ql::ast::Entity};
 pub(in crate::engine) mod dml;
 pub mod exec;
 pub(in crate::engine) mod index;
@@ -36,86 +39,105 @@ mod util;
 pub(super) mod tests;
 // imports
 use {
-    self::{model::Model, util::EntityLocator},
+    self::model::Model,
     crate::engine::{
         core::space::Space,
         error::{QueryError, QueryResult},
-        fractal::GlobalInstanceLike,
-        idx::{IndexST, STIndex},
+        idx::IndexST,
     },
     parking_lot::RwLock,
+    std::collections::HashMap,
 };
 
 /// Use this for now since it substitutes for a file lock (and those syscalls are expensive),
 /// but something better is in the offing
 type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 
-// FIXME(@ohsayan): Make sure we update what all structures we're making use of here
-
 #[cfg_attr(test, derive(Debug))]
 pub struct GlobalNS {
-    index_space: RWLIdx<Box<str>, Space>,
-}
-
-pub(self) fn with_model_for_data_update<'a, E, F>(
-    global: &impl GlobalInstanceLike,
-    entity: E,
-    f: F,
-) -> QueryResult<()>
-where
-    F: FnOnce(&Model) -> QueryResult<dml::QueryExecMeta>,
-    E: 'a + EntityLocator<'a>,
-{
-    let (space_name, model_name) = entity.parse_entity()?;
-    global
-        .namespace()
-        .with_model((space_name, model_name), |mdl| {
-            let r = f(mdl);
-            match r {
-                Ok(dhint) => {
-                    model::DeltaState::guard_delta_overflow(
-                        global, space_name, model_name, mdl, dhint,
-                    );
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        })
+    idx_mdl: RWLIdx<EntityID, Model>,
+    idx: RWLIdx<Box<str>, RwLock<Space>>,
 }
 
 impl GlobalNS {
-    pub fn spaces(&self) -> &RWLIdx<Box<str>, Space> {
-        &self.index_space
-    }
     pub fn empty() -> Self {
         Self {
-            index_space: RWLIdx::default(),
+            idx_mdl: RWLIdx::default(),
+            idx: RWLIdx::default(),
         }
     }
-    #[cfg(test)]
-    pub(self) fn test_new_empty_space(&self, space_id: &str) -> bool {
-        self.index_space
-            .write()
-            .st_insert(space_id.into(), Space::empty())
+    pub fn ddl_with_spaces_write<T>(
+        &self,
+        f: impl FnOnce(&mut HashMap<Box<str>, RwLock<Space>>) -> T,
+    ) -> T {
+        let mut spaces = self.idx.write();
+        f(&mut spaces)
     }
-    pub fn with_space<T>(
+    pub fn ddl_with_space_mut<T>(
         &self,
         space: &str,
-        f: impl FnOnce(&Space) -> QueryResult<T>,
+        f: impl FnOnce(&mut Space) -> QueryResult<T>,
     ) -> QueryResult<T> {
-        let sread = self.index_space.read();
-        let Some(space) = sread.st_get(space) else {
+        let spaces = self.idx.read();
+        let Some(space) = spaces.get(space) else {
             return Err(QueryError::QExecObjectNotFound);
         };
-        f(space)
+        let mut space = space.write();
+        f(&mut space)
     }
-    pub fn with_model<'a, T, E, F>(&self, entity: E, f: F) -> QueryResult<T>
+    pub fn with_model_space<'a, T, F>(&self, entity: Entity<'a>, f: F) -> QueryResult<T>
+    where
+        F: FnOnce(&Space, &Model) -> QueryResult<T>,
+    {
+        let (space, model_name) = entity.into_full_result()?;
+        let mdl_idx = self.idx_mdl.read();
+        let Some(model) = mdl_idx.get(&EntityIDRef::new(&space, &model_name)) else {
+            return Err(QueryError::QExecObjectNotFound);
+        };
+        let space_read = self.idx.read();
+        let space = space_read.get(space.as_str()).unwrap().read();
+        f(&space, model)
+    }
+    pub fn with_model<'a, T, F>(&self, entity: Entity<'a>, f: F) -> QueryResult<T>
     where
         F: FnOnce(&Model) -> QueryResult<T>,
-        E: 'a + EntityLocator<'a>,
     {
-        entity
-            .parse_entity()
-            .and_then(|(space, model)| self.with_space(space, |space| space.with_model(model, f)))
+        let (space, model_name) = entity.into_full_result()?;
+        let mdl_idx = self.idx_mdl.read();
+        let Some(model) = mdl_idx.get(&EntityIDRef::new(&space, &model_name)) else {
+            return Err(QueryError::QExecObjectNotFound);
+        };
+        f(model)
     }
+    pub fn idx_models(&self) -> &RWLIdx<EntityID, Model> {
+        &self.idx_mdl
+    }
+    pub fn idx(&self) -> &RWLIdx<Box<str>, RwLock<Space>> {
+        &self.idx
+    }
+    #[cfg(test)]
+    pub fn create_empty_test_space(&self, space_name: &str) {
+        let _ = self
+            .idx()
+            .write()
+            .insert(space_name.into(), Space::new_auto_all().into());
+    }
+}
+
+pub(self) fn with_model_for_data_update<'a, F>(
+    global: &impl GlobalInstanceLike,
+    entity: Entity<'a>,
+    f: F,
+) -> QueryResult<()>
+where
+    F: FnOnce(&Model) -> QueryResult<QueryExecMeta>,
+{
+    let (space, model_name) = entity.into_full_result()?;
+    let mdl_idx = global.namespace().idx_mdl.read();
+    let Some(model) = mdl_idx.get(&EntityIDRef::new(&space, &model_name)) else {
+        return Err(QueryError::QExecObjectNotFound);
+    };
+    let r = f(model)?;
+    model::DeltaState::guard_delta_overflow(global, &space, &model_name, model, r);
+    Ok(())
 }

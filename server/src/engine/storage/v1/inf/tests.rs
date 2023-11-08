@@ -29,7 +29,7 @@ use {
     crate::engine::{
         core::{
             model::{Field, Layer, Model},
-            space::{Space, SpaceMeta},
+            space::Space,
         },
         data::{
             cell::Datacell,
@@ -111,11 +111,10 @@ fn model() {
 #[test]
 fn space() {
     let uuid = Uuid::new();
-    let space = Space::new_with_uuid(Default::default(), SpaceMeta::default(), uuid);
-    let space_meta_read = space.metadata().dict().read();
+    let space = Space::new_restore_empty(uuid, Default::default());
     let enc = super::enc::enc_full::<obj::SpaceLayoutRef>(obj::SpaceLayoutRef::from((
         &space,
-        &*space_meta_read,
+        space.props(),
     )));
     let dec = super::dec::dec_full::<obj::SpaceLayoutRef>(&enc).unwrap();
     assert_eq!(space, dec);

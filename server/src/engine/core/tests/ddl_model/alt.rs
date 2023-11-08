@@ -28,10 +28,10 @@ use crate::engine::{
     core::{
         model::{alt::AlterPlan, Model},
         tests::ddl_model::{create, exec_create},
+        EntityIDRef,
     },
     error::QueryResult,
     fractal::GlobalInstanceLike,
-    idx::STIndex,
     ql::{ast::parse_ast_node_full, ddl::alt::AlterModel, tests::lex_insecure},
 };
 
@@ -55,19 +55,19 @@ fn exec_plan(
 ) -> QueryResult<()> {
     let mdl_name = exec_create(global, model, new_space)?;
     let prev_uuid = {
-        let gns = global.namespace().spaces().read();
-        let space = gns.get("myspace").unwrap();
-        let space_read = space.models().read();
-        space_read.get(mdl_name.as_str()).unwrap().get_uuid()
+        global
+            .namespace()
+            .idx_models()
+            .read()
+            .get(&EntityIDRef::new("myspace", &mdl_name))
+            .map(|mdl| mdl.get_uuid())
+            .unwrap()
     };
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
-    let (_space, model_name) = alter.model.into_full().unwrap();
     Model::transactional_exec_alter(global, alter)?;
-    let gns_read = global.namespace().spaces().read();
-    let space = gns_read.st_get("myspace").unwrap();
-    let model = space.models().read();
-    let model = model.st_get(model_name.as_str()).unwrap();
+    let models = global.namespace().idx_models().read();
+    let model = models.get(&EntityIDRef::new("myspace", &mdl_name)).unwrap();
     assert_eq!(prev_uuid, model.get_uuid());
     f(model);
     Ok(())

@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
-    core::space::{Space, SpaceMeta},
-    data::cell::Datacell,
+    core::space::Space,
+    data::{cell::Datacell, DictEntryGeneric},
     error::QueryError,
     fractal::test_utils::TestGlobal,
 };
@@ -41,10 +41,9 @@ fn alter_add_prop_env_var() {
         |space| {
             assert_eq!(
                 space,
-                &Space::new_with_uuid(
-                    into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint_default(100))),
-                    space.get_uuid()
+                &Space::new_restore_empty(
+                    space.get_uuid(),
+                    into_dict!("env" => DictEntryGeneric::Map(into_dict!("MY_NEW_PROP" => Datacell::new_uint_default(100)))),
                 )
             );
         },
@@ -59,9 +58,8 @@ fn alter_update_prop_env_var() {
         &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
-            let rl = space.meta.dict().read();
             assert_eq!(
-                SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
+                space.env().get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint_default(100).into())
             )
         },
@@ -73,10 +71,9 @@ fn alter_update_prop_env_var() {
         |space| {
             assert_eq!(
                 space,
-                &Space::new_with_uuid(
-                    into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint_default(200))),
+                &Space::new_restore_empty(
                     uuid,
+                    into_dict! ("env" => DictEntryGeneric::Map(into_dict!("MY_NEW_PROP" => Datacell::new_uint_default(200)))),
                 )
             )
         },
@@ -91,9 +88,8 @@ fn alter_remove_prop_env_var() {
         &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
-            let rl = space.meta.dict().read();
             assert_eq!(
-                SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
+                space.env().get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint_default(100).into())
             )
         },
@@ -105,7 +101,10 @@ fn alter_remove_prop_env_var() {
         |space| {
             assert_eq!(
                 space,
-                &Space::new_with_uuid(into_dict!(), SpaceMeta::with_env(into_dict!()), uuid)
+                &Space::new_restore_empty(
+                    uuid,
+                    into_dict!("env" => DictEntryGeneric::Map(into_dict!()))
+                )
             )
         },
     )
@@ -133,16 +132,21 @@ fn alter_remove_all_env() {
         &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
-            let rl = space.meta.dict().read();
             assert_eq!(
-                SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
+                space.env().get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint_default(100).into())
             )
         },
     )
     .unwrap();
     super::exec_alter(&global, "alter space myspace with { env: null }", |space| {
-        assert_eq!(space, &Space::empty_with_uuid(uuid))
+        assert_eq!(
+            space,
+            &Space::new_restore_empty(
+                uuid,
+                into_dict!("env" => DictEntryGeneric::Map(into_dict!()))
+            )
+        )
     })
     .unwrap();
 }

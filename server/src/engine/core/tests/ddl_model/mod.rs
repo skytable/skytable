@@ -29,10 +29,9 @@ mod crt;
 mod layer;
 
 use crate::engine::{
-    core::{model::Model, space::Space},
+    core::{model::Model, EntityIDRef},
     error::QueryResult,
     fractal::GlobalInstanceLike,
-    idx::STIndex,
     ql::{
         ast::{parse_ast_node_full, Entity},
         ddl::crt::CreateModel,
@@ -59,7 +58,7 @@ pub fn exec_create(
     if create_new_space {
         global
             .namespace()
-            .test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
+            .create_empty_test_space(&create_model.model_name.into_full().unwrap().0)
     }
     Model::transactional_exec_create(global, create_model).map(|_| name)
 }
@@ -71,21 +70,13 @@ pub fn exec_create_new_space(
     exec_create(global, create_stmt, true).map(|_| ())
 }
 
-fn with_space(global: &impl GlobalInstanceLike, space_name: &str, f: impl Fn(&Space)) {
-    let rl = global.namespace().spaces().read();
-    let space = rl.st_get(space_name).unwrap();
-    f(space);
-}
-
 fn with_model(
     global: &impl GlobalInstanceLike,
     space_id: &str,
     model_name: &str,
     f: impl Fn(&Model),
 ) {
-    with_space(global, space_id, |space| {
-        let space_rl = space.models().read();
-        let model = space_rl.st_get(model_name).unwrap();
-        f(model)
-    })
+    let models = global.namespace().idx_models().read();
+    let model = models.get(&EntityIDRef::new(space_id, model_name)).unwrap();
+    f(model)
 }

@@ -30,7 +30,7 @@ use {
         engine::{
             core::{
                 model::{delta::IRModel, Field, Layer, Model},
-                space::{Space, SpaceMeta},
+                space::Space,
             },
             data::{
                 tag::{DataTag, TagClass, TagSelector},
@@ -515,9 +515,6 @@ impl<'a> PersistObject for SpaceLayoutRef<'a> {
                 scanner,
                 super::map::MapIndexSizeMD(md.prop_c),
             )?;
-        Ok(Space::new_restore_empty(
-            SpaceMeta::new_with_meta(space_meta),
-            md.uuid,
-        ))
+        Ok(Space::new_restore_empty(md.uuid, space_meta))
     }
 }

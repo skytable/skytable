@@ -120,8 +120,8 @@ impl<'a> GNSEvent for CreateSpaceTxn<'a> {
         CreateSpaceTxnRestorePL { space_name, space }: CreateSpaceTxnRestorePL,
         gns: &crate::engine::core::GlobalNS,
     ) -> RuntimeResult<()> {
-        let mut wgns = gns.spaces().write();
-        if wgns.st_insert(space_name, space) {
+        let mut spaces = gns.idx().write();
+        if spaces.st_insert(space_name, space.into()) {
             Ok(())
         } else {
             Err(TransactionError::OnRestoreDataConflictAlreadyExists.into())
@@ -215,11 +215,11 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
         }: Self::RestoreType,
         gns: &crate::engine::core::GlobalNS,
     ) -> RuntimeResult<()> {
-        let gns = gns.spaces().read();
+        let gns = gns.idx().read();
         match gns.st_get(&space_id.name) {
             Some(space) => {
-                let mut wmeta = space.metadata().dict().write();
-                if !crate::engine::data::dict::rmerge_metadata(&mut wmeta, space_meta) {
+                let mut space = space.write();
+                if !crate::engine::data::dict::rmerge_metadata(space.props_mut(), space_meta) {
                     return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
             }
@@ -278,10 +278,13 @@ impl<'a> GNSEvent for DropSpaceTxn<'a> {
         super::SpaceIDRes { uuid, name }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        let mut wgns = gns.spaces().write();
+        let mut wgns = gns.idx().write();
         match wgns.entry(name) {
             std::collections::hash_map::Entry::Occupied(oe) => {
-                if oe.get().get_uuid() == uuid {
+                let space = oe.get().read();
+                if space.get_uuid() == uuid {
+                    // NB(@ohsayan): we do not need to remove models here since they must have been already removed for this query to have actually executed
+                    drop(space);
                     oe.remove_entry();
                     Ok(())
                 } else {

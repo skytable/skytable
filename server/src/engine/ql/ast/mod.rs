@@ -325,17 +325,25 @@ pub enum Entity<'a> {
 }
 
 impl<'a> Entity<'a> {
+    pub fn into_full_result(self) -> QueryResult<(Ident<'a>, Ident<'a>)> {
+        match self {
+            Self::Full(a, b) => Ok((a, b)),
+            _ => Err(QueryError::QLExpectedEntity),
+        }
+    }
+}
+
+impl<'a> From<(&'a str, &'a str)> for Entity<'a> {
+    fn from((s, e): (&'a str, &'a str)) -> Self {
+        Self::Full(s.into(), e.into())
+    }
+}
+
+impl<'a> Entity<'a> {
     #[cfg(test)]
     pub fn into_full(self) -> Option<(Ident<'a>, Ident<'a>)> {
         if let Self::Full(a, b) = self {
             Some((a, b))
-        } else {
-            None
-        }
-    }
-    pub fn into_full_str(self) -> Option<(&'a str, &'a str)> {
-        if let Self::Full(a, b) = self {
-            Some((a.as_str(), b.as_str()))
         } else {
             None
         }
@@ -453,6 +461,7 @@ impl<'a> Entity<'a> {
 }
 
 #[derive(Debug, PartialEq)]
+#[allow(dead_code)] // TODO(@ohsayan): get rid of this
 /// A [`Statement`] is a fully BlueQL statement that can be executed by the query engine
 // TODO(@ohsayan): Determine whether we actually need this
 pub enum Statement<'a> {
@@ -496,6 +505,7 @@ pub enum Statement<'a> {
 
 #[inline(always)]
 #[cfg(debug_assertions)]
+#[allow(dead_code)] // TODO(@ohsayan): get rid of this
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResult<Statement<'a>> {
     if compiler::unlikely(tok.len() < 2) {
         return Err(QueryError::QLUnexpectedEndOfStatement);

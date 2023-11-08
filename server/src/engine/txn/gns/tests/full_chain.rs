@@ -27,7 +27,7 @@
 use crate::engine::{
     core::{
         model::{Field, Layer, Model},
-        space::{Space, SpaceMeta},
+        space::Space,
     },
     data::{cell::Datacell, tag::TagSelector, uuid::Uuid, DictEntryGeneric},
     error::QueryError,
@@ -58,10 +58,11 @@ fn init_space(global: &impl GlobalInstanceLike, space_name: &str, env: &str) -> 
     Space::transactional_exec_create(global, stmt).unwrap();
     global
         .namespace()
-        .spaces()
+        .idx()
         .read()
         .get(name.as_str())
         .unwrap()
+        .read()
         .get_uuid()
 }
 
@@ -76,13 +77,13 @@ fn create_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
+            let spaces = global.namespace().idx().read();
+            let space = spaces.get("myspace").unwrap().read();
             assert_eq!(
-                global.namespace().spaces().read().get("myspace").unwrap(),
+                &*space,
                 &Space::new_restore_empty(
-                    SpaceMeta::with_env(
-                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
-                    ),
-                    uuid
+                    uuid,
+                    into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
                 )
             );
         })
@@ -104,13 +105,13 @@ fn alter_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
+            let spaces = global.namespace().idx().read();
+            let space = spaces.get("myspace").unwrap().read();
             assert_eq!(
-                global.namespace().spaces().read().get("myspace").unwrap(),
+                &*space,
                 &Space::new_restore_empty(
-                    SpaceMeta::with_env(
-                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
-                    ),
-                    uuid
+                    uuid,
+                    into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
                 )
             );
         })
@@ -129,7 +130,7 @@ fn drop_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
-            assert_eq!(global.namespace().spaces().read().get("myspace"), None);
+            assert!(global.namespace().idx().read().get("myspace").is_none());
         })
     })
 }
@@ -174,7 +175,7 @@ fn create_model() {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
-                .with_model(("myspace", "mymodel"), |model| {
+                .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model,
                         &Model::new_restore(
@@ -212,7 +213,7 @@ fn alter_model_add() {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
-                .with_model(("myspace", "mymodel"), |model| {
+                .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model
                             .intent_read_model()
@@ -251,7 +252,7 @@ fn alter_model_remove() {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
-                .with_model(("myspace", "mymodel"), |model| {
+                .with_model(("myspace", "mymodel").into(), |model| {
                     let irm = model.intent_read_model();
                     assert!(irm.fields().st_get("has_secure_key").is_none());
                     assert!(irm.fields().st_get("is_dumb").is_none());
@@ -284,7 +285,7 @@ fn alter_model_update() {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
-                .with_model(("myspace", "mymodel"), |model| {
+                .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model
                             .intent_read_model()
@@ -316,7 +317,7 @@ fn drop_model() {
             assert_eq!(
                 global
                     .namespace()
-                    .with_model(("myspace", "mymodel"), |_| { Ok(()) })
+                    .with_model(("myspace", "mymodel").into(), |_| { Ok(()) })
                     .unwrap_err(),
                 QueryError::QExecObjectNotFound
             );

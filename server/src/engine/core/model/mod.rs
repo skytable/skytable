@@ -32,7 +32,7 @@ use std::cell::RefCell;
 
 use {
     self::delta::{IRModel, IRModelSMData, ISyncMatrix, IWModel},
-    super::{index::PrimaryIndex, util::EntityLocator},
+    super::index::PrimaryIndex,
     crate::engine::{
         data::{
             cell::Datacell,
@@ -48,12 +48,14 @@ use {
             drop::DropModel,
             syn::{FieldSpec, LayerSpec},
         },
-        txn::gns as gnstxn,
+        txn::gns::{self as gnstxn, SpaceIDRef},
     },
     std::cell::UnsafeCell,
 };
 
 pub(in crate::engine::core) use self::delta::{DeltaState, DeltaVersion, SchemaDeltaKind};
+
+use super::util::{EntityID, EntityIDRef};
 pub(in crate::engine) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
@@ -204,40 +206,41 @@ impl Model {
         global: &G,
         stmt: CreateModel,
     ) -> QueryResult<()> {
-        let (space_name, model_name) = stmt.model_name.parse_entity()?;
+        let (space_name, model_name) = stmt.model_name.into_full_result()?;
         let model = Self::process_create(stmt)?;
-        global.namespace().with_space(space_name, |space| {
-            let mut w_space = space.models().write();
-            if w_space.st_contains(model_name) {
+        global.namespace().ddl_with_space_mut(&space_name, |space| {
+            // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
+            if space.models().contains(model_name.as_str()) {
                 return Err(QueryError::QExecDdlObjectAlreadyExists);
             }
+            // since we've locked this down, no one else can parallely create another model in the same space (or remove)
             if G::FS_IS_NON_NULL {
                 let irm = model.intent_read_model();
                 let mut txn_driver = global.namespace_txn_driver().lock();
                 // prepare txn
                 let txn = gnstxn::CreateModelTxn::new(
-                    gnstxn::SpaceIDRef::new(space_name, space),
-                    model_name,
+                    SpaceIDRef::new(&space_name, &space),
+                    &model_name,
                     &model,
                     &irm,
                 );
                 // attempt to initialize driver
                 global.initialize_model_driver(
-                    space_name,
+                    &space_name,
                     space.get_uuid(),
-                    model_name,
+                    &model_name,
                     model.get_uuid(),
                 )?;
                 // commit txn
                 match txn_driver.try_commit(txn) {
                     Ok(()) => {}
                     Err(e) => {
-                        // failed to commit, delete this
+                        // failed to commit, request cleanup
                         global.taskmgr_post_standard_priority(Task::new(
                             GenericTask::delete_model_dir(
-                                space_name,
+                                &space_name,
                                 space.get_uuid(),
-                                model_name,
+                                &model_name,
                                 model.get_uuid(),
                             ),
                         ));
@@ -246,7 +249,12 @@ impl Model {
                 }
             }
             // update global state
-            let _ = w_space.st_insert(model_name.into(), model);
+            let _ = space.models_mut().insert(model_name.as_str().into());
+            let _ = global
+                .namespace()
+                .idx_models()
+                .write()
+                .insert(EntityID::new(&space_name, &model_name), model);
             Ok(())
         })
     }
@@ -254,32 +262,44 @@ impl Model {
         global: &G,
         stmt: DropModel,
     ) -> QueryResult<()> {
-        let (space_name, model_name) = stmt.entity.parse_entity()?;
-        global.namespace().with_space(space_name, |space| {
-            let mut w_space = space.models().write();
-            let Some(model) = w_space.get(model_name) else {
+        let (space_name, model_name) = stmt.entity.into_full_result()?;
+        global.namespace().ddl_with_space_mut(&space_name, |space| {
+            if !space.models().contains(model_name.as_str()) {
+                // the model isn't even present
                 return Err(QueryError::QExecObjectNotFound);
-            };
+            }
+            // get exclusive lock on models
+            let mut models_idx = global.namespace().idx_models().write();
+            let model = models_idx
+                .get(&EntityIDRef::new(&space_name, &model_name))
+                .unwrap();
+            // the model must be empty for us to clean it up! (NB: consistent view + EX)
+            if model.primary_index().count() != 0 {
+                // nope, we can't drop this
+                return Err(QueryError::QExecDdlNotEmpty);
+            }
+            // okay this is looking good for us
             if G::FS_IS_NON_NULL {
                 // prepare txn
                 let txn = gnstxn::DropModelTxn::new(gnstxn::ModelIDRef::new(
-                    gnstxn::SpaceIDRef::new(space_name, space),
-                    model_name,
+                    SpaceIDRef::new(&space_name, &space),
+                    &model_name,
                     model.get_uuid(),
                     model.delta_state().schema_current_version().value_u64(),
                 ));
                 // commit txn
                 global.namespace_txn_driver().lock().try_commit(txn)?;
-                // ask for cleanup
+                // request cleanup
                 global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
-                    space_name,
+                    &space_name,
                     space.get_uuid(),
-                    model_name,
+                    &model_name,
                     model.get_uuid(),
                 )));
             }
             // update global state
-            let _ = w_space.st_delete(model_name);
+            let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
+            let _ = space.models_mut().remove(model_name.as_str());
             Ok(())
         })
     }

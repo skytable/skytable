@@ -30,7 +30,7 @@ use crate::engine::storage::v1::{
     JournalWriter,
 };
 use crate::engine::{
-    core::GlobalNS,
+    core::{EntityIDRef, GlobalNS},
     data::uuid::Uuid,
     error::RuntimeResult,
     fractal::error::ErrorContext,
@@ -76,10 +76,15 @@ impl SEInitState {
                 std::fs::create_dir(DATA_DIR).inherit_set_dmsg("creating data directory")?;
             }
             if !is_new {
+                let models = gns.idx_models().read();
                 // this is an existing instance, so read in all data
-                for (space_name, space) in gns.spaces().read().iter() {
+                for (space_name, space) in gns.idx().read().iter() {
+                    let space = space.read();
                     let space_uuid = space.get_uuid();
-                    for (model_name, model) in space.models().read().iter() {
+                    for model_name in space.models().iter() {
+                        let model = models
+                            .get(&EntityIDRef::new(&space_name, &model_name))
+                            .unwrap();
                         let path =
                             Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
                         let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(

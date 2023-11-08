@@ -31,7 +31,7 @@ use {
             core::{
                 model::{delta::IRModel, Field, Model},
                 space::Space,
-                GlobalNS,
+                GlobalNS, {EntityID, EntityIDRef},
             },
             data::uuid::Uuid,
             error::TransactionError,
@@ -160,14 +160,31 @@ fn with_space<T>(
     space_id: &super::SpaceIDRes,
     mut f: impl FnMut(&Space) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
-    let spaces = gns.spaces().read();
+    let spaces = gns.idx().read();
     let Some(space) = spaces.st_get(&space_id.name) else {
         return Err(TransactionError::OnRestoreDataMissing.into());
     };
+    let space = space.read();
     if space.get_uuid() != space_id.uuid {
         return Err(TransactionError::OnRestoreDataConflictMismatch.into());
     }
-    f(space)
+    f(&space)
+}
+
+fn with_space_mut<T>(
+    gns: &GlobalNS,
+    space_id: &super::SpaceIDRes,
+    mut f: impl FnMut(&mut Space) -> RuntimeResult<T>,
+) -> RuntimeResult<T> {
+    let spaces = gns.idx().read();
+    let Some(space) = spaces.st_get(&space_id.name) else {
+        return Err(TransactionError::OnRestoreDataMissing.into());
+    };
+    let mut space = space.write();
+    if space.get_uuid() != space_id.uuid {
+        return Err(TransactionError::OnRestoreDataConflictMismatch.into());
+    }
+    f(&mut space)
 }
 
 fn with_model<T>(
@@ -176,9 +193,10 @@ fn with_model<T>(
     model_id: &ModelIDRes,
     mut f: impl FnMut(&Model) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
-    with_space(gns, space_id, |space| {
-        let models = space.models().read();
-        let Some(model) = models.st_get(&model_id.model_name) else {
+    with_space(gns, space_id, |_| {
+        let models = gns.idx_models().read();
+        let Some(model) = models.get(&EntityIDRef::new(&space_id.name, &model_id.model_name))
+        else {
             return Err(TransactionError::OnRestoreDataMissing.into());
         };
         if model.get_uuid() != model_id.model_uuid {
@@ -302,26 +320,30 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        let rgns = gns.spaces().read();
         /*
             NOTE(@ohsayan):
-            do note that this is a little interesting situation especially because we need to be able to handle
-            changes in the schema *and* be able to "sync" that (for consistency) with the model's primary index.
-
-            There is no evident way about how this is going to be handled, but the ideal way would be to keep
-            versioned index of schemas.
+            A jump to the second branch is practically impossible and should be caught long before we actually end up
+            here (due to mismatched checksums), but might be theoretically possible because the cosmic rays can be wild
+            (or well magnetic stuff arounding spinning disks). But we just want to be extra sure. Don't let the aliens (or
+            rather, radiation) from the cosmos deter us!
         */
-        match rgns.st_get(&space_id.name) {
-            Some(space) if space.get_uuid() == space_id.uuid => {
-                if space._create_model(&model_name, model).is_ok() {
-                    Ok(())
-                } else {
-                    Err(TransactionError::OnRestoreDataConflictAlreadyExists.into())
-                }
-            }
-            Some(_) => return Err(TransactionError::OnRestoreDataConflictMismatch.into()),
-            None => return Err(TransactionError::OnRestoreDataMissing.into()),
+        let spaces = gns.idx().write();
+        let mut models = gns.idx_models().write();
+        let Some(space) = spaces.get(&space_id.name) else {
+            return Err(TransactionError::OnRestoreDataMissing.into());
+        };
+        let mut space = space.write();
+        if space.models().contains(&model_name) {
+            return Err(TransactionError::OnRestoreDataConflictAlreadyExists.into());
         }
+        if models
+            .insert(EntityID::new(&space_id.name, &model_name), model)
+            .is_some()
+        {
+            return Err(TransactionError::OnRestoreDataConflictMismatch.into());
+        }
+        space.models_mut().insert(model_name);
+        Ok(())
     }
 }
 
@@ -724,13 +746,19 @@ impl<'a> GNSEvent for DropModelTxn<'a> {
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        with_space(gns, &space_id, |space| {
-            let mut wgns = space.models().write();
-            match wgns.st_delete_if(&model_name, |mdl| mdl.get_uuid() == model_uuid) {
-                Some(true) => Ok(()),
-                Some(false) => return Err(TransactionError::OnRestoreDataConflictMismatch.into()),
-                None => Err(TransactionError::OnRestoreDataMissing.into()),
+        with_space_mut(gns, &space_id, |space| {
+            let mut models = gns.idx_models().write();
+            if !space.models_mut().remove(&model_name) {
+                return Err(TransactionError::OnRestoreDataMissing.into());
             }
+            let Some(removed_model) = models.remove(&EntityIDRef::new(&space_id.name, &model_name))
+            else {
+                return Err(TransactionError::OnRestoreDataMissing.into());
+            };
+            if removed_model.get_uuid() != model_uuid {
+                return Err(TransactionError::OnRestoreDataConflictMismatch.into());
+            }
+            Ok(())
         })
     }
 }

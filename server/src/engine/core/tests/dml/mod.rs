@@ -30,7 +30,7 @@ mod select;
 mod update;
 
 use crate::engine::{
-    core::{dml, index::Row, model::Model},
+    core::{dml, index::Row, model::Model, space::Space},
     data::{cell::Datacell, lit::Lit},
     error::QueryResult,
     fractal::GlobalInstanceLike,
@@ -43,9 +43,11 @@ use crate::engine::{
 };
 
 fn _exec_only_create_space_model(global: &impl GlobalInstanceLike, model: &str) -> QueryResult<()> {
-    if !global.namespace().spaces().read().contains_key("myspace") {
-        global.namespace().test_new_empty_space("myspace");
-    }
+    let _ = global
+        .namespace()
+        .idx()
+        .write()
+        .insert("myspace".into(), Space::new_auto_all().into());
     let lex_create_model = lex_insecure(model.as_bytes()).unwrap();
     let stmt_create_model = parse_ast_node_full(&lex_create_model[2..]).unwrap();
     Model::transactional_exec_create(global, stmt_create_model)

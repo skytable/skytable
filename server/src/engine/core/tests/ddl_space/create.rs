@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
-    core::space::{Space, SpaceMeta},
-    data::cell::Datacell,
+    core::space::Space,
+    data::{cell::Datacell, DictEntryGeneric},
     error::QueryError,
     fractal::test_utils::TestGlobal,
 };
@@ -35,7 +35,7 @@ use crate::engine::{
 fn exec_create_space_simple() {
     let global = TestGlobal::new_with_tmp_nullfs_driver();
     super::exec_create(&global, "create space myspace", |spc| {
-        assert!(spc.models().read().is_empty())
+        assert!(spc.models().is_empty())
     })
     .unwrap();
 }
@@ -55,12 +55,11 @@ fn exec_create_space_with_env() {
         |space| {
             assert_eq!(
                 space,
-                &Space::new_with_uuid(
-                    into_dict! {},
-                    SpaceMeta::with_env(into_dict! {
-                        "MAX_MODELS" => Datacell::new_uint_default(100)
-                    }),
-                    space.get_uuid()
+                &Space::new_restore_empty(
+                    space.get_uuid(),
+                    into_dict! {
+                        "env" => DictEntryGeneric::Map(into_dict!("MAX_MODELS" => Datacell::new_uint_default(100)))
+                    },
                 )
             );
         },
