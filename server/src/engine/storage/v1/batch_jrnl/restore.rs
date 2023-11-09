@@ -44,7 +44,6 @@ use {
         idx::{MTIndex, STIndex, STIndexSeq},
         storage::v1::rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedReader},
     },
-    crossbeam_epoch::pin,
     std::{
         collections::{hash_map::Entry as HMEntry, HashMap},
         mem::ManuallyDrop,
@@ -217,7 +216,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         // NOTE(@ohsayan): current complexity is O(n) which is good enough (in the future I might revise this to a fancier impl)
         // pin model
         let irm = m.intent_read_model();
-        let g = pin();
+        let g = unsafe { crossbeam_epoch::unprotected() };
         let mut pending_delete = HashMap::new();
         let p_index = m.primary_index().__raw_index();
         // scan rows

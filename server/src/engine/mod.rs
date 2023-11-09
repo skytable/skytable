@@ -41,11 +41,12 @@ mod txn;
 // test
 #[cfg(test)]
 mod tests;
+// re-export
+pub use error::RuntimeResult;
 
 use {
     self::{
         config::{ConfigEndpoint, ConfigEndpointTls, ConfigMode, ConfigReturn, Configuration},
-        error::RuntimeResult,
         fractal::context::{self, Subsystem},
         storage::v1::{
             loader::{self, SEInitState},
@@ -57,6 +58,10 @@ use {
     std::process::exit,
     tokio::sync::broadcast,
 };
+
+pub(super) fn set_context_init(msg: &'static str) {
+    context::set(Subsystem::Init, msg)
+}
 
 /// Initialize all drivers, load all data
 ///
@@ -137,12 +142,10 @@ impl EndpointListeners {
 }
 
 pub async fn start(
+    termsig: TerminationSignal,
     Configuration { endpoints, .. }: Configuration,
     fractal::GlobalStateStart { global, boot }: fractal::GlobalStateStart,
 ) -> RuntimeResult<()> {
-    // bind termination signal
-    context::set(Subsystem::Init, "binding system signals");
-    let termsig = TerminationSignal::init()?;
     // create our system-wide channel
     let (signal, _) = broadcast::channel::<()>(1);
     // start our services
@@ -212,7 +215,6 @@ pub async fn start(
         (_, Err(e)) => error!("error while terminating flp-executor: {e}"),
         _ => {}
     }
-    info!("all services have exited");
     Ok(())
 }
 

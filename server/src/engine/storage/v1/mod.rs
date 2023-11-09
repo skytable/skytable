@@ -41,9 +41,8 @@ mod tests;
 // re-exports
 pub use {
     journal::{JournalAdapter, JournalWriter},
-    memfs::NullFS,
     rw::{LocalFS, RawFSInterface, SDSSFileIO},
 };
 pub mod data_batch {
-    pub use super::batch_jrnl::{create, reinit, DataBatchPersistDriver, DataBatchRestoreDriver};
+    pub use super::batch_jrnl::{create, DataBatchPersistDriver};
 }

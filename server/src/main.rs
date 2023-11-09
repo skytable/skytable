@@ -67,23 +67,28 @@ fn main() {
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
     println!("{TEXT}\nSkytable v{VERSION} | {URL}\n");
-    let (config, global) = match engine::load_all() {
-        Ok(x) => x,
-        Err(e) => {
-            error!("{e}");
-            exit_error()
-        }
+    let run = || {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("server")
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async move {
+            engine::set_context_init("binding system signals");
+            let signal = util::os::TerminationSignal::init()?;
+            let (config, global) = tokio::task::spawn_blocking(|| engine::load_all())
+                .await
+                .unwrap()?;
+            let g = global.global.clone();
+            engine::start(signal, config, global).await?;
+            engine::RuntimeResult::Ok(g)
+        })
     };
-    let g = global.global.clone();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("server")
-        .enable_all()
-        .build()
-        .unwrap();
-    match runtime.block_on(async move { engine::start(config, global).await }) {
-        Ok(()) => {
+    match run() {
+        Ok(g) => {
+            info!("completing cleanup before exit");
             engine::finish(g);
-            info!("finished all pending tasks. Goodbye!");
+            println!("Goodbye!");
         }
         Err(e) => {
             error!("{e}");

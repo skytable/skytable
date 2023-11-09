@@ -32,7 +32,7 @@ use {
     std::{collections::hash_map::RandomState, sync::Arc},
 };
 
-const LNODE_STACK: usize = 2;
+const LNODE_STACK: usize = 1;
 pub type DefConfig = Config2B<RandomState>;
 pub type LNode<T> = VInline<LNODE_STACK, T>;
 

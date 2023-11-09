@@ -40,13 +40,13 @@ use crate::{
 };
 
 #[cfg(test)]
-pub use upd::collect_trace_path as update_flow_trace;
 pub use {
-    del::{delete, delete_resp},
-    ins::{insert, insert_resp},
-    sel::{select_custom, select_resp},
-    upd::{update, update_resp},
+    del::delete,
+    ins::insert,
+    sel::select_custom,
+    upd::{collect_trace_path as update_flow_trace, update},
 };
+pub use {del::delete_resp, ins::insert_resp, sel::select_resp, upd::update_resp};
 
 impl Model {
     pub(self) fn resolve_where<'a>(

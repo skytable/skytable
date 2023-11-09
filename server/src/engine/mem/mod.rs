@@ -39,10 +39,9 @@ pub use {
     astr::AStr,
     ll::CachePadded,
     scanner::BufferedScanner,
-    stackop::ByteStack,
     uarray::UArray,
     vinline::VInline,
-    word::{DwordNN, DwordQN, QwordNNNN, TwordNNN, WordIO, ZERO_BLOCK},
+    word::{DwordNN, DwordQN, WordIO, ZERO_BLOCK},
 };
 // imports
 use std::alloc::{self, Layout};

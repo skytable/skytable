@@ -70,6 +70,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
     }
 }
 
+#[cfg(test)]
 pub use impls::InspectStatementAST;
 mod impls {
     use crate::engine::{

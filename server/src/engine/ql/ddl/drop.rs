@@ -101,6 +101,7 @@ pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResu
     }
 }
 
+#[cfg(test)]
 pub use impls::DropStatementAST;
 mod impls {
     use {
