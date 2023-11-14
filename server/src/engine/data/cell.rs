@@ -220,6 +220,21 @@ impl Datacell {
     pub fn str(&self) -> &str {
         self.try_str().unwrap()
     }
+    pub fn into_str(self) -> Option<String> {
+        if self.kind() != TagClass::Str {
+            return None;
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): no double free + tagck
+            let md = ManuallyDrop::new(self);
+            let (a, b) = md.data.word.dwordqn_load_qw_nw();
+            Some(String::from_raw_parts(
+                b as *const u8 as *mut u8,
+                a as usize,
+                a as usize,
+            ))
+        }
+    }
     // list
     pub fn new_list(l: Vec<Self>) -> Self {
         unsafe {

@@ -45,6 +45,8 @@ pub enum QueryError {
     SysAuthError = 3,
     /// transactional error
     SysTransactionalError = 4,
+    /// insufficient permissions error
+    SysPermissionDenied = 5,
     // exchange
     NetworkSubsystemCorruptedPacket = 24,
     // QL

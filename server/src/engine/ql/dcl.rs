@@ -95,6 +95,15 @@ impl<'a> UserAdd<'a> {
     pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         parse(state).map(|UserMeta { username, options }: UserMeta| Self::new(username, options))
     }
+    pub fn username(&self) -> &str {
+        self.username
+    }
+    pub fn options_mut(&mut self) -> &mut DictGeneric {
+        &mut self.options
+    }
+    pub fn options(&self) -> &DictGeneric {
+        &self.options
+    }
 }
 
 impl<'a> traits::ASTNode<'a> for UserAdd<'a> {
@@ -130,6 +139,9 @@ impl<'a> UserDel<'a> {
             }
         }
         Err(QueryError::QLInvalidSyntax)
+    }
+    pub fn username(&self) -> &str {
+        self.username
     }
 }
 

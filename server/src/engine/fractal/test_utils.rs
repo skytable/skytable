@@ -26,8 +26,8 @@
 
 use {
     super::{
-        config::SysConfig, CriticalTask, FractalModelDriver, GenericTask, GlobalInstanceLike,
-        ModelUniqueID, Task,
+        sys_store::{SysConfig, SystemStore},
+        CriticalTask, FractalModelDriver, GenericTask, GlobalInstanceLike, ModelUniqueID, Task,
     },
     crate::engine::{
         core::GlobalNS,
@@ -54,7 +54,7 @@ pub struct TestGlobal<Fs: RawFSInterface = VirtualFS> {
     max_delta_size: usize,
     txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
     model_drivers: RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>>,
-    sys_cfg: SysConfig,
+    sys_cfg: SystemStore<Fs>,
 }
 
 impl<Fs: RawFSInterface> TestGlobal<Fs> {
@@ -70,7 +70,7 @@ impl<Fs: RawFSInterface> TestGlobal<Fs> {
             max_delta_size,
             txn_driver: Mutex::new(txn_driver),
             model_drivers: RwLock::default(),
-            sys_cfg: SysConfig::test_default(),
+            sys_cfg: SystemStore::_new(SysConfig::test_default()),
         }
     }
 }
@@ -117,7 +117,7 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     fn get_max_delta_size(&self) -> usize {
         100
     }
-    fn sys_cfg(&self) -> &super::config::SysConfig {
+    fn sys_store(&self) -> &SystemStore<Fs> {
         &self.sys_cfg
     }
     fn initialize_model_driver(

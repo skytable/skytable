@@ -32,24 +32,19 @@ mod tx;
 
 mod sysdb {
     use {
-        super::{
-            super::sysdb::{self, SystemStoreInitState},
-            VirtualFS as VFS,
+        super::{super::sysdb::SystemStoreInitState, VirtualFS as VFS},
+        crate::engine::{
+            config::{AuthDriver, ConfigAuth, ConfigMode},
+            fractal::sys_store::SystemStore,
         },
-        crate::engine::config::{AuthDriver, ConfigAuth, ConfigMode},
     };
     fn open_sysdb(
         auth_config: ConfigAuth,
         sysdb_path: &str,
         sysdb_cow_path: &str,
-    ) -> sysdb::SystemStoreInit {
-        sysdb::open_or_reinit_system_database::<VFS>(
-            auth_config,
-            ConfigMode::Dev,
-            sysdb_path,
-            sysdb_cow_path,
-        )
-        .unwrap()
+    ) -> (SystemStore<VFS>, SystemStoreInitState) {
+        SystemStore::<VFS>::open_with_name(sysdb_path, sysdb_cow_path, auth_config, ConfigMode::Dev)
+            .unwrap()
     }
     #[test]
     fn open_close() {
@@ -62,28 +57,28 @@ mod sysdb {
         };
         let auth_config = ConfigAuth::new(AuthDriver::Pwd, "password12345678".into());
         {
-            let config = open(auth_config.clone());
-            assert_eq!(config.state, SystemStoreInitState::Created);
+            let (config, state) = open(auth_config.clone());
+            assert_eq!(state, SystemStoreInitState::Created);
             assert!(config
-                .store
+                .system_store()
                 .auth_data()
                 .read()
                 .verify_user("root", "password12345678")
                 .is_ok());
-            assert_eq!(config.store.host_data().settings_version(), 0);
-            assert_eq!(config.store.host_data().startup_counter(), 0);
+            assert_eq!(config.system_store().host_data().settings_version(), 0);
+            assert_eq!(config.system_store().host_data().startup_counter(), 0);
         }
         // reboot
-        let config = open(auth_config);
-        assert_eq!(config.state, SystemStoreInitState::Unchanged);
+        let (config, state) = open(auth_config);
+        assert_eq!(state, SystemStoreInitState::Unchanged);
         assert!(config
-            .store
+            .system_store()
             .auth_data()
             .read()
             .verify_user("root", "password12345678")
             .is_ok());
-        assert_eq!(config.store.host_data().settings_version(), 0);
-        assert_eq!(config.store.host_data().startup_counter(), 1);
+        assert_eq!(config.system_store().host_data().settings_version(), 0);
+        assert_eq!(config.system_store().host_data().startup_counter(), 1);
     }
     #[test]
     fn open_change_root_password() {
@@ -95,26 +90,26 @@ mod sysdb {
             )
         };
         {
-            let config = open(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()));
-            assert_eq!(config.state, SystemStoreInitState::Created);
+            let (config, state) = open(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()));
+            assert_eq!(state, SystemStoreInitState::Created);
             assert!(config
-                .store
+                .system_store()
                 .auth_data()
                 .read()
                 .verify_user("root", "password12345678")
                 .is_ok());
-            assert_eq!(config.store.host_data().settings_version(), 0);
-            assert_eq!(config.store.host_data().startup_counter(), 0);
+            assert_eq!(config.system_store().host_data().settings_version(), 0);
+            assert_eq!(config.system_store().host_data().startup_counter(), 0);
         }
-        let config = open(ConfigAuth::new(AuthDriver::Pwd, "password23456789".into()));
-        assert_eq!(config.state, SystemStoreInitState::UpdatedRoot);
+        let (config, state) = open(ConfigAuth::new(AuthDriver::Pwd, "password23456789".into()));
+        assert_eq!(state, SystemStoreInitState::UpdatedRoot);
         assert!(config
-            .store
+            .system_store()
             .auth_data()
             .read()
             .verify_user("root", "password23456789")
             .is_ok());
-        assert_eq!(config.store.host_data().settings_version(), 1);
-        assert_eq!(config.store.host_data().startup_counter(), 1);
+        assert_eq!(config.system_store().host_data().settings_version(), 1);
+        assert_eq!(config.system_store().host_data().startup_counter(), 1);
     }
 }

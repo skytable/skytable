@@ -25,6 +25,7 @@
 */
 
 use {
+    self::sys_store::SystemStore,
     super::{
         core::{dml::QueryExecMeta, model::Model, GlobalNS},
         data::uuid::Uuid,
@@ -40,11 +41,11 @@ use {
     tokio::sync::mpsc::unbounded_channel,
 };
 
-pub mod config;
 pub mod context;
 mod drivers;
 pub mod error;
 mod mgr;
+pub mod sys_store;
 #[cfg(test)]
 pub mod test_utils;
 mod util;
@@ -74,7 +75,7 @@ pub struct GlobalStateStart {
 /// Must be called iff this is the only thread calling it
 pub unsafe fn load_and_enable_all(
     gns: GlobalNS,
-    config: config::SysConfig,
+    config: SystemStore<LocalFS>,
     gns_driver: GNSTransactionDriverAnyFS<LocalFS>,
     model_drivers: ModelDrivers<LocalFS>,
 ) -> GlobalStateStart {
@@ -145,7 +146,7 @@ pub trait GlobalInstanceLike {
         }
     }
     // config handle
-    fn sys_cfg(&self) -> &config::SysConfig;
+    fn sys_store(&self) -> &SystemStore<Self::FileSystem>;
 }
 
 impl GlobalInstanceLike for Global {
@@ -169,7 +170,7 @@ impl GlobalInstanceLike for Global {
         self._get_max_delta_size()
     }
     // sys
-    fn sys_cfg(&self) -> &config::SysConfig {
+    fn sys_store(&self) -> &SystemStore<Self::FileSystem> {
         &self.get_state().config
     }
     // model
@@ -264,7 +265,7 @@ struct GlobalState {
     gns_driver: drivers::FractalGNSDriver<LocalFS>,
     mdl_driver: RwLock<ModelDrivers<LocalFS>>,
     task_mgr: mgr::FractalMgr,
-    config: config::SysConfig,
+    config: SystemStore<LocalFS>,
 }
 
 impl GlobalState {
@@ -273,7 +274,7 @@ impl GlobalState {
         gns_driver: drivers::FractalGNSDriver<LocalFS>,
         mdl_driver: RwLock<ModelDrivers<LocalFS>>,
         task_mgr: mgr::FractalMgr,
-        config: config::SysConfig,
+        config: SystemStore<LocalFS>,
     ) -> Self {
         Self {
             gns,

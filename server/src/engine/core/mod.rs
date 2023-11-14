@@ -24,22 +24,24 @@
  *
 */
 
-use self::dml::QueryExecMeta;
-pub use self::util::{EntityID, EntityIDRef};
-use super::{fractal::GlobalInstanceLike, ql::ast::Entity};
+pub(in crate::engine) mod dcl;
 pub(in crate::engine) mod dml;
-pub mod exec;
+pub(in crate::engine) mod exec;
 pub(in crate::engine) mod index;
 pub(in crate::engine) mod model;
 pub(in crate::engine) mod query_meta;
-pub mod space;
+pub(in crate::engine) mod space;
+// util
 mod util;
 // test
 #[cfg(test)]
 pub(super) mod tests;
+// re-exports
+pub use self::util::{EntityID, EntityIDRef};
 // imports
 use {
-    self::model::Model,
+    self::{dml::QueryExecMeta, model::Model},
+    super::{fractal::GlobalInstanceLike, ql::ast::Entity},
     crate::engine::{
         core::space::Space,
         error::{QueryError, QueryResult},

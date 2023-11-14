@@ -29,7 +29,7 @@ use {
         core::{dml, model::Model, space::Space},
         error::{QueryError, QueryResult},
         fractal::Global,
-        net::protocol::{Response, SQuery},
+        net::protocol::{ClientLocalState, Response, SQuery},
         ql::{
             ast::{traits::ASTNode, InplaceData, State},
             lex::{Keyword, KeywordStmt, Token},
@@ -38,8 +38,9 @@ use {
     core::ops::Deref,
 };
 
-pub async fn dispatch_to_executor<'a, 'b>(
-    global: &'b Global,
+pub async fn dispatch_to_executor<'a>(
+    global: &Global,
+    cstate: &ClientLocalState,
     query: SQuery<'a>,
 ) -> QueryResult<Response> {
     let tokens =
@@ -52,9 +53,9 @@ pub async fn dispatch_to_executor<'a, 'b>(
     };
     state.cursor_ahead();
     if stmt.is_blocking() {
-        run_blocking_stmt(state, stmt, global).await
+        run_blocking_stmt(global, cstate, state, stmt).await
     } else {
-        run_nb(global, state, stmt)
+        run_nb(global, cstate, state, stmt)
     }
 }
 
@@ -114,10 +115,15 @@ fn _call<A: ASTNode<'static> + core::fmt::Debug, T>(
 }
 
 async fn run_blocking_stmt(
+    global: &Global,
+    cstate: &ClientLocalState,
     mut state: State<'_, InplaceData>,
     stmt: KeywordStmt,
-    global: &Global,
 ) -> Result<Response, QueryError> {
+    if !cstate.is_root() {
+        // all the actions here need root permission
+        return Err(QueryError::SysPermissionDenied);
+    }
     let (a, b) = (&state.current()[0], &state.current()[1]);
     let sysctl = stmt == KeywordStmt::Sysctl;
     let create = stmt == KeywordStmt::Create;
@@ -132,24 +138,26 @@ async fn run_blocking_stmt(
     let d_m = (drop & Token![model].eq(a) & last_id) as u8 * 7;
     let fc = sysctl as u8 | c_s | c_m | a_s | a_m | d_s | d_m;
     state.cursor_ahead();
-    static BLK_EXEC: [fn(Global, RawSlice<Token<'static>>) -> QueryResult<()>; 8] = [
-        |_, _| Err(QueryError::QLUnknownStatement), // unknown
-        blocking_exec_sysctl,                       // sysctl
-        |g, t| call(g, t, Space::transactional_exec_create),
-        |g, t| call(g, t, Model::transactional_exec_create),
-        |g, t| call(g, t, Space::transactional_exec_alter),
-        |g, t| call(g, t, Model::transactional_exec_alter),
-        |g, t| call(g, t, Space::transactional_exec_drop),
-        |g, t| call(g, t, Model::transactional_exec_drop),
+    static BLK_EXEC: [fn(Global, &ClientLocalState, RawSlice<Token<'static>>) -> QueryResult<()>;
+        8] = [
+        |_, _, _| Err(QueryError::QLUnknownStatement), // unknown
+        blocking_exec_sysctl,                          // sysctl
+        |g, _, t| call(g, t, Space::transactional_exec_create),
+        |g, _, t| call(g, t, Model::transactional_exec_create),
+        |g, _, t| call(g, t, Space::transactional_exec_alter),
+        |g, _, t| call(g, t, Model::transactional_exec_alter),
+        |g, _, t| call(g, t, Space::transactional_exec_drop),
+        |g, _, t| call(g, t, Model::transactional_exec_drop),
     ];
     let r = unsafe {
         // UNSAFE(@ohsayan): the only await is within this block
         let c_glob = global.clone();
         let ptr = state.current().as_ptr() as usize;
         let len = state.current().len();
+        let cstate: &'static ClientLocalState = core::mem::transmute(cstate);
         tokio::task::spawn_blocking(move || {
             let tokens = RawSlice::new(ptr as *const Token, len);
-            BLK_EXEC[fc as usize](c_glob, tokens)?;
+            BLK_EXEC[fc as usize](c_glob, cstate, tokens)?;
             Ok(Response::Empty)
         })
         .await
@@ -157,8 +165,30 @@ async fn run_blocking_stmt(
     r.unwrap()
 }
 
-fn blocking_exec_sysctl(_: Global, _: RawSlice<Token<'static>>) -> QueryResult<()> {
-    todo!()
+fn blocking_exec_sysctl(
+    g: Global,
+    cstate: &ClientLocalState,
+    tokens: RawSlice<Token<'static>>,
+) -> QueryResult<()> {
+    let mut state = State::new_inplace(&tokens);
+    /*
+        currently supported: sysctl create user, sysctl drop user
+    */
+    if state.remaining() != 2 {
+        return Err(QueryError::QLInvalidSyntax);
+    }
+    let (a, b) = (state.fw_read(), state.fw_read());
+    match (a, b) {
+        (Token![create], Token::Ident(id)) if id.eq_ignore_ascii_case("user") => {
+            let useradd = ASTNode::from_state(&mut state)?;
+            super::dcl::create_user(&g, useradd)
+        }
+        (Token![drop], Token::Ident(id)) if id.eq_ignore_ascii_case("user") => {
+            let userdel = ASTNode::from_state(&mut state)?;
+            super::dcl::drop_user(&g, cstate, userdel)
+        }
+        _ => Err(QueryError::QLUnknownStatement),
+    }
 }
 
 /*
@@ -167,6 +197,7 @@ fn blocking_exec_sysctl(_: Global, _: RawSlice<Token<'static>>) -> QueryResult<(
 
 fn run_nb(
     global: &Global,
+    _cstate: &ClientLocalState,
     state: State<'_, InplaceData>,
     stmt: KeywordStmt,
 ) -> QueryResult<Response> {

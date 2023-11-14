@@ -52,6 +52,25 @@ use {
 };
 
 #[derive(Debug, PartialEq)]
+pub struct ClientLocalState {
+    username: Box<str>,
+    root: bool,
+    hs: handshake::CHandshakeStatic,
+}
+
+impl ClientLocalState {
+    pub fn new(username: Box<str>, root: bool, hs: handshake::CHandshakeStatic) -> Self {
+        Self { username, root, hs }
+    }
+    pub fn is_root(&self) -> bool {
+        self.root
+    }
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Response {
     Empty,
     EncodedAB(Box<[u8]>, Box<[u8]>),
@@ -63,7 +82,7 @@ pub(super) async fn query_loop<S: Socket>(
     global: &Global,
 ) -> IoResult<QueryLoopResult> {
     // handshake
-    let _ = match do_handshake(con, buf, global).await? {
+    let client_state = match do_handshake(con, buf, global).await? {
         PostHandshake::Okay(hs) => hs,
         PostHandshake::ConnectionClosedFin => return Ok(QueryLoopResult::Fin),
         PostHandshake::ConnectionClosedRst => return Ok(QueryLoopResult::Rst),
@@ -116,7 +135,7 @@ pub(super) async fn query_loop<S: Socket>(
             }
         };
         // now execute query
-        match engine::core::exec::dispatch_to_executor(global, sq).await {
+        match engine::core::exec::dispatch_to_executor(global, &client_state, sq).await {
             Ok(Response::Empty) => {
                 con.write_all(&[0x12]).await?;
             }
@@ -137,7 +156,7 @@ pub(super) async fn query_loop<S: Socket>(
 
 #[derive(Debug, PartialEq)]
 enum PostHandshake {
-    Okay(handshake::CHandshakeStatic),
+    Okay(ClientLocalState),
     Error(ProtocolError),
     ConnectionClosedFin,
     ConnectionClosedRst,
@@ -197,14 +216,20 @@ async fn do_handshake<S: Socket>(
     }
     match core::str::from_utf8(handshake.hs_auth().username()) {
         Ok(uname) => {
-            let auth = global.sys_cfg().auth_data().read();
-            if auth
-                .verify_user(uname, handshake.hs_auth().password())
-                .is_ok()
-            {
-                let hs_static = handshake.hs_static();
-                buf.advance(cursor);
-                return Ok(PostHandshake::Okay(hs_static));
+            let auth = global.sys_store().system_store().auth_data().read();
+            let r = auth.verify_user_is_root(uname, handshake.hs_auth().password());
+            match r {
+                Ok(is_root) => {
+                    let hs = handshake.hs_static();
+                    let ret = Ok(PostHandshake::Okay(ClientLocalState::new(
+                        uname.into(),
+                        is_root,
+                        hs,
+                    )));
+                    buf.advance(cursor);
+                    return ret;
+                }
+                Err(_) => {}
             }
         }
         Err(_) => {}

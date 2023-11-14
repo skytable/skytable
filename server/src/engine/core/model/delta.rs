@@ -24,18 +24,13 @@
  *
 */
 
-#![allow(unused)]
-
 use {
     super::{Fields, Model},
-    crate::{
-        engine::{
-            core::{dml::QueryExecMeta, index::Row},
-            fractal::{FractalToken, GlobalInstanceLike},
-            sync::atm::Guard,
-            sync::queue::Queue,
-        },
-        util::compiler,
+    crate::engine::{
+        core::{dml::QueryExecMeta, index::Row},
+        fractal::{FractalToken, GlobalInstanceLike},
+        sync::atm::Guard,
+        sync::queue::Queue,
     },
     parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     std::{
@@ -70,8 +65,8 @@ impl PartialEq for ISyncMatrix {
 #[derive(Debug)]
 /// Read model, write new data
 pub struct IRModelSMData<'a> {
-    rmodel: RwLockReadGuard<'a, ()>,
-    mdata: RwLockReadGuard<'a, ()>,
+    _rmodel: RwLockReadGuard<'a, ()>,
+    _mdata: RwLockReadGuard<'a, ()>,
     fields: &'a Fields,
 }
 
@@ -80,8 +75,8 @@ impl<'a> IRModelSMData<'a> {
         let rmodel = m.sync_matrix().v_priv_model_alter.read();
         let mdata = m.sync_matrix().v_priv_data_new_or_revise.read();
         Self {
-            rmodel,
-            mdata,
+            _rmodel: rmodel,
+            _mdata: mdata,
             fields: unsafe {
                 // UNSAFE(@ohsayan): we already have acquired this resource
                 m._read_fields()
@@ -96,14 +91,14 @@ impl<'a> IRModelSMData<'a> {
 #[derive(Debug)]
 /// Read model
 pub struct IRModel<'a> {
-    rmodel: RwLockReadGuard<'a, ()>,
+    _rmodel: RwLockReadGuard<'a, ()>,
     fields: &'a Fields,
 }
 
 impl<'a> IRModel<'a> {
     pub fn new(m: &'a Model) -> Self {
         Self {
-            rmodel: m.sync_matrix().v_priv_model_alter.read(),
+            _rmodel: m.sync_matrix().v_priv_model_alter.read(),
             fields: unsafe {
                 // UNSAFE(@ohsayan): we already have acquired this resource
                 m._read_fields()
@@ -118,14 +113,14 @@ impl<'a> IRModel<'a> {
 #[derive(Debug)]
 /// Write model
 pub struct IWModel<'a> {
-    wmodel: RwLockWriteGuard<'a, ()>,
+    _wmodel: RwLockWriteGuard<'a, ()>,
     fields: &'a mut Fields,
 }
 
 impl<'a> IWModel<'a> {
     pub fn new(m: &'a Model) -> Self {
         Self {
-            wmodel: m.sync_matrix().v_priv_model_alter.write(),
+            _wmodel: m.sync_matrix().v_priv_model_alter.write(),
             fields: unsafe {
                 // UNSAFE(@ohsayan): we have exclusive access to this resource
                 m._read_fields_mut()
@@ -210,9 +205,6 @@ impl DeltaState {
     }
     pub fn create_new_data_delta_version(&self) -> DeltaVersion {
         DeltaVersion(self.__data_delta_step())
-    }
-    pub fn get_data_delta_size(&self) -> usize {
-        self.data_deltas_size.load(Ordering::Acquire)
     }
 }
 
@@ -356,7 +348,7 @@ impl<'a> SchemaDeltaIndexRGuard<'a> {
 
 #[derive(Debug, Clone)]
 pub struct DataDelta {
-    schema_version: DeltaVersion,
+    _schema_version: DeltaVersion,
     data_version: DeltaVersion,
     row: Row,
     change: DataDeltaKind,
@@ -370,14 +362,11 @@ impl DataDelta {
         change: DataDeltaKind,
     ) -> Self {
         Self {
-            schema_version,
+            _schema_version: schema_version,
             data_version,
             row,
             change,
         }
-    }
-    pub fn schema_version(&self) -> DeltaVersion {
-        self.schema_version
     }
     pub fn data_version(&self) -> DeltaVersion {
         self.data_version

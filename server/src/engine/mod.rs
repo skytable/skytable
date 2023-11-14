@@ -47,10 +47,12 @@ pub use error::RuntimeResult;
 use {
     self::{
         config::{ConfigEndpoint, ConfigEndpointTls, ConfigMode, ConfigReturn, Configuration},
-        fractal::context::{self, Subsystem},
+        fractal::{
+            context::{self, Subsystem},
+            sys_store::SystemStore,
+        },
         storage::v1::{
             loader::{self, SEInitState},
-            sysdb::{self, SystemStoreInit},
             LocalFS,
         },
     },
@@ -83,8 +85,7 @@ pub fn load_all() -> RuntimeResult<(Configuration, fractal::GlobalStateStart)> {
     // restore system database
     info!("loading system database ...");
     context::set_dmsg("loading system database");
-    let SystemStoreInit { store, state } =
-        sysdb::open_system_database::<LocalFS>(config.auth.clone(), config.mode)?;
+    let (store, state) = SystemStore::<LocalFS>::open_or_restore(config.auth.clone(), config.mode)?;
     let sysdb_is_new = state.is_created();
     if state.is_existing_updated_root() {
         warn!("the root account was updated");

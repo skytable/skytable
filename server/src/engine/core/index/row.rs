@@ -110,7 +110,7 @@ impl Row {
             data,
             schema_version,
             txn_revised_data,
-            DeltaVersion::__new(0),
+            DeltaVersion::genesis(),
         )
     }
     pub fn new_restored(

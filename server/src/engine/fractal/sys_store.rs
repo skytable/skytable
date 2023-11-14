@@ -24,16 +24,30 @@
  *
 */
 
-use crate::engine::config::ConfigAuth;
-
 use {
     crate::engine::{
-        config::ConfigMode,
+        config::{ConfigAuth, ConfigMode},
         error::{QueryError, QueryResult},
+        storage::v1::RawFSInterface,
     },
     parking_lot::RwLock,
-    std::collections::{hash_map::Entry, HashMap},
+    std::{
+        collections::{hash_map::Entry, HashMap},
+        marker::PhantomData,
+    },
 };
+
+#[derive(Debug)]
+pub struct SystemStore<Fs> {
+    syscfg: SysConfig,
+    _fs: PhantomData<Fs>,
+}
+
+impl<Fs> SystemStore<Fs> {
+    pub fn system_store(&self) -> &SysConfig {
+        &self.syscfg
+    }
+}
 
 #[derive(Debug)]
 /// The global system configuration
@@ -63,10 +77,10 @@ impl SysConfig {
     pub fn new_full(new_auth: ConfigAuth, host_data: SysHostData, run_mode: ConfigMode) -> Self {
         Self::new(
             RwLock::new(SysAuth::new(
-                rcrypt::hash(new_auth.root_key, rcrypt::DEFAULT_COST)
+                into_dict!(SysAuthUser::USER_ROOT => SysAuthUser::new(
+                rcrypt::hash(new_auth.root_key.as_str(), rcrypt::DEFAULT_COST)
                     .unwrap()
-                    .into_boxed_slice(),
-                Default::default(),
+                    .into_boxed_slice())),
             )),
             host_data,
             run_mode,
@@ -80,10 +94,10 @@ impl SysConfig {
     pub(super) fn test_default() -> Self {
         Self {
             auth_data: RwLock::new(SysAuth::new(
+                into_dict!(SysAuthUser::USER_ROOT => SysAuthUser::new(
                 rcrypt::hash("password12345678", rcrypt::DEFAULT_COST)
                     .unwrap()
-                    .into_boxed_slice(),
-                Default::default(),
+                    .into_boxed_slice())),
             )),
             host_data: SysHostData::new(0, 0),
             run_mode: ConfigMode::Dev,
@@ -133,6 +147,51 @@ impl SysHostData {
     }
 }
 
+impl<Fs: RawFSInterface> SystemStore<Fs> {
+    pub fn _new(syscfg: SysConfig) -> Self {
+        Self {
+            syscfg,
+            _fs: PhantomData,
+        }
+    }
+    /// Create a new user with the given details
+    pub fn create_new_user(&self, username: String, password: String) -> QueryResult<()> {
+        // TODO(@ohsayan): we want to be very careful with this
+        let _username = username.clone();
+        let mut auth = self.system_store().auth_data().write();
+        match auth.users.entry(username.into()) {
+            Entry::Vacant(ve) => {
+                ve.insert(SysAuthUser::new(
+                    rcrypt::hash(password, rcrypt::DEFAULT_COST)
+                        .unwrap()
+                        .into_boxed_slice(),
+                ));
+                self.sync_db_or_rollback(|| {
+                    auth.users.remove(_username.as_str());
+                })?;
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(QueryError::SysAuthError),
+        }
+    }
+    pub fn drop_user(&self, username: &str) -> QueryResult<()> {
+        let mut auth = self.system_store().auth_data().write();
+        if username == SysAuthUser::USER_ROOT {
+            // you can't remove root!
+            return Err(QueryError::SysAuthError);
+        }
+        match auth.users.remove_entry(username) {
+            Some((username, user)) => {
+                self.sync_db_or_rollback(|| {
+                    let _ = auth.users.insert(username, user);
+                })?;
+                Ok(())
+            }
+            None => Err(QueryError::SysAuthError),
+        }
+    }
+}
+
 /*
     auth
 */
@@ -140,28 +199,24 @@ impl SysHostData {
 #[derive(Debug, PartialEq)]
 /// The auth data section (system.auth)
 pub struct SysAuth {
-    root_key: Box<[u8]>,
     users: HashMap<Box<str>, SysAuthUser>,
 }
 
 impl SysAuth {
     /// New [`SysAuth`] with the given settings
-    pub fn new(root_key: Box<[u8]>, users: HashMap<Box<str>, SysAuthUser>) -> Self {
-        Self { root_key, users }
+    pub fn new(users: HashMap<Box<str>, SysAuthUser>) -> Self {
+        Self { users }
     }
-    /// Create a new user with the given details
-    #[allow(unused)]
-    pub fn create_new_user(&mut self, username: &str, password: &str) -> QueryResult<()> {
-        match self.users.entry(username.into()) {
-            Entry::Vacant(ve) => {
-                ve.insert(SysAuthUser::new(
-                    rcrypt::hash(password, rcrypt::DEFAULT_COST)
-                        .unwrap()
-                        .into_boxed_slice(),
-                ));
-                Ok(())
+    pub fn verify_user_is_root<T: AsRef<[u8]> + ?Sized>(
+        &self,
+        username: &str,
+        password: &T,
+    ) -> QueryResult<bool> {
+        match self.users.get(username) {
+            Some(user) if rcrypt::verify(password, user.key()).unwrap() => {
+                Ok(username == SysAuthUser::USER_ROOT)
             }
-            Entry::Occupied(_) => Err(QueryError::SysAuthError),
+            Some(_) | None => Err(QueryError::SysAuthError),
         }
     }
     /// Verify the user with the given details
@@ -170,20 +225,7 @@ impl SysAuth {
         username: &str,
         password: &T,
     ) -> QueryResult<()> {
-        if username == "root" {
-            if rcrypt::verify(password, self.root_key()).unwrap() {
-                return Ok(());
-            } else {
-                return Err(QueryError::SysAuthError);
-            }
-        }
-        match self.users.get(username) {
-            Some(user) if rcrypt::verify(password, user.key()).unwrap() => Ok(()),
-            Some(_) | None => Err(QueryError::SysAuthError),
-        }
-    }
-    pub fn root_key(&self) -> &[u8] {
-        &self.root_key
+        self.verify_user_is_root(username, password).map(|_| ())
     }
     pub fn users(&self) -> &HashMap<Box<str>, SysAuthUser> {
         &self.users
@@ -197,6 +239,7 @@ pub struct SysAuthUser {
 }
 
 impl SysAuthUser {
+    pub const USER_ROOT: &'static str = "root";
     /// Create a new [`SysAuthUser`]
     pub fn new(key: Box<[u8]>) -> Self {
         Self { key }
