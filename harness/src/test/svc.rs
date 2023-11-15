@@ -26,12 +26,16 @@
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+
 use {
     crate::{
         util::{self},
         HarnessError, HarnessResult, ROOT_DIR,
     },
-    skytable::{error::Error, Connection, SkyResult},
+    skytable::{
+        error::{ClientResult, Error},
+        Config, Connection,
+    },
     std::{
         io::ErrorKind,
         path::Path,
@@ -45,15 +49,16 @@ const POWERSHELL_SCRIPT: &str = include_str!("../../../ci/windows/stop.ps1");
 #[cfg(windows)]
 /// Flag for new console Window
 const CREATE_NEW_CONSOLE: u32 = 0x00000010;
-pub(super) const SERVERS: [(&str, [u16; 2]); 3] = [
-    ("server1", [2003, 2004]),
-    ("server2", [2005, 2006]),
-    ("server3", [2007, 2008]),
-];
+pub(super) const SERVERS: [(&str, [u16; 2]); 1] = [("server1", [2003, 2004])];
 /// The test suite server host
 const TESTSUITE_SERVER_HOST: &str = "127.0.0.1";
 /// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
+
+fn connect_db(host: &str, port: u16) -> ClientResult<Connection> {
+    let cfg = Config::new(host, port, "root", "password12345678");
+    cfg.connect()
+}
 
 /// Get the command to start the provided server1
 pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Path>) -> Command {
@@ -63,8 +68,8 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
             .to_string_lossy()
             .to_string(),
         // config
-        "--withconfig".to_owned(),
-        format!("{WORKSPACE_ROOT}ci/{server_id}.toml"),
+        "--config".to_owned(),
+        format!("{WORKSPACE_ROOT}ci/{server_id}.yaml"),
     ];
     let mut cmd = util::assemble_command_from_slice(&args);
     cmd.current_dir(server_id);
@@ -94,7 +99,7 @@ pub(super) fn wait_for_server_exit() -> HarnessResult<()> {
     Ok(())
 }
 
-fn connection_refused<T>(input: SkyResult<T>) -> HarnessResult<bool> {
+fn connection_refused<T>(input: ClientResult<T>) -> HarnessResult<bool> {
     match input {
         Ok(_) => Ok(false),
         Err(Error::IoError(e))
@@ -118,7 +123,7 @@ fn wait_for_startup() -> HarnessResult<()> {
         for port in ports {
             let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
             let mut backoff = 1;
-            let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
+            let mut con = connect_db(TESTSUITE_SERVER_HOST, port);
             while connection_refused(con)? {
                 if backoff > 64 {
                     // enough sleeping, return an error
@@ -131,7 +136,7 @@ fn wait_for_startup() -> HarnessResult<()> {
                 "Server at {connection_string} not started. Sleeping for {backoff} second(s) ..."
             );
                 util::sleep_sec(backoff);
-                con = Connection::new(TESTSUITE_SERVER_HOST, port);
+                con = connect_db(TESTSUITE_SERVER_HOST, port);
                 backoff *= 2;
             }
             info!("Server at {connection_string} has started");
@@ -148,7 +153,7 @@ fn wait_for_shutdown() -> HarnessResult<()> {
         for port in ports {
             let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
             let mut backoff = 1;
-            let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
+            let mut con = connect_db(TESTSUITE_SERVER_HOST, port);
             while !connection_refused(con)? {
                 if backoff > 64 {
                     // enough sleeping, return an error
@@ -161,7 +166,7 @@ fn wait_for_shutdown() -> HarnessResult<()> {
                 "Server at {connection_string} still active. Sleeping for {backoff} second(s) ..."
             );
                 util::sleep_sec(backoff);
-                con = Connection::new(TESTSUITE_SERVER_HOST, port);
+                con = connect_db(TESTSUITE_SERVER_HOST, port);
                 backoff *= 2;
             }
             info!("Server at {connection_string} has stopped accepting connections");

@@ -1,5 +1,5 @@
 Skytable is a free and open-source NoSQL database that aims
 to provide flexibility in data modeling at scale.
 The `skytable` package contains the database server (`skyd`),
-an interactive command-line client (`skysh`), a benchmarking
-tool (`sky-bench`) and a migration tool (`sky-migrate`).
+an interactive command-line client (`skysh`) and a benchmarking
+tool (`sky-bench`).

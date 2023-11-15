@@ -7,8 +7,6 @@ members = [
     "sky-bench",
     "sky-macros",
     "libstress",
-    "stress-test",
-    "sky-migrate",
     "harness",
 ]
 

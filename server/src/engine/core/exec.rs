@@ -187,6 +187,12 @@ fn blocking_exec_sysctl(
             let userdel = ASTNode::from_state(&mut state)?;
             super::dcl::drop_user(&g, cstate, userdel)
         }
+        (Token::Ident(k1), Token::Ident(k2))
+            if k1.eq_ignore_ascii_case("report") && k2.eq_ignore_ascii_case("status") =>
+        {
+            // TODO(@ohsayan): replace dummy endpoint with actual `system report status` responses
+            Ok(())
+        }
         _ => Err(QueryError::QLUnknownStatement),
     }
 }

@@ -1,3 +1,0 @@
-# This is a 'bad' configuration file since it contains an invalid port
-[server]
-port = 20033002

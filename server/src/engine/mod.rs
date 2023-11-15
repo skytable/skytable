@@ -144,14 +144,16 @@ impl EndpointListeners {
 
 pub async fn start(
     termsig: TerminationSignal,
-    Configuration { endpoints, .. }: Configuration,
+    Configuration {
+        endpoints, system, ..
+    }: Configuration,
     fractal::GlobalStateStart { global, boot }: fractal::GlobalStateStart,
 ) -> RuntimeResult<()> {
     // create our system-wide channel
     let (signal, _) = broadcast::channel::<()>(1);
     // start our services
     context::set_dmsg("starting fractal engine");
-    let fractal_handle = boot.boot(&signal);
+    let fractal_handle = boot.boot(&signal, system.reliability_system_window);
     // create our server
     context::set(Subsystem::Network, "initializing endpoints");
     let str;

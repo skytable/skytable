@@ -217,7 +217,7 @@ async fn do_handshake<S: Socket>(
     match core::str::from_utf8(handshake.hs_auth().username()) {
         Ok(uname) => {
             let auth = global.sys_store().system_store().auth_data().read();
-            let r = auth.verify_user_is_root(uname, handshake.hs_auth().password());
+            let r = auth.verify_user_check_root(uname, handshake.hs_auth().password());
             match r {
                 Ok(is_root) => {
                     let hs = handshake.hs_static();

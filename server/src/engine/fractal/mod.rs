@@ -51,7 +51,7 @@ pub mod test_utils;
 mod util;
 pub use {
     drivers::FractalModelDriver,
-    mgr::{CriticalTask, GenericTask, Task},
+    mgr::{CriticalTask, GenericTask, Task, GENERAL_EXECUTOR_WINDOW},
     util::FractalToken,
 };
 

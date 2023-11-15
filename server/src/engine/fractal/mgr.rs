@@ -46,6 +46,8 @@ use {
     },
 };
 
+pub const GENERAL_EXECUTOR_WINDOW: u64 = 5 * 60;
+
 /// A task for the [`FractalMgr`] to perform
 pub struct Task<T> {
     threshold: usize,
@@ -190,13 +192,13 @@ impl FractalBoot {
             hp_recv,
         }
     }
-    pub fn boot(self, sigterm: &broadcast::Sender<()>) -> FractalHandle {
+    pub fn boot(self, sigterm: &broadcast::Sender<()>, rs_window: u64) -> FractalHandle {
         let Self {
             global,
             lp_recv: lp_receiver,
             hp_recv: hp_receiver,
         } = self;
-        FractalMgr::start_all(global, sigterm, lp_receiver, hp_receiver)
+        FractalMgr::start_all(global, sigterm, lp_receiver, hp_receiver, rs_window)
     }
 }
 
@@ -207,6 +209,7 @@ impl FractalMgr {
         sigterm: &broadcast::Sender<()>,
         lp_receiver: UnboundedReceiver<Task<GenericTask>>,
         hp_receiver: UnboundedReceiver<Task<CriticalTask>>,
+        rs_window: u64,
     ) -> FractalHandle {
         let fractal_mgr = global.get_state().fractal_mgr();
         let global_1 = global.clone();
@@ -217,7 +220,14 @@ impl FractalMgr {
         });
         let sigterm_rx = sigterm.subscribe();
         let lp_handle = tokio::spawn(async move {
-            FractalMgr::general_executor_svc(fractal_mgr, global_2, lp_receiver, sigterm_rx).await
+            FractalMgr::general_executor_svc(
+                fractal_mgr,
+                global_2,
+                lp_receiver,
+                sigterm_rx,
+                rs_window,
+            )
+            .await
         });
         FractalHandle {
             hp_handle,
@@ -228,7 +238,6 @@ impl FractalMgr {
 
 // services
 impl FractalMgr {
-    const GENERAL_EXECUTOR_WINDOW: u64 = 5 * 60;
     /// The high priority executor service runs in the background to take care of high priority tasks and take any
     /// appropriate action. It will exclusively own the high priority queue since it is the only broker that is
     /// allowed to perform HP tasks
@@ -323,7 +332,9 @@ impl FractalMgr {
         global: super::Global,
         mut lpq: UnboundedReceiver<Task<GenericTask>>,
         mut sigterm: broadcast::Receiver<()>,
+        rs_window: u64,
     ) {
+        let dur = std::time::Duration::from_secs(rs_window);
         loop {
             tokio::select! {
                 _ = sigterm.recv() => {
@@ -333,7 +344,7 @@ impl FractalMgr {
                     info!("flp: exited executor service");
                     break;
                 },
-                _ = tokio::time::sleep(std::time::Duration::from_secs(Self::GENERAL_EXECUTOR_WINDOW)) => {
+                _ = tokio::time::sleep(dur) => {
                     let global = global.clone();
                     tokio::task::spawn_blocking(|| self.general_executor_model_maintenance(global)).await.unwrap()
                 }

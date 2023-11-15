@@ -1,6 +1,0 @@
-[server]
-host = "127.0.0.1"
-port = 2003
-
-[bgsave]
-every = 600

@@ -7,9 +7,7 @@ edition = "2021"
 
 [dependencies]
 # internal deps
-skytable = { git = "https://github.com/skytable/client-rust.git", features = [
-    "sync",
-], default-features = false }
+skytable = { git = "https://github.com/skytable/client-rust.git", branch = "octave" }
 libsky = { path = "../libsky" }
 # external deps
 env_logger = "0.10.0"

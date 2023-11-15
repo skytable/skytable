@@ -1,5 +1,5 @@
 /*
- * Created on Mon Aug 08 2022
+ * Created on Wed Nov 15 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,40 +24,4 @@
  *
 */
 
-use {
-    clap::{load_yaml, App},
-    config::ServerConfig,
-    env_logger::Builder,
-    std::{env, process},
-};
-#[macro_use]
-extern crate log;
-
-mod bench;
-mod config;
-mod error;
-mod util;
-
-fn main() {
-    Builder::new()
-        .parse_filters(&env::var("SKYBENCH_LOG").unwrap_or_else(|_| "info".to_owned()))
-        .init();
-    if let Err(e) = run() {
-        error!("sky-bench exited with error: {}", e);
-        process::exit(0x01);
-    }
-}
-
-fn run() -> error::BResult<()> {
-    // init CLI arg parser
-    let cli_args = load_yaml!("cli.yml");
-    let cli = App::from_yaml(cli_args);
-    let matches = cli.get_matches();
-
-    // parse args
-    let cfg = ServerConfig::new(&matches)?;
-
-    // run our task
-    bench::run_bench(&cfg, matches)?;
-    util::cleanup(&cfg)
-}
+fn main() {}

@@ -83,7 +83,9 @@ fn create_space() {
                 &*space,
                 &Space::new_restore_empty(
                     uuid,
-                    into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
+                    into_dict!("env" => DictEntryGeneric::Map(
+                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
+                    ))
                 )
             );
         })
@@ -111,7 +113,9 @@ fn alter_space() {
                 &*space,
                 &Space::new_restore_empty(
                     uuid,
-                    into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536)))
+                    into_dict!("env" => DictEntryGeneric::Map(
+                        into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint_default(65536))
+                    )))
                 )
             );
         })

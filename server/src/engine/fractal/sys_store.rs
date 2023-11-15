@@ -207,7 +207,7 @@ impl SysAuth {
     pub fn new(users: HashMap<Box<str>, SysAuthUser>) -> Self {
         Self { users }
     }
-    pub fn verify_user_is_root<T: AsRef<[u8]> + ?Sized>(
+    pub fn verify_user_check_root<T: AsRef<[u8]> + ?Sized>(
         &self,
         username: &str,
         password: &T,
@@ -225,7 +225,7 @@ impl SysAuth {
         username: &str,
         password: &T,
     ) -> QueryResult<()> {
-        self.verify_user_is_root(username, password).map(|_| ())
+        self.verify_user_check_root(username, password).map(|_| ())
     }
     pub fn users(&self) -> &HashMap<Box<str>, SysAuthUser> {
         &self.users

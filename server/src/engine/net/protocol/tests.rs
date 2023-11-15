@@ -39,7 +39,7 @@ use crate::engine::{
     client handshake
 */
 
-const FULL_HANDSHAKE_WITH_AUTH: [u8; 23] = *b"H\0\0\0\0\x015\n8\nsayanpass1234";
+const FULL_HANDSHAKE_WITH_AUTH: [u8; 23] = *b"H\0\0\0\0\x005\n8\nsayanpass1234";
 
 const STATIC_HANDSHAKE_WITH_AUTH: CHandshakeStatic = CHandshakeStatic::new(
     HandshakeVersion::Original,

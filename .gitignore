@@ -15,3 +15,4 @@ snapstore.partmap
 *.deb
 .skytest_*
 *.pem
+passphrase.txt

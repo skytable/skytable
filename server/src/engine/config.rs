@@ -25,7 +25,7 @@
 */
 
 use {
-    crate::engine::error::RuntimeResult,
+    crate::engine::{error::RuntimeResult, fractal},
     core::fmt,
     serde::Deserialize,
     std::{collections::HashMap, fs},
@@ -97,7 +97,6 @@ impl Configuration {
     }
     const DEFAULT_HOST: &'static str = "127.0.0.1";
     const DEFAULT_PORT_TCP: u16 = 2003;
-    const DEFAULT_RELIABILITY_SVC_PING: u64 = 5 * 60;
     pub fn default_dev_mode(auth: DecodedAuth) -> Self {
         Self {
             endpoints: ConfigEndpoint::Insecure(ConfigEndpointTcp {
@@ -105,9 +104,7 @@ impl Configuration {
                 port: Self::DEFAULT_PORT_TCP,
             }),
             mode: ConfigMode::Dev,
-            system: ConfigSystem {
-                reliability_system_window: Self::DEFAULT_RELIABILITY_SVC_PING,
-            },
+            system: ConfigSystem::new(fractal::GENERAL_EXECUTOR_WINDOW),
             auth: ConfigAuth::new(auth.plugin, auth.root_pass),
         }
     }
@@ -204,11 +201,10 @@ pub enum ConfigMode {
 /// System configuration settings
 pub struct ConfigSystem {
     /// time window in seconds for the reliability system to kick-in automatically
-    reliability_system_window: u64,
+    pub reliability_system_window: u64,
 }
 
 impl ConfigSystem {
-    #[cfg(test)]
     pub fn new(reliability_system_window: u64) -> Self {
         Self {
             reliability_system_window,
@@ -472,6 +468,7 @@ fn decode_tls_ep(
     host: &str,
     port: u16,
 ) -> RuntimeResult<DecodedEPSecureConfig> {
+    super::fractal::context::set_dmsg("loading TLS configuration from disk");
     let tls_key = fs::read_to_string(key_path)?;
     let tls_cert = fs::read_to_string(cert_path)?;
     let tls_priv_key_passphrase = fs::read_to_string(pkey_pass)?;
@@ -653,6 +650,7 @@ Flags:
   -v, --version              Display the version number and exit.
 
 Options:
+  --config <path>             Set configuration options using the config file
   --tlscert <path>            Specify the path to the TLS certificate.
   --tlskey <path>             Specify the path to the TLS private key.
   --endpoint <definition>     Designate an endpoint. Format: protocol@host:port.
@@ -1075,6 +1073,7 @@ fn get_file_from_store(filename: &str) -> RuntimeResult<String> {
     }
     #[cfg(not(test))]
     {
+        super::fractal::context::set_dmsg("loading configuration file from disk");
         f = Ok(fs::read_to_string(filename)?);
     }
     f
@@ -1202,6 +1201,12 @@ fn check_config_file(
         match config_from_file.endpoints.as_mut() {
             Some(ep) => match ep.secure.as_mut() {
                 Some(secure_ep) => {
+                    super::fractal::context::set_dmsg("loading TLS configuration from disk");
+                    dbg!(
+                        &secure_ep.cert,
+                        &secure_ep.private_key,
+                        &secure_ep.pkey_passphrase
+                    );
                     let cert = fs::read_to_string(&secure_ep.cert)?;
                     let private_key = fs::read_to_string(&secure_ep.private_key)?;
                     let private_key_passphrase = fs::read_to_string(&secure_ep.pkey_passphrase)?;

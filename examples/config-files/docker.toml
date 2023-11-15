@@ -1,5 +1,0 @@
-# this is the default configuration file for Docker images. Modify it as required
-[server]
-host = "0.0.0.0"
-port = 2003
-noart = true
