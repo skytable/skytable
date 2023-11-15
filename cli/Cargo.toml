@@ -10,3 +10,5 @@ edition = "2021"
 # internal deps
 libsky = { path = "../libsky" }
 skytable = { git = "https://github.com/skytable/client-rust.git", branch = "octave" }
+crossterm = "0.27.0"
+rustyline = "12.0.0"

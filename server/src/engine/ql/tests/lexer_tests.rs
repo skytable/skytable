@@ -195,7 +195,7 @@ fn make_safe_query(a: &[u8], b: &[u8]) -> (Vec<u8>, usize) {
 fn safe_query_all_literals() {
     let (query, query_window) = make_safe_query(
         b"? ? ? ? ? ? ?",
-        b"\x00\x01\x01\x021234\n\x03-1234\n\x049\n1234.5678\x0513\nbinarywithlf\n\x065\nsayan",
+        b"\x00\x01\x01\x021234\n\x03-1234\n\x041234.5678\n\x0513\nbinarywithlf\n\x065\nsayan",
     );
     let ret = lex_secure(&query, query_window).unwrap();
     assert_eq!(

@@ -24,32 +24,37 @@
  *
 */
 
-macro_rules! fatal {
-    ($($arg:tt)*) => {{
-        eprintln!($($arg)*);
-        std::process::exit(0x01);
-    }}
+use core::fmt;
+
+pub type CliResult<T> = Result<T, CliError>;
+
+#[derive(Debug)]
+pub enum CliError {
+    QueryError(String),
+    ArgsErr(String),
+    ClientError(skytable::error::Error),
+    IoError(std::io::Error),
 }
 
-mod args;
-mod error;
-mod query;
-mod repl;
-mod resp;
-
-use args::Task;
-
-fn main() {
-    match run() {
-        Ok(()) => {}
-        Err(e) => fatal!("cli error: {e}"),
+impl From<skytable::error::Error> for CliError {
+    fn from(cle: skytable::error::Error) -> Self {
+        Self::ClientError(cle)
     }
 }
 
-fn run() -> error::CliResult<()> {
-    match args::parse()? {
-        Task::HelpMessage(msg) => println!("{msg}"),
-        Task::OpenShell(cfg) => repl::start(cfg)?,
+impl From<std::io::Error> for CliError {
+    fn from(ioe: std::io::Error) -> Self {
+        Self::IoError(ioe)
     }
-    Ok(())
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ArgsErr(e) => write!(f, "incorrect arguments. {e}"),
+            Self::ClientError(e) => write!(f, "client error. {e}"),
+            Self::IoError(e) => write!(f, "i/o error. {e}"),
+            Self::QueryError(e) => write!(f, "invalid query. {e}"),
+        }
+    }
 }

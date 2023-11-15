@@ -104,6 +104,9 @@ impl<'a, T> Scanner<'a, T> {
 }
 
 impl<'a, T> Scanner<'a, T> {
+    pub fn inner_buffer(&self) -> &'a [T] {
+        &self.d
+    }
     /// Manually set the cursor position
     ///
     /// ## Safety

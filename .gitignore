@@ -16,3 +16,5 @@ snapstore.partmap
 .skytest_*
 *.pem
 passphrase.txt
+*.db-tlog
+*.db
