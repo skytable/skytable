@@ -82,17 +82,8 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
     ) -> RuntimeResult<(Self, SystemStoreInitState)> {
         Self::open_with_name(Self::SYSDB_PATH, Self::SYSDB_COW_PATH, auth, run_mode)
     }
-    pub fn sync_db_or_rollback(&self, rb: impl FnOnce()) -> RuntimeResult<()> {
-        match self.sync_db() {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                rb();
-                Err(e)
-            }
-        }
-    }
-    pub fn sync_db(&self) -> RuntimeResult<()> {
-        self._sync_with(Self::SYSDB_PATH, Self::SYSDB_COW_PATH)
+    pub fn sync_db(&self, auth: &SysAuth) -> RuntimeResult<()> {
+        self._sync_with(Self::SYSDB_PATH, Self::SYSDB_COW_PATH, auth)
     }
     pub fn open_with_name(
         sysdb_name: &str,
@@ -103,7 +94,7 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
         match SDSSFileIO::open_or_create_perm_rw::<spec::SysDBV1>(sysdb_name)? {
             FileOpen::Created(new) => {
                 let me = Self::_new(SysConfig::new_auth(auth, run_mode));
-                me._sync(new)?;
+                me._sync(new, &me.system_store().auth_data().read())?;
                 Ok((me, SystemStoreInitState::Created))
             }
             FileOpen::Existing((ex, _)) => {
@@ -114,7 +105,7 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
 }
 
 impl<Fs: RawFSInterface> SystemStore<Fs> {
-    fn _sync(&self, mut f: SDSSFileIO<Fs>) -> RuntimeResult<()> {
+    fn _sync(&self, mut f: SDSSFileIO<Fs>, auth: &SysAuth) -> RuntimeResult<()> {
         let cfg = self.system_store();
         // prepare our flat file
         let mut map: DictGeneric = into_dict!(
@@ -125,7 +116,6 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
             Self::SYS_KEY_AUTH => DictGeneric::new(),
         );
         let auth_key = map.get_mut(Self::SYS_KEY_AUTH).unwrap();
-        let auth = cfg.auth_data().read();
         let auth_key = auth_key.as_dict_mut().unwrap();
         auth_key.insert(
             Self::SYS_KEY_AUTH_USERS.into(),
@@ -148,9 +138,9 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
         let buf = super::inf::enc::enc_dict_full::<super::inf::map::GenericDictSpec>(&map);
         f.fsynced_write(&buf)
     }
-    fn _sync_with(&self, target: &str, cow: &str) -> RuntimeResult<()> {
+    fn _sync_with(&self, target: &str, cow: &str, auth: &SysAuth) -> RuntimeResult<()> {
         let f = SDSSFileIO::create::<spec::SysDBV1>(cow)?;
-        self._sync(f)?;
+        self._sync(f, auth)?;
         Fs::fs_rename_file(cow, target)
     }
     fn restore_and_sync(
@@ -185,7 +175,7 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
         );
         let slf = Self::_new(new_syscfg);
         // now sync
-        slf._sync_with(fname, fcow_name)?;
+        slf._sync_with(fname, fcow_name, &slf.system_store().auth_data().read())?;
         Ok((slf, state))
     }
     fn _restore(mut f: SDSSFileIO<Fs>, run_mode: ConfigMode) -> RuntimeResult<SysConfig> {

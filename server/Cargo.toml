@@ -1,6 +1,5 @@
 [package]
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
-build = "build.rs"
 edition = "2021"
 name = "skyd"
 version = "0.8.0"
@@ -34,10 +33,6 @@ winapi = { version = "0.3.9", features = ["fileapi"] }
 [target.'cfg(unix)'.dependencies]
 # external deps
 libc = "0.2.147"
-
-[target.'cfg(unix)'.build-dependencies]
-# external deps
-cc = "1.0.82"
 
 [dev-dependencies]
 # external deps

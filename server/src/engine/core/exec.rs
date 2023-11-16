@@ -137,7 +137,7 @@ async fn run_blocking_stmt(
     let d_s = (drop & Token![space].eq(a) & last_id) as u8 * 6;
     let d_m = (drop & Token![model].eq(a) & last_id) as u8 * 7;
     let fc = sysctl as u8 | c_s | c_m | a_s | a_m | d_s | d_m;
-    state.cursor_ahead();
+    state.cursor_ahead_if(!sysctl);
     static BLK_EXEC: [fn(Global, &ClientLocalState, RawSlice<Token<'static>>) -> QueryResult<()>;
         8] = [
         |_, _, _| Err(QueryError::QLUnknownStatement), // unknown
@@ -174,7 +174,7 @@ fn blocking_exec_sysctl(
     /*
         currently supported: sysctl create user, sysctl drop user
     */
-    if state.remaining() != 2 {
+    if state.remaining() < 2 {
         return Err(QueryError::QLInvalidSyntax);
     }
     let (a, b) = (state.fw_read(), state.fw_read());

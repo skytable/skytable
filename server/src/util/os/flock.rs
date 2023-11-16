@@ -48,39 +48,39 @@ impl FileLock {
         {
             use winapi::um::{
                 fileapi::LockFileEx,
-                minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, OVERLAPPED},
+                minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, OVERLAPPED},
                 winnt::HANDLE,
             };
-
             let handle = file.as_raw_handle();
             let mut overlapped = OVERLAPPED::default();
             let result = unsafe {
                 LockFileEx(
                     handle as HANDLE,
-                    LOCKFILE_EXCLUSIVE_LOCK,
+                    LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
                     0,
                     u32::MAX,
                     u32::MAX,
                     &mut overlapped,
                 )
             };
-
             if result == 0 {
-                return Err(io::Error::last_os_error());
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "file is already locked",
+                ));
             }
-
             return Ok(Self { file, handle });
         }
         #[cfg(unix)]
         {
-            use libc::{flock, LOCK_EX};
-
-            let result = unsafe { flock(file.as_raw_fd(), LOCK_EX) };
-
+            use libc::{flock, LOCK_EX, LOCK_NB};
+            let result = unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) };
             if result != 0 {
-                return Err(io::Error::last_os_error());
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "file is already locked",
+                ));
             }
-
             return Ok(Self { file });
         }
     }

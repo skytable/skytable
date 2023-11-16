@@ -38,11 +38,11 @@ use crate::engine::{
 
 fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMeta<'a>> {
     /*
-        user add [username] with { password: [password], ... }
-                 ^cursor
+        [username] with { password: [password], ... }
+        ^cursor
         7 tokens
     */
-    if state.remaining() < 7 {
+        if state.remaining() < 7 {
         return Err(QueryError::QLInvalidSyntax);
     }
     let token_buffer = state.current();
@@ -61,7 +61,7 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
         token_buffer[0].uck_read_lit()
     };
     state.poison_if_not(maybe_username.kind().tag_class() == TagClass::Str);
-    if state.not_exhausted() & !state.okay() {
+    if state.not_exhausted() | !state.okay() {
         // we shouldn't have more tokens
         return Err(QueryError::QLInvalidSyntax);
     }

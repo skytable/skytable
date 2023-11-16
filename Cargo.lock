@@ -1244,7 +1244,6 @@ name = "skyd"
 version = "0.8.0"
 dependencies = [
  "bytes",
- "cc",
  "crc",
  "crossbeam-epoch",
  "env_logger",

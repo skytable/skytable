@@ -154,6 +154,16 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
             _fs: PhantomData,
         }
     }
+    fn _try_sync_or(&self, auth: &mut SysAuth, rb: impl FnOnce(&mut SysAuth)) -> QueryResult<()> {
+        match self.sync_db(auth) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                error!("failed to sync system store: {e}");
+                rb(auth);
+                Err(e.into())
+            }
+        }
+    }
     /// Create a new user with the given details
     pub fn create_new_user(&self, username: String, password: String) -> QueryResult<()> {
         // TODO(@ohsayan): we want to be very careful with this
@@ -166,10 +176,9 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
                         .unwrap()
                         .into_boxed_slice(),
                 ));
-                self.sync_db_or_rollback(|| {
+                self._try_sync_or(&mut auth, |auth| {
                     auth.users.remove(_username.as_str());
-                })?;
-                Ok(())
+                })
             }
             Entry::Occupied(_) => Err(QueryError::SysAuthError),
         }
@@ -181,12 +190,9 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
             return Err(QueryError::SysAuthError);
         }
         match auth.users.remove_entry(username) {
-            Some((username, user)) => {
-                self.sync_db_or_rollback(|| {
-                    let _ = auth.users.insert(username, user);
-                })?;
-                Ok(())
-            }
+            Some((username, user)) => self._try_sync_or(&mut auth, |auth| {
+                let _ = auth.users.insert(username, user);
+            }),
             None => Err(QueryError::SysAuthError),
         }
     }

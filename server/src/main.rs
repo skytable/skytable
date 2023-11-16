@@ -61,6 +61,7 @@ const TEXT: &str = "
 ";
 
 type IoResult<T> = std::io::Result<T>;
+const SKY_PID_FILE: &str = ".sky_pid";
 
 fn main() {
     Builder::new()
@@ -68,12 +69,14 @@ fn main() {
         .init();
     println!("{TEXT}\nSkytable v{VERSION} | {URL}\n");
     let run = || {
+        engine::set_context_init("locking PID file");
+        let pid_file = util::os::FileLock::new(SKY_PID_FILE)?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .thread_name("server")
             .enable_all()
             .build()
             .unwrap();
-        runtime.block_on(async move {
+        let g = runtime.block_on(async move {
             engine::set_context_init("binding system signals");
             let signal = util::os::TerminationSignal::init()?;
             let (config, global) = tokio::task::spawn_blocking(|| engine::load_all())
@@ -82,12 +85,14 @@ fn main() {
             let g = global.global.clone();
             engine::start(signal, config, global).await?;
             engine::RuntimeResult::Ok(g)
-        })
+        })?;
+        engine::RuntimeResult::Ok((pid_file, g))
     };
     match run() {
-        Ok(g) => {
+        Ok((_, g)) => {
             info!("completing cleanup before exit");
             engine::finish(g);
+            std::fs::remove_file(SKY_PID_FILE).expect("failed to remove PID file");
             println!("Goodbye!");
         }
         Err(e) => {

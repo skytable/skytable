@@ -24,19 +24,17 @@
  *
 */
 
-use std::io::Read;
-
-use rand::seq::SliceRandom;
-
 use {
     rand::{
         distributions::{uniform::SampleUniform, Alphanumeric},
         rngs::ThreadRng,
+        seq::SliceRandom,
         Rng,
     },
     std::{
         collections::hash_map::RandomState,
         hash::{BuildHasher, Hash, Hasher},
+        io::Read,
     },
 };
 
