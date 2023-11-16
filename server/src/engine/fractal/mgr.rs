@@ -307,7 +307,7 @@ impl FractalMgr {
                         }
                     }
                     Err(_) => {
-                        log::error!(
+                        error!(
                             "fhp: error writing data batch for model {}. retrying ...",
                             model_id.uuid()
                         );

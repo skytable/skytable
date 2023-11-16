@@ -520,7 +520,6 @@ dependencies = [
  "log",
  "openssl",
  "powershell_script",
- "skytable",
  "zip",
 ]
 

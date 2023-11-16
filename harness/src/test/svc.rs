@@ -32,10 +32,6 @@ use {
         util::{self},
         HarnessError, HarnessResult, ROOT_DIR,
     },
-    skytable::{
-        error::{ClientResult, Error},
-        Config, Connection,
-    },
     std::{
         io::ErrorKind,
         path::Path,
@@ -55,9 +51,9 @@ const TESTSUITE_SERVER_HOST: &str = "127.0.0.1";
 /// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
 
-fn connect_db(host: &str, port: u16) -> ClientResult<Connection> {
-    let cfg = Config::new(host, port, "root", "password12345678");
-    cfg.connect()
+fn connect_db(host: &str, port: u16) -> std::io::Result<std::net::TcpStream> {
+    let tcp_stream = std::net::TcpStream::connect((host, port))?;
+    Ok(tcp_stream)
 }
 
 /// Get the command to start the provided server1
@@ -99,10 +95,10 @@ pub(super) fn wait_for_server_exit() -> HarnessResult<()> {
     Ok(())
 }
 
-fn connection_refused<T>(input: ClientResult<T>) -> HarnessResult<bool> {
+fn connection_refused<T>(input: std::io::Result<T>) -> HarnessResult<bool> {
     match input {
         Ok(_) => Ok(false),
-        Err(Error::IoError(e))
+        Err(e)
             if matches!(
                 e.kind(),
                 ErrorKind::ConnectionRefused | ErrorKind::ConnectionReset

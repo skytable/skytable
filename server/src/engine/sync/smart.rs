@@ -24,7 +24,6 @@
  *
 */
 
-
 use {
     super::atm::{ORD_ACQ, ORD_REL, ORD_RLX},
     std::{

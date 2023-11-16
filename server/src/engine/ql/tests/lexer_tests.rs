@@ -217,7 +217,7 @@ const SFQ_BOOL_FALSE: &[u8] = b"\x01\0";
 const SFQ_BOOL_TRUE: &[u8] = b"\x01\x01";
 const SFQ_UINT: &[u8] = b"\x0218446744073709551615\n";
 const SFQ_SINT: &[u8] = b"\x03-9223372036854775808\n";
-const SFQ_FLOAT: &[u8] = b"\x0411\n3.141592654";
+const SFQ_FLOAT: &[u8] = b"\x043.141592654\n";
 const SFQ_BINARY: &[u8] = "\x0546\ncringe😃😄😁😆😅😂🤣😊😸😺".as_bytes();
 const SFQ_STRING: &[u8] = "\x0646\ncringe😃😄😁😆😅😂🤣😊😸😺".as_bytes();
 

@@ -130,8 +130,10 @@ fn open_log(
     log_name: &str,
     db: &Database,
 ) -> RuntimeResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
-    journal::open_or_create_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(log_name, db)
-        .map(|v| v.into_inner())
+    journal::open_or_create_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(
+        log_name, db,
+    )
+    .map(|v| v.into_inner())
 }
 
 #[test]

@@ -40,7 +40,7 @@ use {
     },
     std::{cell::Cell, net::SocketAddr, pin::Pin, time::Duration},
     tokio::{
-        io::{AsyncRead, AsyncWrite, BufWriter, AsyncWriteExt},
+        io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufWriter},
         net::{TcpListener, TcpStream},
         sync::{broadcast, mpsc, Semaphore},
     },
@@ -220,7 +220,7 @@ impl Listener {
                     /*
                         SECURITY: IGNORE THIS ERROR
                     */
-                    log::error!("failed to accept connection on TCP socket: `{e}`");
+                    warn!("failed to accept connection on TCP socket: `{e}`");
                     continue;
                 }
             };
@@ -232,7 +232,7 @@ impl Listener {
             );
             tokio::spawn(async move {
                 if let Err(e) = handler.run().await {
-                    log::error!("error handling client connection: `{e}`");
+                    warn!("error handling client connection: `{e}`");
                 }
             });
             // return the permit
@@ -274,7 +274,7 @@ impl Listener {
                     /*
                         SECURITY: Once again, ignore this error
                     */
-                    log::error!("failed to accept connection on TLS socket: `{e:#?}`");
+                    warn!("failed to accept connection on TLS socket: `{e}`");
                     continue;
                 }
             };
@@ -286,7 +286,7 @@ impl Listener {
             );
             tokio::spawn(async move {
                 if let Err(e) = handler.run().await {
-                    log::error!("error handling client TLS connection: `{e}`");
+                    warn!("error handling client TLS connection: `{e}`");
                 }
             });
         }
