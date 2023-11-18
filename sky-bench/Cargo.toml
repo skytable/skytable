@@ -9,4 +9,9 @@ version = "0.8.0"
 [dependencies]
 # internal deps
 skytable = { git = "https://github.com/skytable/client-rust.git", branch = "octave" }
-libstress = { path = "../libstress" }
+libsky = { path = "../libsky" }
+# external deps
+crossbeam-channel = "0.5.8"
+num_cpus = "1.16.0"
+env_logger = "0.10.1"
+log = "0.4.20"

@@ -24,4 +24,31 @@
  *
 */
 
-fn main() {}
+#[macro_use]
+extern crate log;
+mod args;
+mod bench;
+mod error;
+mod pool;
+
+fn main() {
+    env_logger::Builder::new()
+        .parse_filters(&std::env::var("SKYBENCH_LOG").unwrap_or_else(|_| "info".to_owned()))
+        .init();
+    match run() {
+        Ok(()) => {}
+        Err(e) => {
+            error!("bench error: {e}");
+            std::process::exit(0x01);
+        }
+    }
+}
+
+fn run() -> error::BenchResult<()> {
+    let task = args::parse()?;
+    match task {
+        args::Task::HelpMsg(msg) => println!("{msg}"),
+        args::Task::BenchConfig(bench) => bench::run(bench)?,
+    }
+    Ok(())
+}
