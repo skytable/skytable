@@ -36,6 +36,19 @@ pub enum CliError {
     IoError(std::io::Error),
 }
 
+impl From<libsky::ArgParseError> for CliError {
+    fn from(e: libsky::ArgParseError) -> Self {
+        match e {
+            libsky::ArgParseError::Duplicate(d) => {
+                Self::ArgsErr(format!("duplicate value for `{d}`"))
+            }
+            libsky::ArgParseError::MissingValue(m) => {
+                Self::ArgsErr(format!("missing value for `{m}`"))
+            }
+        }
+    }
+}
+
 impl From<skytable::error::Error> for CliError {
     fn from(cle: skytable::error::Error) -> Self {
         Self::ClientError(cle)

@@ -24,136 +24,157 @@
  *
 */
 
-use crate::error::BenchResult;
-
 use {
     crate::{
         args::BenchConfig,
-        error::{self, BenchmarkTaskWorkerError},
-        pool::{RuntimeStats, Taskpool, ThreadedTask},
+        error::{self, BenchResult},
+        runtime::{BombardPool, RuntimeStats, ThreadedBombardTask},
     },
-    skytable::{query, response::Response, Config, Connection, Query},
-    std::time::Instant,
+    skytable::{error::Error, query, response::Response, Config, Connection, Query},
+    std::{fmt, time::Instant},
 };
 
+/*
+    task impl
+*/
+
+/// A bombard task used for benchmarking
+
 #[derive(Debug)]
-pub struct BenchmarkTask {
-    cfg: Config,
+pub struct BombardTask {
+    config: Config,
 }
 
-impl BenchmarkTask {
-    pub fn new(host: &str, port: u16, username: &str, password: &str) -> Self {
+impl BombardTask {
+    pub fn new(config: Config) -> Self {
+        Self { config }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BombardTaskKind {
+    Insert(u8),
+    Update,
+    Delete,
+}
+
+#[derive(Debug, Clone)]
+pub struct BombardTaskSpec {
+    kind: BombardTaskKind,
+    base_query: String,
+    pk_len: usize,
+}
+
+impl BombardTaskSpec {
+    pub fn insert(base_query: String, pk_len: usize, second_column: u8) -> Self {
         Self {
-            cfg: Config::new(host, port, username, password),
+            kind: BombardTaskKind::Insert(second_column),
+            base_query,
+            pk_len,
+        }
+    }
+    pub fn update(base_query: String, pk_len: usize) -> Self {
+        Self {
+            kind: BombardTaskKind::Update,
+            base_query,
+            pk_len,
+        }
+    }
+    pub fn delete(base_query: String, pk_len: usize) -> Self {
+        Self {
+            kind: BombardTaskKind::Delete,
+            base_query,
+            pk_len,
+        }
+    }
+    fn generate(&self, current: u64) -> (Query, Response) {
+        let mut q = query!(&self.base_query);
+        let resp = match self.kind {
+            BombardTaskKind::Insert(second_column) => {
+                q.push_param(format!("{:0>width$}", current, width = self.pk_len));
+                q.push_param(second_column);
+                Response::Empty
+            }
+            BombardTaskKind::Update => {
+                q.push_param(1u64);
+                q.push_param(format!("{:0>width$}", current, width = self.pk_len));
+                Response::Empty
+            }
+            BombardTaskKind::Delete => {
+                q.push_param(format!("{:0>width$}", current, width = self.pk_len));
+                Response::Empty
+            }
+        };
+        (q, resp)
+    }
+}
+
+/// Errors while running a bombard
+#[derive(Debug)]
+pub enum BombardTaskError {
+    DbError(Error),
+    Mismatch,
+}
+
+impl fmt::Display for BombardTaskError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DbError(e) => write!(f, "a bombard subtask failed with {e}"),
+            Self::Mismatch => write!(f, "got unexpected response for bombard subtask"),
         }
     }
 }
 
-impl ThreadedTask for BenchmarkTask {
-    type TaskWorker = Connection;
-    type TaskWorkerInitError = BenchmarkTaskWorkerError;
-    type TaskWorkerTerminateError = BenchmarkTaskWorkerError;
-    type TaskWorkerWorkError = BenchmarkTaskWorkerError;
-    type TaskInput = (Query, Response);
-    fn initialize_worker(&self) -> Result<Self::TaskWorker, Self::TaskWorkerInitError> {
-        self.cfg.connect().map_err(Into::into)
-    }
-    fn drive_worker_timed(
-        worker: &mut Self::TaskWorker,
-        (query, expected_resp): Self::TaskInput,
-    ) -> Result<(Instant, Instant), Self::TaskWorkerWorkError> {
-        let start = Instant::now();
-        let resp = worker.query(&query)?;
-        let stop = Instant::now();
-        if resp == expected_resp {
-            Ok((start, stop))
-        } else {
-            Err(BenchmarkTaskWorkerError::Error(format!(
-                "response from server did not match expected response: {:?}",
-                resp
-            )))
-        }
-    }
-    fn terminate_worker(
-        &self,
-        _: &mut Self::TaskWorker,
-    ) -> Result<(), Self::TaskWorkerTerminateError> {
-        Ok(())
+impl From<Error> for BombardTaskError {
+    fn from(dbe: Error) -> Self {
+        Self::DbError(dbe)
     }
 }
+
+impl ThreadedBombardTask for BombardTask {
+    type Worker = Connection;
+    type WorkerTask = (Query, Response);
+    type WorkerTaskSpec = BombardTaskSpec;
+    type WorkerInitError = Error;
+    type WorkerTaskError = BombardTaskError;
+    fn worker_init(&self) -> Result<Self::Worker, Self::WorkerInitError> {
+        self.config.connect()
+    }
+    fn generate_task(spec: &Self::WorkerTaskSpec, current: u64) -> Self::WorkerTask {
+        spec.generate(current)
+    }
+    fn worker_drive_timed(
+        worker: &mut Self::Worker,
+        (query, response): Self::WorkerTask,
+    ) -> Result<u128, Self::WorkerTaskError> {
+        let start = Instant::now();
+        let ret = worker.query(&query)?;
+        let stop = Instant::now();
+        if ret == response {
+            Ok(stop.duration_since(start).as_nanos())
+        } else {
+            Err(BombardTaskError::Mismatch)
+        }
+    }
+}
+
+/*
+    runner
+*/
 
 pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
-    let bench_config = BenchmarkTask::new(&bench.host, bench.port, "root", &bench.root_pass);
+    let bench_config = BombardTask::new(Config::new(
+        &bench.host,
+        bench.port,
+        "root",
+        &bench.root_pass,
+    ));
     info!("running preliminary checks and creating model `bench.bench` with definition: `{{un: string, pw: uint8}}`");
-    let mut main_thread_db = bench_config.cfg.connect()?;
+    let mut main_thread_db = bench_config.config.connect()?;
     main_thread_db.query_parse::<()>(&query!("create space bench"))?;
     main_thread_db.query_parse::<()>(&query!("create model bench.bench(un: string, pw: uint8)"))?;
-    info!(
-        "initializing connection pool with {} connections",
-        bench.threads
-    );
-    let mut p = Taskpool::new(bench.threads, bench_config)?;
-    info!(
-        "pool initialized successfully. preparing {} `INSERT` queries with primary key size={} bytes",
-        bench.query_count, bench.key_size
-    );
-    let mut insert_stats = Default::default();
-    let mut update_stats = Default::default();
-    let mut delete_stats = Default::default();
-    match || -> BenchResult<()> {
-        // bench insert
-        let insert_queries: Vec<(Query, Response)> = (0..bench.query_count)
-            .into_iter()
-            .map(|i| {
-                (
-                    query!(
-                        "insert into bench.bench(?, ?)",
-                        format!("{:0>width$}", i, width = bench.key_size),
-                        0u64
-                    ),
-                    Response::Empty,
-                )
-            })
-            .collect();
-        info!("benchmarking `INSERT` queries");
-        insert_stats = p.blocking_bombard(insert_queries)?;
-        // bench update
-        info!("completed benchmarking `INSERT`. preparing `UPDATE` queries");
-        let update_queries: Vec<(Query, Response)> = (0..bench.query_count)
-            .into_iter()
-            .map(|i| {
-                (
-                    query!(
-                        "update bench.bench set pw += ? where un = ?",
-                        1u64,
-                        format!("{:0>width$}", i, width = bench.key_size),
-                    ),
-                    Response::Empty,
-                )
-            })
-            .collect();
-        info!("benchmarking `UPDATE` queries");
-        update_stats = p.blocking_bombard(update_queries)?;
-        // bench delete
-        info!("completed benchmarking `UPDATE`. preparing `DELETE` queries");
-        let delete_queries: Vec<(Query, Response)> = (0..bench.query_count)
-            .into_iter()
-            .map(|i| {
-                (
-                    query!(
-                        "delete from bench.bench where un = ?",
-                        format!("{:0>width$}", i, width = bench.key_size),
-                    ),
-                    Response::Empty,
-                )
-            })
-            .collect();
-        info!("benchmarking `DELETE` queries");
-        delete_stats = p.blocking_bombard(delete_queries)?;
-        info!("completed benchmarking `DELETE` queries");
-        Ok(())
-    }() {
-        Ok(()) => {}
+    let stats = match bench_internal(bench_config, bench) {
+        Ok(stats) => stats,
         Err(e) => {
             error!("benchmarking failed. attempting to clean up");
             match cleanup(main_thread_db) {
@@ -164,19 +185,17 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
                 }
             }
         }
-    }
-    drop(p);
+    };
     warn!("benchmarks might appear to be slower. this tool is currently experimental");
     // print results
-    info!("results:");
-    print_table(vec![
-        ("INSERT", insert_stats),
-        ("UPDATE", update_stats),
-        ("DELETE", delete_stats),
-    ]);
+    print_table(stats);
     cleanup(main_thread_db)?;
     Ok(())
 }
+
+/*
+    util
+*/
 
 fn cleanup(mut main_thread_db: Connection) -> Result<(), error::BenchError> {
     trace!("dropping space and table");
@@ -195,22 +214,51 @@ fn print_table(data: Vec<(&'static str, RuntimeStats)>) {
     println!(
         "+---------+--------------------------+-----------------------+------------------------+"
     );
-    for (
-        query,
-        RuntimeStats {
-            qps,
-            avg_per_query_ns: _,
-            head_ns,
-            tail_ns,
-        },
-    ) in data
-    {
+    for (query, RuntimeStats { qps, head, tail }) in data {
         println!(
             "| {:<7} | {:>24.2} | {:>21} | {:>22} |",
-            query, qps, tail_ns, head_ns
+            query, qps, tail, head
         );
     }
     println!(
         "+---------+--------------------------+-----------------------+------------------------+"
     );
+}
+
+/*
+    bench runner
+*/
+
+fn bench_internal(
+    config: BombardTask,
+    bench: BenchConfig,
+) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
+    let mut ret = vec![];
+    // initialize pool
+    info!("initializing connection pool");
+    let mut pool = BombardPool::new(bench.threads, config)?;
+    // bench INSERT
+    info!("benchmarking `INSERT`");
+    let insert = BombardTaskSpec::insert("insert into bench.bench(?, ?)".into(), bench.key_size, 0);
+    let insert_stats = pool.blocking_bombard(insert, bench.query_count)?;
+    ret.push(("INSERT", insert_stats));
+    // bench UPDATE
+    info!("benchmarking `UPDATE`");
+    let update = BombardTaskSpec::update(
+        "update bench.bench set pw += ? where un = ?".into(),
+        bench.key_size,
+    );
+    let update_stats = pool.blocking_bombard(update, bench.query_count)?;
+    ret.push(("UPDATE", update_stats));
+    // bench DELETE
+    info!("benchmarking `DELETE`");
+    let delete = BombardTaskSpec::delete(
+        "delete from bench.bench where un = ?".into(),
+        bench.key_size,
+    );
+    let delete_stats = pool.blocking_bombard(delete, bench.query_count)?;
+    ret.push(("DELETE", delete_stats));
+    info!("completed benchmarks. closing pool");
+    drop(pool);
+    Ok(ret)
 }

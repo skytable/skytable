@@ -25,7 +25,7 @@
 */
 
 use {
-    crate::{bench::BenchmarkTask, pool::TaskpoolError},
+    crate::{bench::BombardTask, runtime::BombardError},
     core::fmt,
     skytable::error::Error,
 };
@@ -35,13 +35,20 @@ pub type BenchResult<T> = Result<T, BenchError>;
 #[derive(Debug)]
 pub enum BenchError {
     ArgsErr(String),
-    BenchError(TaskpoolError<BenchmarkTask>),
+    BenchBombardError(BombardError<BombardTask>),
     DirectDbError(Error),
 }
 
-impl From<TaskpoolError<BenchmarkTask>> for BenchError {
-    fn from(e: TaskpoolError<BenchmarkTask>) -> Self {
-        Self::BenchError(e)
+impl From<libsky::ArgParseError> for BenchError {
+    fn from(e: libsky::ArgParseError) -> Self {
+        match e {
+            libsky::ArgParseError::Duplicate(d) => {
+                Self::ArgsErr(format!("duplicate value for `{d}`"))
+            }
+            libsky::ArgParseError::MissingValue(m) => {
+                Self::ArgsErr(format!("missing value for `{m}`"))
+            }
+        }
     }
 }
 
@@ -51,12 +58,18 @@ impl From<Error> for BenchError {
     }
 }
 
+impl From<BombardError<BombardTask>> for BenchError {
+    fn from(e: BombardError<BombardTask>) -> Self {
+        Self::BenchBombardError(e)
+    }
+}
+
 impl fmt::Display for BenchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ArgsErr(e) => write!(f, "args error: {e}"),
-            Self::BenchError(e) => write!(f, "benchmark system error: {e}"),
             Self::DirectDbError(e) => write!(f, "direct operation on db failed. {e}"),
+            Self::BenchBombardError(e) => write!(f, "benchmark failed: {e}"),
         }
     }
 }
@@ -66,7 +79,6 @@ impl std::error::Error for BenchError {}
 #[derive(Debug)]
 pub enum BenchmarkTaskWorkerError {
     DbError(Error),
-    Error(String),
 }
 
 impl From<Error> for BenchmarkTaskWorkerError {
@@ -79,7 +91,6 @@ impl fmt::Display for BenchmarkTaskWorkerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::DbError(e) => write!(f, "worker failed due to DB error. {e}"),
-            Self::Error(e) => write!(f, "worker failed. {e}"),
         }
     }
 }

@@ -30,9 +30,10 @@ use {
         event::{self, Event, KeyCode, KeyEvent},
         terminal,
     },
+    libsky::CliAction,
     std::{
-        collections::{hash_map::Entry, HashMap},
-        env, fs,
+        collections::HashMap,
+        fs,
         io::{self, Write},
         process::exit,
     },
@@ -75,42 +76,12 @@ enum TaskInner {
 }
 
 fn load_env() -> CliResult<TaskInner> {
-    let mut args = HashMap::new();
-    let mut it = env::args().skip(1).into_iter();
-    while let Some(arg) = it.next() {
-        let (arg, arg_val) = match arg.as_str() {
-            "--help" => return Ok(TaskInner::HelpMsg(TXT_HELP.into())),
-            "--version" => return Ok(TaskInner::HelpMsg(format!("skysh v{}", libsky::VERSION))),
-            _ if arg.starts_with("--") => match it.next() {
-                Some(arg_val) => (arg, arg_val),
-                None => {
-                    // self contained?
-                    let split: Vec<&str> = arg.split("=").collect();
-                    if split.len() != 2 {
-                        return Err(CliError::ArgsErr(format!("expected value for {arg}")));
-                    }
-                    (split[0].into(), split[1].into())
-                }
-            },
-            unknown_arg => {
-                return Err(CliError::ArgsErr(format!(
-                    "unknown argument: {unknown_arg}"
-                )))
-            }
-        };
-        match args.entry(arg) {
-            Entry::Occupied(oe) => {
-                return Err(CliError::ArgsErr(format!(
-                    "found duplicate values for {}",
-                    oe.key()
-                )))
-            }
-            Entry::Vacant(ve) => {
-                ve.insert(arg_val);
-            }
-        }
+    let action = libsky::parse_cli_args_disallow_duplicate()?;
+    match action {
+        CliAction::Help => Ok(TaskInner::HelpMsg(TXT_HELP.into())),
+        CliAction::Version => Ok(TaskInner::HelpMsg(libsky::version_msg("skysh"))),
+        CliAction::Action(a) => Ok(TaskInner::OpenShell(a)),
     }
-    Ok(TaskInner::OpenShell(args))
 }
 
 pub fn parse() -> CliResult<Task> {

@@ -29,7 +29,7 @@ extern crate log;
 mod args;
 mod bench;
 mod error;
-mod pool;
+mod runtime;
 
 fn main() {
     env_logger::Builder::new()

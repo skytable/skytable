@@ -26,10 +26,8 @@
 
 use {
     crate::error::{BenchError, BenchResult},
-    std::{
-        collections::hash_map::{Entry, HashMap},
-        env,
-    },
+    libsky::CliAction,
+    std::collections::hash_map::HashMap,
 };
 
 const TXT_HELP: &str = include_str!("../help_text/help");
@@ -77,47 +75,12 @@ impl BenchConfig {
 }
 
 fn load_env() -> BenchResult<TaskInner> {
-    let mut args = HashMap::new();
-    let mut it = env::args().skip(1).into_iter();
-    while let Some(arg) = it.next() {
-        let (arg, arg_val) = match arg.as_str() {
-            "--help" => return Ok(TaskInner::HelpMsg(TXT_HELP.into())),
-            "--version" => {
-                return Ok(TaskInner::HelpMsg(format!(
-                    "sky-bench v{}",
-                    libsky::VERSION
-                )))
-            }
-            _ if arg.starts_with("--") => match it.next() {
-                Some(arg_val) => (arg, arg_val),
-                None => {
-                    // self contained?
-                    let split: Vec<&str> = arg.split("=").collect();
-                    if split.len() != 2 {
-                        return Err(BenchError::ArgsErr(format!("expected value for {arg}")));
-                    }
-                    (split[0].into(), split[1].into())
-                }
-            },
-            unknown_arg => {
-                return Err(BenchError::ArgsErr(format!(
-                    "unknown argument: {unknown_arg}"
-                )))
-            }
-        };
-        match args.entry(arg) {
-            Entry::Occupied(oe) => {
-                return Err(BenchError::ArgsErr(format!(
-                    "found duplicate values for {}",
-                    oe.key()
-                )))
-            }
-            Entry::Vacant(ve) => {
-                ve.insert(arg_val);
-            }
-        }
+    let action = libsky::parse_cli_args_disallow_duplicate()?;
+    match action {
+        CliAction::Help => Ok(TaskInner::HelpMsg(TXT_HELP.into())),
+        CliAction::Version => Ok(TaskInner::HelpMsg(libsky::version_msg("sky-bench"))),
+        CliAction::Action(a) => Ok(TaskInner::CheckConfig(a)),
     }
-    Ok(TaskInner::CheckConfig(args))
 }
 
 fn cdig(n: usize) -> usize {
@@ -176,7 +139,7 @@ pub fn parse() -> BenchResult<Task> {
     };
     // threads
     let thread_count = match args.remove("--threads") {
-        None => num_cpus::get(),
+        None => num_cpus::get_physical(),
         Some(tc) => match tc.parse() {
             Ok(tc) if tc > 0 => tc,
             Err(_) | Ok(_) => {
