@@ -120,6 +120,22 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     fn sys_store(&self) -> &SystemStore<Fs> {
         &self.sys_cfg
     }
+    fn purge_model_driver(
+        &self,
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) {
+        let id = ModelUniqueID::new(space_name, model_name, model_uuid);
+        self.model_drivers
+            .write()
+            .remove(&id)
+            .expect("tried to remove non-existent model");
+        self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+            space_name, space_uuid, model_name, model_uuid,
+        )));
+    }
     fn initialize_model_driver(
         &self,
         space_name: &str,

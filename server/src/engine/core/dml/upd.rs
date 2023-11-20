@@ -372,13 +372,8 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
             // update revised tag
             row_data_wl.set_txn_revised(new_version);
             // publish delta
-            let dp = ds.append_new_data_delta_with(
-                DataDeltaKind::Update,
-                row.clone(),
-                ds.schema_current_version(),
-                new_version,
-                &g,
-            );
+            let dp =
+                ds.append_new_data_delta_with(DataDeltaKind::Update, row.clone(), new_version, &g);
             ret = Ok(QueryExecMeta::new(dp))
         }
         ret

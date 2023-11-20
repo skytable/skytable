@@ -91,21 +91,27 @@ impl BombardTaskSpec {
         let mut q = query!(&self.base_query);
         let resp = match self.kind {
             BombardTaskKind::Insert(second_column) => {
-                q.push_param(format!("{:0>width$}", current, width = self.pk_len));
+                self.push_pk(&mut q, current);
                 q.push_param(second_column);
                 Response::Empty
             }
             BombardTaskKind::Update => {
                 q.push_param(1u64);
-                q.push_param(format!("{:0>width$}", current, width = self.pk_len));
+                self.push_pk(&mut q, current);
                 Response::Empty
             }
             BombardTaskKind::Delete => {
-                q.push_param(format!("{:0>width$}", current, width = self.pk_len));
+                self.push_pk(&mut q, current);
                 Response::Empty
             }
         };
         (q, resp)
+    }
+    fn push_pk(&self, q: &mut Query, current: u64) {
+        q.push_param(self.get_primary_key(current));
+    }
+    fn get_primary_key(&self, current: u64) -> String {
+        format!("{:0>width$}", current, width = self.pk_len)
     }
 }
 
@@ -229,36 +235,89 @@ fn print_table(data: Vec<(&'static str, RuntimeStats)>) {
     bench runner
 */
 
+struct BenchItem {
+    name: &'static str,
+    spec: BombardTaskSpec,
+    count: usize,
+}
+
+impl BenchItem {
+    fn new(name: &'static str, spec: BombardTaskSpec, count: usize) -> Self {
+        Self { name, spec, count }
+    }
+    fn print_log_start(&self) {
+        info!(
+            "benchmarking `{}`. average payload size = {} bytes. queries = {}",
+            self.name,
+            self.spec.generate(0).0.debug_encode_packet().len(),
+            self.count
+        )
+    }
+    fn run(self, pool: &mut BombardPool<BombardTask>) -> BenchResult<RuntimeStats> {
+        pool.blocking_bombard(self.spec, self.count)
+            .map_err(From::from)
+    }
+}
+
 fn bench_internal(
     config: BombardTask,
     bench: BenchConfig,
 ) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
-    let mut ret = vec![];
     // initialize pool
-    info!("initializing connection pool");
+    info!(
+        "initializing connections. threads={}, primary key size ={} bytes",
+        bench.threads, bench.key_size
+    );
     let mut pool = BombardPool::new(bench.threads, config)?;
-    // bench INSERT
-    info!("benchmarking `INSERT`");
-    let insert = BombardTaskSpec::insert("insert into bench.bench(?, ?)".into(), bench.key_size, 0);
-    let insert_stats = pool.blocking_bombard(insert, bench.query_count)?;
-    ret.push(("INSERT", insert_stats));
-    // bench UPDATE
-    info!("benchmarking `UPDATE`");
-    let update = BombardTaskSpec::update(
-        "update bench.bench set pw += ? where un = ?".into(),
-        bench.key_size,
+    // prepare benches
+    let benches = vec![
+        BenchItem::new(
+            "INSERT",
+            BombardTaskSpec::insert("insert into bench.bench(?, ?)".into(), bench.key_size, 0),
+            bench.query_count,
+        ),
+        BenchItem::new(
+            "UPDATE",
+            BombardTaskSpec::update(
+                "update bench.bench set pw += ? where un = ?".into(),
+                bench.key_size,
+            ),
+            bench.query_count,
+        ),
+        BenchItem::new(
+            "DELETE",
+            BombardTaskSpec::delete(
+                "delete from bench.bench where un = ?".into(),
+                bench.key_size,
+            ),
+            bench.query_count,
+        ),
+    ];
+    // bench
+    let total_queries = bench.query_count as u64 * benches.len() as u64;
+    let mut results = vec![];
+    for task in benches {
+        let name = task.name;
+        task.print_log_start();
+        let this_result = task.run(&mut pool)?;
+        results.push((name, this_result));
+    }
+    info!(
+        "benchmark complete. finished executing {} queries",
+        fmt_u64(total_queries)
     );
-    let update_stats = pool.blocking_bombard(update, bench.query_count)?;
-    ret.push(("UPDATE", update_stats));
-    // bench DELETE
-    info!("benchmarking `DELETE`");
-    let delete = BombardTaskSpec::delete(
-        "delete from bench.bench where un = ?".into(),
-        bench.key_size,
-    );
-    let delete_stats = pool.blocking_bombard(delete, bench.query_count)?;
-    ret.push(("DELETE", delete_stats));
-    info!("completed benchmarks. closing pool");
-    drop(pool);
-    Ok(ret)
+    Ok(results)
+}
+
+fn fmt_u64(n: u64) -> String {
+    let num_str = n.to_string();
+    let mut result = String::new();
+    let chars_rev: Vec<_> = num_str.chars().rev().collect();
+    for (i, ch) in chars_rev.iter().enumerate() {
+        if i % 3 == 0 && i != 0 {
+            result.push(',');
+        }
+        result.push(*ch);
+    }
+    result.chars().rev().collect()
 }

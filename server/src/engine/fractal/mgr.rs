@@ -340,13 +340,13 @@ impl FractalMgr {
                 _ = sigterm.recv() => {
                     info!("flp: finishing any pending maintenance tasks");
                     let global = global.clone();
-                    tokio::task::spawn_blocking(|| self.general_executor_model_maintenance(global)).await.unwrap();
+                    tokio::task::spawn_blocking(|| self.general_executor(global)).await.unwrap();
                     info!("flp: exited executor service");
                     break;
                 },
                 _ = tokio::time::sleep(dur) => {
                     let global = global.clone();
-                    tokio::task::spawn_blocking(|| self.general_executor_model_maintenance(global)).await.unwrap()
+                    tokio::task::spawn_blocking(|| self.general_executor(global)).await.unwrap()
                 }
                 task = lpq.recv() => {
                     let Task { threshold, task } = match task {
@@ -377,7 +377,7 @@ impl FractalMgr {
             }
         }
     }
-    fn general_executor_model_maintenance(&'static self, global: super::Global) {
+    fn general_executor(&'static self, global: super::Global) {
         let mdl_drivers = global.get_state().get_mdl_drivers().read();
         for (model_id, driver) in mdl_drivers.iter() {
             let mut observed_len = 0;

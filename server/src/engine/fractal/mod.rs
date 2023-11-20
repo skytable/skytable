@@ -120,6 +120,13 @@ pub trait GlobalInstanceLike {
         model_name: &str,
         model_uuid: Uuid,
     ) -> RuntimeResult<()>;
+    fn purge_model_driver(
+        &self,
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    );
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>);
@@ -174,6 +181,23 @@ impl GlobalInstanceLike for Global {
         &self.get_state().config
     }
     // model
+    fn purge_model_driver(
+        &self,
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) {
+        let id = ModelUniqueID::new(space_name, model_name, model_uuid);
+        self.get_state()
+            .mdl_driver
+            .write()
+            .remove(&id)
+            .expect("tried to remove non existent driver");
+        self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+            space_name, space_uuid, model_name, model_uuid,
+        )));
+    }
     fn initialize_model_driver(
         &self,
         space_name: &str,

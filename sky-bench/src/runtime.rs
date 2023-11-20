@@ -320,13 +320,10 @@ impl<Bt: ThreadedBombardTask> BombardPool<Bt> {
             let mut global_stop = None;
             let mut global_head = u128::MAX;
             let mut global_tail = 0u128;
-            let messages: Vec<<Bt as ThreadedBombardTask>::WorkerTaskSpec> =
-                (0..self.workers.len())
-                    .into_iter()
-                    .map(|_| task_description.clone())
-                    .collect();
-            for ((_, sender), msg) in self.workers.iter().zip(messages) {
-                sender.send(WorkerTask::Task(msg)).unwrap();
+            for (_, sender) in self.workers.iter() {
+                sender
+                    .send(WorkerTask::Task(task_description.clone()))
+                    .unwrap();
             }
             // wait for all workers to complete
             let mut received = 0;

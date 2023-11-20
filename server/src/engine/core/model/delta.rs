@@ -193,11 +193,10 @@ impl DeltaState {
         &self,
         kind: DataDeltaKind,
         row: Row,
-        schema_version: DeltaVersion,
         data_version: DeltaVersion,
         g: &Guard,
     ) -> usize {
-        self.append_new_data_delta(DataDelta::new(schema_version, data_version, row, kind), g)
+        self.append_new_data_delta(DataDelta::new(data_version, row, kind), g)
     }
     pub fn append_new_data_delta(&self, delta: DataDelta, g: &Guard) -> usize {
         self.data_deltas.blocking_enqueue(delta, g);
@@ -348,21 +347,14 @@ impl<'a> SchemaDeltaIndexRGuard<'a> {
 
 #[derive(Debug, Clone)]
 pub struct DataDelta {
-    _schema_version: DeltaVersion,
     data_version: DeltaVersion,
     row: Row,
     change: DataDeltaKind,
 }
 
 impl DataDelta {
-    pub const fn new(
-        schema_version: DeltaVersion,
-        data_version: DeltaVersion,
-        row: Row,
-        change: DataDeltaKind,
-    ) -> Self {
+    pub const fn new(data_version: DeltaVersion, row: Row, change: DataDeltaKind) -> Self {
         Self {
-            _schema_version: schema_version,
             data_version,
             row,
             change,

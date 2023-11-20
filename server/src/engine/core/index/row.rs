@@ -43,7 +43,6 @@ pub type DcFieldIndex = IndexST<Box<str>, Datacell, HasherNativeFx>;
 
 #[derive(Debug)]
 pub struct Row {
-    __genesis_schema_version: DeltaVersion,
     __pk: ManuallyDrop<PrimaryIndexKey>,
     __rc: RawRC<RwLock<RowData>>,
 }
@@ -121,7 +120,6 @@ impl Row {
         restore_txn_id: DeltaVersion,
     ) -> Self {
         Self {
-            __genesis_schema_version: schema_version,
             __pk: ManuallyDrop::new(pk),
             __rc: unsafe {
                 // UNSAFE(@ohsayan): we free this up later

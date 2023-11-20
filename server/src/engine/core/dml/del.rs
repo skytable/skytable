@@ -44,7 +44,6 @@ pub fn delete_resp(
 pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, delete.entity(), |model| {
         let g = sync::atm::cpin();
-        let schema_version = model.delta_state().schema_current_version();
         let delta_state = model.delta_state();
         // create new version
         let new_version = delta_state.create_new_data_delta_version();
@@ -57,7 +56,6 @@ pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> 
                 let dp = delta_state.append_new_data_delta_with(
                     DataDeltaKind::Delete,
                     row.clone(),
-                    schema_version,
                     new_version,
                     &g,
                 );

@@ -1232,7 +1232,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.8.0"
-source = "git+https://github.com/skytable/client-rust.git?branch=octave#ce16be88204044cd8358a5aa48521bd30e60ae33"
+source = "git+https://github.com/skytable/client-rust.git?branch=octave#18aad43142fbe013ace64d92c3ffd71ab1394a18"
 dependencies = [
  "async-trait",
  "bb8",

@@ -81,7 +81,6 @@ fn new_delta(
     change: DataDeltaKind,
 ) -> DataDelta {
     new_delta_with_row(
-        schema,
         txnid,
         Row::new(
             pkey(pk),
@@ -93,13 +92,8 @@ fn new_delta(
     )
 }
 
-fn new_delta_with_row(schema: u64, txnid: u64, row: Row, change: DataDeltaKind) -> DataDelta {
-    DataDelta::new(
-        DeltaVersion::__new(schema),
-        DeltaVersion::__new(txnid),
-        row,
-        change,
-    )
+fn new_delta_with_row(txnid: u64, row: Row, change: DataDeltaKind) -> DataDelta {
+    DataDelta::new(DeltaVersion::__new(txnid), row, change)
 }
 
 fn flush_deltas_and_re_read<const N: usize>(
@@ -247,7 +241,7 @@ fn skewed_delta() {
     // prepare deltas
     let deltas = [
         // insert catname: Schrödinger's cat, is_good: true
-        new_delta_with_row(0, 0, row.clone(), DataDeltaKind::Insert),
+        new_delta_with_row(0, row.clone(), DataDeltaKind::Insert),
         // insert catname: good cat, is_good: true, magical: false
         new_delta(
             0,
@@ -265,7 +259,7 @@ fn skewed_delta() {
             DataDeltaKind::Insert,
         ),
         // update catname: Schrödinger's cat, is_good: true, magical: true
-        new_delta_with_row(0, 3, row.clone(), DataDeltaKind::Update),
+        new_delta_with_row(3, row.clone(), DataDeltaKind::Update),
     ];
     let batch = flush_deltas_and_re_read(&mdl, deltas, "skewed_delta.db-btlog");
     assert_eq!(
@@ -352,10 +346,10 @@ fn skewed_shuffled_persist_restore() {
             into_dict!("password" => "pwd456789"),
             DataDeltaKind::Insert,
         ),
-        new_delta_with_row(0, 4, mongobongo.clone(), DataDeltaKind::Insert),
-        new_delta_with_row(0, 5, rds.clone(), DataDeltaKind::Insert),
-        new_delta_with_row(0, 6, mongobongo.clone(), DataDeltaKind::Delete),
-        new_delta_with_row(0, 7, rds.clone(), DataDeltaKind::Delete),
+        new_delta_with_row(4, mongobongo.clone(), DataDeltaKind::Insert),
+        new_delta_with_row(5, rds.clone(), DataDeltaKind::Insert),
+        new_delta_with_row(6, mongobongo.clone(), DataDeltaKind::Delete),
+        new_delta_with_row(7, rds.clone(), DataDeltaKind::Delete),
     ];
     for i in 0..deltas.len() {
         // prepare pretest

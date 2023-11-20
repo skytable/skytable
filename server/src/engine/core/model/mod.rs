@@ -290,12 +290,12 @@ impl Model {
                 // commit txn
                 global.namespace_txn_driver().lock().try_commit(txn)?;
                 // request cleanup
-                global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
-                    &space_name,
+                global.purge_model_driver(
+                    space_name.as_str(),
                     space.get_uuid(),
-                    &model_name,
+                    model_name.as_str(),
                     model.get_uuid(),
-                )));
+                );
             }
             // update global state
             let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));

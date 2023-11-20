@@ -57,13 +57,7 @@ pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> Quer
         let row = Row::new(pk, data, ds.schema_current_version(), new_version);
         if mdl.primary_index().__raw_index().mt_insert(row.clone(), &g) {
             // append delta for new version
-            let dp = ds.append_new_data_delta_with(
-                DataDeltaKind::Insert,
-                row,
-                ds.schema_current_version(),
-                new_version,
-                &g,
-            );
+            let dp = ds.append_new_data_delta_with(DataDeltaKind::Insert, row, new_version, &g);
             Ok(QueryExecMeta::new(dp))
         } else {
             Err(QueryError::QExecDmlDuplicate)
