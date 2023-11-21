@@ -2,23 +2,85 @@
 
 All changes in this project will be noted in this file.
 
-## Unreleased
+## Version 0.8.0
+
+> This is the first release of Skytable Octave, and it changes the query API entirely making all previous versions incompatible 
+> excluding the data files which are automatically upgraded per our backwards compatibility guarantees
 
 ### Additions
 
+#### BlueQL query language
+- DDL:
+  - `space`s are the equivalent of the `keyspace` from previous versions
+  - `model`s are the equivalent of `table`s from previous version
+  - The following queries were added:
+    - `CREATE SPACE ...`
+    - `CREATE MODEL ...`
+      - Nested lists are now supported
+      - Type definitions are now supported
+      - Multiple fields are now supported
+    - `ALTER SPACE ...`
+    - `ALTER MODEL ...`
+    - `DROP SPACE ...`
+    - `DROP MODEL ...`
+- DML:
+  - **All actions removed**: All the prior `SET`, `GET` and other actions have been removed in favor of the new query language
+  - The following queries were added:
+    - `INSERT INTO <space>.<model>(col, col2, col3, ...)`
+    - `SELECT field1, field2, ... FROM <space>.<model> WHERE <primary_key_column> = <value>`
+    - New data manipulation via `UPDATE` allows arithmetic operations, string manipulation and more!:
+      - `UPDATE <space>.<model> SET col_num += 1 WHERE <primary_key_column> = <value>`
+    - `DELETE FROM <space>.<model> WHERE <primary_key_column> = <value>`
+- DCL:
+  - `SYSCTL CREATE USER <name> WITH { password: <password> }`
+  - `SYSCTL DROP USER <name>`
+
+#### Fractal engine
+
+- The fractal engine is the start of the development of advanced internal state management in Skytable
+- Effectively balances performance and reliability tasks
+
+#### Skyhash 2 protocol
+- The `Skyhash-2` protocol now uses a multi-stage connection sequence for improved security and performance
+- Seamless auth
+- More types
+- Fewer retransmissions
+
+#### Storage engines
+- **New `deltax` storage engine for data**:
+  - The `deltax` storage engine monitors the database for changes and only records the changes in an append only file
+  - The interval can be adjusted per requirements of reliability
+  - Faster and hugely more reliable than the previous engine
+- **New DDL ACID transactions with with the `logx` engine**:
+  - DDL queries are now fully transactional which means that if they are executed, you can be sure that they were complete and synced to disk
+  - This largely improves reliability
+
+#### New shell
+
+- The new client shell easily authenticates based on the Skyhash-2 protocol
+- More reliable
+
+#### Benchmark tool
+
+- New benchmark engines to enable more efficient load testing
+- New benchmark engines use far lesser memory
+- New engines can handle midway benchmark crashes
+
+### Breaking changes
+
 - `skyd`:
-  - New protocol: Skyhash 2.0
-    - Reduced bandwidth usage (as much as 50%)
-    - Even simpler client implementations
-  - Backward compatibility with Skyhash 1.0:
-    - Simply set the protocol version you want to use in the config file, env vars or pass it as a CLI
-      argument
-    - Even faster implementation, even for Skyhash 1.0
-  - New query language: BlueQL
-    - `create keyspace` is now `create space`
-    - `create table` is now `create model`
-    - Similary, all `inspect` queries have been changed
-    - Entities are now of the form `space.model` instead of `ks:tbl`
+  - **The entire query API has changed as actions have been removed**
+  - **Spaces and models**: replace keyspaces and models respectively
+  - **Configuration**:
+    - The configuration system now uses YAML instead of TOML for better readability
+    - The configuration options have changed across CLI, ENV and the config file
+    - Authentication **must be enabled** irrespective of `dev`/`prod` mode
+- `sky-bench`:
+  - New benchmark engines are completely different from the previous engines (see above)
+  - Configuration options have changed because of how the new Skytable engine works
+- `skysh`:
+  - Configuration options have changed because of how the new Skytable engine works
+- `sky-migrate`: **This tool is deprecated and has been removed**. The Skytable engine will now automatically manage data upgrades. (please see [this issue](https://github.com/skytable/skytable/issues/320) for discussion on the same)
 
 ## Version 0.7.6
 

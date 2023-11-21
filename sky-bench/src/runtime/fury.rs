@@ -232,6 +232,17 @@ async fn worker_svc(
             return;
         }
     };
+    // warm up connection
+    match db
+        .query_parse::<()>(&skytable::query!("sysctl report status"))
+        .await
+    {
+        Ok(()) => {}
+        Err(e) => {
+            tx_ack.send(e).await.unwrap();
+            return;
+        }
+    }
     // we're connected and ready to server
     drop(tx_ack);
     'wait: loop {

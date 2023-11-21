@@ -185,8 +185,8 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
         BenchEngine::Rookie => bench_rookie(bench_config, bench),
         BenchEngine::Fury => bench_fury(bench),
     };
-    let stats = match stats {
-        Ok(stats) => stats,
+    let (total_queries, stats) = match stats {
+        Ok(ret) => ret,
         Err(e) => {
             error!("benchmarking failed. attempting to clean up");
             match cleanup(main_thread_db) {
@@ -198,6 +198,10 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
             }
         }
     };
+    info!(
+        "{} queries executed. benchmark complete.",
+        fmt_u64(total_queries)
+    );
     warn!("benchmarks might appear to be slower. this tool is currently experimental");
     // print results
     print_table(stats);
@@ -312,7 +316,7 @@ fn fmt_u64(n: u64) -> String {
 fn bench_rookie(
     task: BombardTask,
     bench: BenchConfig,
-) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
+) -> BenchResult<(u64, Vec<(&'static str, RuntimeStats)>)> {
     // initialize pool
     info!(
         "initializing connections. engine=rookie, threads={}, primary key size ={} bytes",
@@ -330,14 +334,10 @@ fn bench_rookie(
         let this_result = task.run(&mut pool)?;
         results.push((name, this_result));
     }
-    info!(
-        "benchmark complete. finished executing {} queries",
-        fmt_u64(total_queries)
-    );
-    Ok(results)
+    Ok((total_queries, results))
 }
 
-fn bench_fury(bench: BenchConfig) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
+fn bench_fury(bench: BenchConfig) -> BenchResult<(u64, Vec<(&'static str, RuntimeStats)>)> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(bench.threads)
         .enable_all()
@@ -364,10 +364,6 @@ fn bench_fury(bench: BenchConfig) -> BenchResult<Vec<(&'static str, RuntimeStats
             let this_result = task.run_async(&mut pool).await?;
             results.push((name, this_result));
         }
-        info!(
-            "benchmark complete. finished executing {} queries",
-            fmt_u64(total_queries)
-        );
-        Ok(results)
+        Ok((total_queries,results))
     })
 }

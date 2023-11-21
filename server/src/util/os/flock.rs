@@ -33,12 +33,12 @@ extern crate winapi;
 #[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
 
-use std::{fs::File, io, os::unix::io::AsRawFd, path::Path};
+use std::{fs::File, io, path::Path};
 
 pub struct FileLock {
-    file: File,
+    _file: File,
     #[cfg(windows)]
-    handle: winapi::um::handleapi::HANDLE,
+    handle: winapi::um::winnt::HANDLE,
 }
 
 impl FileLock {
@@ -46,13 +46,16 @@ impl FileLock {
         let file = File::create(path)?;
         #[cfg(windows)]
         {
-            use winapi::um::{
-                fileapi::LockFileEx,
-                minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, OVERLAPPED},
-                winnt::HANDLE,
+            use {
+                std::mem,
+                winapi::um::{
+                    fileapi::LockFileEx,
+                    minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY},
+                    winnt::HANDLE,
+                },
             };
             let handle = file.as_raw_handle();
-            let mut overlapped = OVERLAPPED::default();
+            let mut overlapped = unsafe { mem::zeroed() };
             let result = unsafe {
                 LockFileEx(
                     handle as HANDLE,
@@ -69,11 +72,17 @@ impl FileLock {
                     "file is already locked",
                 ));
             }
-            return Ok(Self { file, handle });
+            return Ok(Self {
+                _file: file,
+                handle,
+            });
         }
         #[cfg(unix)]
         {
-            use libc::{flock, LOCK_EX, LOCK_NB};
+            use {
+                libc::{flock, LOCK_EX, LOCK_NB},
+                std::os::unix::io::AsRawFd,
+            };
             let result = unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) };
             if result != 0 {
                 return Err(io::Error::new(
@@ -81,15 +90,18 @@ impl FileLock {
                     "file is already locked",
                 ));
             }
-            return Ok(Self { file });
+            return Ok(Self { _file: file });
         }
     }
     pub fn release(self) -> io::Result<()> {
         #[cfg(windows)]
         {
-            use winapi::um::{fileapi::UnlockFileEx, minwinbase::OVERLAPPED, winnt::HANDLE};
+            use {
+                std::mem,
+                winapi::um::{fileapi::UnlockFileEx, winnt::HANDLE},
+            };
 
-            let mut overlapped = OVERLAPPED::default();
+            let mut overlapped = unsafe { mem::zeroed() };
             let result = unsafe {
                 UnlockFileEx(
                     self.handle as HANDLE,
@@ -106,8 +118,11 @@ impl FileLock {
         }
         #[cfg(unix)]
         {
-            use libc::{flock, LOCK_UN};
-            let result = unsafe { flock(self.file.as_raw_fd(), LOCK_UN) };
+            use {
+                libc::{flock, LOCK_UN},
+                std::os::unix::io::AsRawFd,
+            };
+            let result = unsafe { flock(self._file.as_raw_fd(), LOCK_UN) };
             if result != 0 {
                 return Err(io::Error::last_os_error());
             }

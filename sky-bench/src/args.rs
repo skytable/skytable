@@ -197,7 +197,7 @@ pub fn parse() -> BenchResult<Task> {
         },
     };
     let connections = match args.remove("--connections") {
-        None => num_cpus::get() * 2,
+        None => num_cpus::get() * 8,
         Some(c) => match c.parse::<usize>() {
             Ok(s) if s != 0 => {
                 if engine == BenchEngine::Rookie {
