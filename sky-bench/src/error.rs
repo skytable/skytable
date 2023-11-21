@@ -25,7 +25,10 @@
 */
 
 use {
-    crate::{bench::BombardTask, runtime::BombardError},
+    crate::{
+        bench::BombardTask,
+        runtime::{fury, rookie::BombardError},
+    },
     core::fmt,
     skytable::error::Error,
 };
@@ -35,8 +38,15 @@ pub type BenchResult<T> = Result<T, BenchError>;
 #[derive(Debug)]
 pub enum BenchError {
     ArgsErr(String),
-    BenchBombardError(BombardError<BombardTask>),
+    RookieEngineError(BombardError<BombardTask>),
+    FuryEngineError(fury::FuryError),
     DirectDbError(Error),
+}
+
+impl From<fury::FuryError> for BenchError {
+    fn from(e: fury::FuryError) -> Self {
+        Self::FuryEngineError(e)
+    }
 }
 
 impl From<libsky::ArgParseError> for BenchError {
@@ -60,7 +70,7 @@ impl From<Error> for BenchError {
 
 impl From<BombardError<BombardTask>> for BenchError {
     fn from(e: BombardError<BombardTask>) -> Self {
-        Self::BenchBombardError(e)
+        Self::RookieEngineError(e)
     }
 }
 
@@ -69,7 +79,8 @@ impl fmt::Display for BenchError {
         match self {
             Self::ArgsErr(e) => write!(f, "args error: {e}"),
             Self::DirectDbError(e) => write!(f, "direct operation on db failed. {e}"),
-            Self::BenchBombardError(e) => write!(f, "benchmark failed: {e}"),
+            Self::RookieEngineError(e) => write!(f, "benchmark failed (rookie engine): {e}"),
+            Self::FuryEngineError(e) => write!(f, "benchmark failed (fury engine): {e}"),
         }
     }
 }

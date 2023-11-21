@@ -13,13 +13,21 @@ REQUIRED OPTIONS:
     --password  Provide the password
 
 OPTIONS:
-    --endpoint  Set the endpoint (defaults to tcp@127.0.0.1:2003)
-    --threads   Set the number of threads to be used (defaults to number of physical CPU cores)
-    --keysize   Set the default primary key size. defaults to 7
-    --rowcount  Set the number of rows to be manipulated for the benchmark
+    --endpoint    Set the endpoint (defaults to tcp@127.0.0.1:2003)
+    --threads     Set the number of threads to be used (defaults to logical
+                  CPU count)
+    --connections Set the number of connections. Defaults to twice the logical CPU
+                  count but is only supported by the `fury` engine
+    --keysize     Set the default primary key size. defaults to 7
+    --rowcount    Set the number of rows to be manipulated for the benchmark
+                  Defaults to 1,000,000 rows.
+    --engine      Set the engine for benchmarking. `rookie` is the stable engine
+                  and `fury` is the experimental engine
 
 NOTES:
-    - The user for auth will be 'root' since only 'root' accounts allow the creation and deletion of spaces and models
+    - The user for auth will be 'root' since only 'root' accounts allow the
+      creation and deletion of spaces and models
     - A space called 'benchmark_[random 8B string]' will be created
-    - A model called 'benchmark_[random 8B string]' will be created in the space created above. The created model has the structure {name: string, pass: string}
+    - A model called 'benchmark_[random 8B string]' will be created in the space
+      created above. The created model has the structure {name: string, pass: string}
     - The model and space will be removed once the benchmark is complete

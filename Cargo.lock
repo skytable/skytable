@@ -1182,6 +1182,7 @@ dependencies = [
  "log",
  "num_cpus",
  "skytable",
+ "tokio",
 ]
 
 [[package]]
@@ -1232,7 +1233,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.8.0"
-source = "git+https://github.com/skytable/client-rust.git?branch=octave#18aad43142fbe013ace64d92c3ffd71ab1394a18"
+source = "git+https://github.com/skytable/client-rust.git?branch=octave#691e15578c1a09a5d2b6b85c8752e6eee31fbda2"
 dependencies = [
  "async-trait",
  "bb8",

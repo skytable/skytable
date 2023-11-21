@@ -44,6 +44,12 @@ pub enum Task {
     BenchConfig(BenchConfig),
 }
 
+#[derive(Debug, PartialEq)]
+pub enum BenchEngine {
+    Rookie,
+    Fury,
+}
+
 #[derive(Debug)]
 pub struct BenchConfig {
     pub host: String,
@@ -52,6 +58,8 @@ pub struct BenchConfig {
     pub threads: usize,
     pub key_size: usize,
     pub query_count: usize,
+    pub engine: BenchEngine,
+    pub connections: usize,
 }
 
 impl BenchConfig {
@@ -62,6 +70,8 @@ impl BenchConfig {
         threads: usize,
         key_size: usize,
         query_count: usize,
+        engine: BenchEngine,
+        connections: usize,
     ) -> Self {
         Self {
             host,
@@ -70,6 +80,8 @@ impl BenchConfig {
             threads,
             key_size,
             query_count,
+            engine,
+            connections,
         }
     }
 }
@@ -139,7 +151,7 @@ pub fn parse() -> BenchResult<Task> {
     };
     // threads
     let thread_count = match args.remove("--threads") {
-        None => num_cpus::get_physical(),
+        None => num_cpus::get(),
         Some(tc) => match tc.parse() {
             Ok(tc) if tc > 0 => tc,
             Err(_) | Ok(_) => {
@@ -169,12 +181,51 @@ pub fn parse() -> BenchResult<Task> {
             Err(_) | Ok(_) => return Err(BenchError::ArgsErr(format!("incorrect value for `--keysize`. must be set to a value that can be used to generate atleast {query_count} unique primary keys"))),
         }
     };
-    Ok(Task::BenchConfig(BenchConfig::new(
-        host,
-        port,
-        passsword,
-        thread_count,
-        key_size,
-        query_count,
-    )))
+    let engine = match args.remove("--engine") {
+        None => {
+            warn!("engine unspecified. choosing 'fury'");
+            BenchEngine::Fury
+        }
+        Some(engine) => match engine.as_str() {
+            "rookie" => BenchEngine::Rookie,
+            "fury" => BenchEngine::Fury,
+            _ => {
+                return Err(BenchError::ArgsErr(format!(
+                    "bad value for `--engine`. got `{engine}` but expected warp or rookie"
+                )))
+            }
+        },
+    };
+    let connections = match args.remove("--connections") {
+        None => num_cpus::get() * 2,
+        Some(c) => match c.parse::<usize>() {
+            Ok(s) if s != 0 => {
+                if engine == BenchEngine::Rookie {
+                    return Err(BenchError::ArgsErr(format!(
+                        "the 'rookie' engine does not support explicit connection count. the number of threads is the connection count"
+                    )));
+                }
+                s
+            }
+            _ => {
+                return Err(BenchError::ArgsErr(format!(
+                    "bad value for `--connections`. must be a nonzero value"
+                )))
+            }
+        },
+    };
+    if args.is_empty() {
+        Ok(Task::BenchConfig(BenchConfig::new(
+            host,
+            port,
+            passsword,
+            thread_count,
+            key_size,
+            query_count,
+            engine,
+            connections,
+        )))
+    } else {
+        Err(BenchError::ArgsErr(format!("unrecognized arguments")))
+    }
 }

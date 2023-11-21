@@ -24,11 +24,13 @@
  *
 */
 
+use crate::args::BenchEngine;
+
 use {
     crate::{
         args::BenchConfig,
         error::{self, BenchResult},
-        runtime::{BombardPool, RuntimeStats, ThreadedBombardTask},
+        runtime::{fury, rookie, RuntimeStats},
     },
     skytable::{error::Error, query, response::Response, Config, Connection, Query},
     std::{fmt, time::Instant},
@@ -87,7 +89,7 @@ impl BombardTaskSpec {
             pk_len,
         }
     }
-    fn generate(&self, current: u64) -> (Query, Response) {
+    pub fn generate(&self, current: u64) -> (Query, Response) {
         let mut q = query!(&self.base_query);
         let resp = match self.kind {
             BombardTaskKind::Insert(second_column) => {
@@ -137,7 +139,7 @@ impl From<Error> for BombardTaskError {
     }
 }
 
-impl ThreadedBombardTask for BombardTask {
+impl rookie::ThreadedBombardTask for BombardTask {
     type Worker = Connection;
     type WorkerTask = (Query, Response);
     type WorkerTaskSpec = BombardTaskSpec;
@@ -179,7 +181,11 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
     let mut main_thread_db = bench_config.config.connect()?;
     main_thread_db.query_parse::<()>(&query!("create space bench"))?;
     main_thread_db.query_parse::<()>(&query!("create model bench.bench(un: string, pw: uint8)"))?;
-    let stats = match bench_internal(bench_config, bench) {
+    let stats = match bench.engine {
+        BenchEngine::Rookie => bench_rookie(bench_config, bench),
+        BenchEngine::Fury => bench_fury(bench),
+    };
+    let stats = match stats {
         Ok(stats) => stats,
         Err(e) => {
             error!("benchmarking failed. attempting to clean up");
@@ -253,24 +259,19 @@ impl BenchItem {
             self.count
         )
     }
-    fn run(self, pool: &mut BombardPool<BombardTask>) -> BenchResult<RuntimeStats> {
+    fn run(self, pool: &mut rookie::BombardPool<BombardTask>) -> BenchResult<RuntimeStats> {
         pool.blocking_bombard(self.spec, self.count)
+            .map_err(From::from)
+    }
+    async fn run_async(self, pool: &mut fury::Fury) -> BenchResult<RuntimeStats> {
+        pool.bombard(self.count, self.spec)
+            .await
             .map_err(From::from)
     }
 }
 
-fn bench_internal(
-    config: BombardTask,
-    bench: BenchConfig,
-) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
-    // initialize pool
-    info!(
-        "initializing connections. threads={}, primary key size ={} bytes",
-        bench.threads, bench.key_size
-    );
-    let mut pool = BombardPool::new(bench.threads, config)?;
-    // prepare benches
-    let benches = vec![
+fn prepare_bench_spec(bench: &BenchConfig) -> Vec<BenchItem> {
+    vec![
         BenchItem::new(
             "INSERT",
             BombardTaskSpec::insert("insert into bench.bench(?, ?)".into(), bench.key_size, 0),
@@ -292,7 +293,34 @@ fn bench_internal(
             ),
             bench.query_count,
         ),
-    ];
+    ]
+}
+
+fn fmt_u64(n: u64) -> String {
+    let num_str = n.to_string();
+    let mut result = String::new();
+    let chars_rev: Vec<_> = num_str.chars().rev().collect();
+    for (i, ch) in chars_rev.iter().enumerate() {
+        if i % 3 == 0 && i != 0 {
+            result.push(',');
+        }
+        result.push(*ch);
+    }
+    result.chars().rev().collect()
+}
+
+fn bench_rookie(
+    task: BombardTask,
+    bench: BenchConfig,
+) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
+    // initialize pool
+    info!(
+        "initializing connections. engine=rookie, threads={}, primary key size ={} bytes",
+        bench.threads, bench.key_size
+    );
+    let mut pool = rookie::BombardPool::new(bench.threads, task)?;
+    // prepare benches
+    let benches = prepare_bench_spec(&bench);
     // bench
     let total_queries = bench.query_count as u64 * benches.len() as u64;
     let mut results = vec![];
@@ -309,15 +337,37 @@ fn bench_internal(
     Ok(results)
 }
 
-fn fmt_u64(n: u64) -> String {
-    let num_str = n.to_string();
-    let mut result = String::new();
-    let chars_rev: Vec<_> = num_str.chars().rev().collect();
-    for (i, ch) in chars_rev.iter().enumerate() {
-        if i % 3 == 0 && i != 0 {
-            result.push(',');
+fn bench_fury(bench: BenchConfig) -> BenchResult<Vec<(&'static str, RuntimeStats)>> {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(bench.threads)
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async move {
+        info!(
+            "initializing connections. engine=fury, threads={}, connections={}, primary key size ={} bytes",
+            bench.threads, bench.connections, bench.key_size
+        );
+        let mut pool = fury::Fury::new(
+            bench.connections,
+            Config::new(&bench.host, bench.port, "root", &bench.root_pass),
+        )
+        .await?;
+        // prepare benches
+        let benches = prepare_bench_spec(&bench);
+        // bench
+        let total_queries = bench.query_count as u64 * benches.len() as u64;
+        let mut results = vec![];
+        for task in benches {
+            let name = task.name;
+            task.print_log_start();
+            let this_result = task.run_async(&mut pool).await?;
+            results.push((name, this_result));
         }
-        result.push(*ch);
-    }
-    result.chars().rev().collect()
+        info!(
+            "benchmark complete. finished executing {} queries",
+            fmt_u64(total_queries)
+        );
+        Ok(results)
+    })
 }
