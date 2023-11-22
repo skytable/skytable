@@ -142,8 +142,8 @@ pub struct GenericDictSpec;
 
 /// generic dict entry metadata
 pub struct GenericDictEntryMD {
-    pub(crate) dscr: u8,
     pub(crate) klen: usize,
+    pub(crate) dscr: u8,
 }
 
 impl GenericDictEntryMD {

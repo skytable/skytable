@@ -125,13 +125,16 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         };
         match exec() {
             Ok(()) => Ok(()),
-            Err(_) => {
+            Err(e) => {
                 // republish changes since we failed to commit
                 restore_list.into_iter().for_each(|delta| {
                     model.delta_state().append_new_data_delta(delta, &g);
                 });
                 // now attempt to fix the file
-                return self.attempt_fix_data_batchfile();
+                self.attempt_fix_data_batchfile()?;
+                // IMPORTANT: return an error because even though we recovered the journal we still didn't succeed in
+                // writing the batch
+                return Err(e);
             }
         }
     }

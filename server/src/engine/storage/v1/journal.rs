@@ -402,7 +402,11 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         debug_assert!(TA::RECOVERY_PLUGIN);
         match self.append_event(event) {
             Ok(()) => Ok(()),
-            Err(_) => compiler::cold_call(|| return self.appendrec_journal_reverse_entry()),
+            Err(e) => compiler::cold_call(move || {
+                // IMPORTANT: we still need to return an error so that the caller can retry if deemed appropriate
+                self.appendrec_journal_reverse_entry()?;
+                Err(e)
+            }),
         }
     }
 }

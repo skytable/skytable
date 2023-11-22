@@ -47,7 +47,7 @@ pub const fn unlikely(b: bool) -> bool {
 
 #[cold]
 #[inline(never)]
-pub fn cold_call<U>(mut v: impl FnMut() -> U) -> U {
+pub fn cold_call<U>(v: impl FnOnce() -> U) -> U {
     v()
 }
 
