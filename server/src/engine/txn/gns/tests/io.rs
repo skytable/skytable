@@ -155,7 +155,9 @@ mod model_tests {
                     model.get_uuid(),
                     model.delta_state().schema_current_version().value_u64()
                 ),
-                new_fields
+                new_fields: into_dict! {
+                    "auth_2fa" => Field::new([Layer::bool()].into(), true),
+                }
             },
             decoded
         );
@@ -191,6 +193,10 @@ mod model_tests {
     #[test]
     fn alter_update() {
         let (space, model) = default_space_model();
+        let updated_fields_copy = into_dict! {
+            // people of your social app will hate this, but hehe
+            "profile_pic" => Field::new([Layer::bin()].into(), false)
+        };
         let updated_fields = into_dict! {
             // people of your social app will hate this, but hehe
             "profile_pic" => Field::new([Layer::bin()].into(), false)
@@ -214,7 +220,7 @@ mod model_tests {
                     model.get_uuid(),
                     model.delta_state().schema_current_version().value_u64()
                 ),
-                updated_fields
+                updated_fields: updated_fields_copy
             },
             decoded
         );

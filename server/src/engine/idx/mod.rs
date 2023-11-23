@@ -39,7 +39,9 @@ use {
     core::{borrow::Borrow, hash::Hash},
 };
 
-pub use stord::iter::IndexSTSeqDllIterOrdKV;
+pub mod stdord_iter {
+    pub use super::stord::iter::IndexSTSeqDllIterOrdKV;
+}
 
 // re-exports
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;
@@ -308,7 +310,7 @@ pub trait STIndex<K: ?Sized, V>: IndexBaseSpec {
     fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
 }
 
-pub trait STIndexSeq<K: ?Sized, V>: STIndex<K, V> {
+pub trait STIndexSeq<K, V>: STIndex<K, V> {
     /// An ordered iterator over the keys and values
     type IterOrdKV<'a>: Iterator<Item = (&'a K, &'a V)> + DoubleEndedIterator<Item = (&'a K, &'a V)>
     where
@@ -325,10 +327,17 @@ pub trait STIndexSeq<K: ?Sized, V>: STIndex<K, V> {
     where
         Self: 'a,
         V: 'a;
+    type OwnedIterKV: Iterator<Item = (K, V)> + DoubleEndedIterator<Item = (K, V)>;
+    type OwnedIterKeys: Iterator<Item = K> + DoubleEndedIterator<Item = K>;
+    type OwnedIterValues: Iterator<Item = V> + DoubleEndedIterator<Item = V>;
     /// Returns an ordered iterator over the KV pairs
     fn stseq_ord_kv<'a>(&'a self) -> Self::IterOrdKV<'a>;
     /// Returns an ordered iterator over the keys
     fn stseq_ord_key<'a>(&'a self) -> Self::IterOrdKey<'a>;
     /// Returns an ordered iterator over the values
     fn stseq_ord_value<'a>(&'a self) -> Self::IterOrdValue<'a>;
+    // owned
+    fn stseq_owned_kv(self) -> Self::OwnedIterKV;
+    fn stseq_owned_keys(self) -> Self::OwnedIterKeys;
+    fn stseq_owned_values(self) -> Self::OwnedIterValues;
 }

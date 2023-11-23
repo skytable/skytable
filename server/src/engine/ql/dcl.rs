@@ -42,7 +42,7 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
         ^cursor
         7 tokens
     */
-        if state.remaining() < 7 {
+    if state.remaining() < 7 {
         return Err(QueryError::QLInvalidSyntax);
     }
     let token_buffer = state.current();

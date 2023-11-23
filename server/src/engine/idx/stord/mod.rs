@@ -275,6 +275,12 @@ impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     }
 }
 
+impl<K, V, C: Config<K, V> + Default> Default for IndexSTSeqDll<K, V, C> {
+    fn default() -> Self {
+        Self::with_hasher(C::Hasher::default())
+    }
+}
+
 impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     #[inline(always)]
     fn metrics_update_f_decr(&mut self) {
@@ -707,27 +713,34 @@ where
         Self: 'a,
         K: 'a,
         V: 'a;
-
     type IterOrdKey<'a> = IndexSTSeqDllIterOrdKey<'a, K, V>
     where
         Self: 'a,
         K: 'a;
-
     type IterOrdValue<'a> = IndexSTSeqDllIterOrdValue<'a, K, V>
     where
         Self: 'a,
         V: 'a;
-
+    type OwnedIterKV = iter::OrderedOwnedIteratorKV<K, V>;
+    type OwnedIterKeys = iter::OrderedOwnedIteratorKey<K, V>;
+    type OwnedIterValues = iter::OrderedOwnedIteratorValue<K, V>;
     fn stseq_ord_kv<'a>(&'a self) -> Self::IterOrdKV<'a> {
         self._iter_ord_kv()
     }
-
     fn stseq_ord_key<'a>(&'a self) -> Self::IterOrdKey<'a> {
         self._iter_ord_k()
     }
-
     fn stseq_ord_value<'a>(&'a self) -> Self::IterOrdValue<'a> {
         self._iter_ord_v()
+    }
+    fn stseq_owned_keys(self) -> Self::OwnedIterKeys {
+        iter::OrderedOwnedIteratorKey(iter::OrderedOwnedIteratorRaw::new(self))
+    }
+    fn stseq_owned_values(self) -> Self::OwnedIterValues {
+        iter::OrderedOwnedIteratorValue(iter::OrderedOwnedIteratorRaw::new(self))
+    }
+    fn stseq_owned_kv(self) -> Self::OwnedIterKV {
+        iter::OrderedOwnedIteratorKV(iter::OrderedOwnedIteratorRaw::new(self))
     }
 }
 

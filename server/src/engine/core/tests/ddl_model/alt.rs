@@ -371,7 +371,7 @@ mod exec {
                         .stseq_ord_kv()
                         .rev()
                         .take(2)
-                        .map(|(id, f)| (id.clone(), f.clone()))
+                        .map(|(id, f)| (id.as_str().to_owned(), f.clone()))
                         .collect::<Vec<_>>(),
                     [
                         ("col3".into(), Field::new([Layer::uint16()].into(), true)),
@@ -400,7 +400,7 @@ mod exec {
                         .fields()
                         .stseq_ord_kv()
                         .rev()
-                        .map(|(a, b)| (a.clone(), b.clone()))
+                        .map(|(a, b)| (a.as_str().to_owned(), b.clone()))
                         .collect::<Vec<_>>(),
                     [("username".into(), Field::new([Layer::str()].into(), false))]
                 );

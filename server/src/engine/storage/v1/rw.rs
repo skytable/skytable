@@ -308,7 +308,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedWriter<Fs> {
             cs: SCrc::new(),
         })
     }
-    pub fn write_unfsynced(&mut self, block: &[u8]) -> RuntimeResult<()> {
+    pub fn tracked_write_unfsynced(&mut self, block: &[u8]) -> RuntimeResult<()> {
         self.untracked_write(block)
             .map(|_| self.cs.recompute_with_new_var_block(block))
     }
@@ -322,8 +322,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedWriter<Fs> {
         self.f.f.sync_write_cache()
     }
     pub fn reset_and_finish_checksum(&mut self) -> u64 {
-        let mut scrc = SCrc::new();
-        core::mem::swap(&mut self.cs, &mut scrc);
+        let scrc = core::mem::replace(&mut self.cs, SCrc::new());
         scrc.finish()
     }
     pub fn into_inner_file(self) -> RuntimeResult<SDSSFileIO<Fs>> {

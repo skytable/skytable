@@ -80,8 +80,11 @@ fn fieldmap() {
         "profile_pic".into(),
         Field::new([Layer::bin()].into(), true),
     );
-    let enc = super::enc::enc_dict_full::<super::map::FieldMapSpec>(&fields);
-    let dec = super::dec::dec_dict_full::<super::map::FieldMapSpec>(&enc).unwrap();
+    let enc = super::enc::enc_dict_full::<super::map::FieldMapSpec<_>>(&fields);
+    let dec = super::dec::dec_dict_full::<
+        super::map::FieldMapSpec<crate::engine::idx::IndexSTSeqCns<Box<str>, _>>,
+    >(&enc)
+    .unwrap();
     for ((orig_field_id, orig_field), (restored_field_id, restored_field)) in
         fields.stseq_ord_kv().zip(dec.stseq_ord_kv())
     {

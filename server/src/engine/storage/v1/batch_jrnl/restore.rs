@@ -146,6 +146,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         // begin
         let mut closed = false;
         while !self.f.is_eof() && !closed {
+            self.f.__reset_checksum();
             // try to decode this batch
             let Ok(batch) = self.read_batch() else {
                 self.attempt_recover_data_batch()?;
@@ -237,10 +238,16 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                             for (field_name, new_data) in m
                                 .fields()
                                 .stseq_ord_key()
-                                .filter(|key| key.as_ref() != m.p_key())
+                                .filter(|key| key.as_str() != m.p_key())
                                 .zip(new_row)
                             {
-                                data.st_insert(field_name.clone(), new_data);
+                                data.st_insert(
+                                    unsafe {
+                                        // UNSAFE(@ohsayan): model in scope, we're good
+                                        field_name.clone()
+                                    },
+                                    new_data,
+                                );
                             }
                             let row = Row::new_restored(
                                 pk,

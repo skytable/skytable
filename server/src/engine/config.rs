@@ -1202,11 +1202,6 @@ fn check_config_file(
             Some(ep) => match ep.secure.as_mut() {
                 Some(secure_ep) => {
                     super::fractal::context::set_dmsg("loading TLS configuration from disk");
-                    dbg!(
-                        &secure_ep.cert,
-                        &secure_ep.private_key,
-                        &secure_ep.pkey_passphrase
-                    );
                     let cert = fs::read_to_string(&secure_ep.cert)?;
                     let private_key = fs::read_to_string(&secure_ep.private_key)?;
                     let private_key_passphrase = fs::read_to_string(&secure_ep.pkey_passphrase)?;

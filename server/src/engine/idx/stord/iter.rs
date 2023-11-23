@@ -28,14 +28,16 @@ use {
     super::{
         config::Config, IndexSTSeqDll, IndexSTSeqDllKeyptr, IndexSTSeqDllNode, IndexSTSeqDllNodePtr,
     },
+    crate::engine::idx::{AsKey, AsValue},
     std::{
         collections::{
-            hash_map::{Iter, Keys as StdMapIterKey, Values as StdMapIterVal},
+            hash_map::{Iter as StdMapIter, Keys as StdMapIterKey, Values as StdMapIterVal},
             HashMap as StdMap,
         },
         fmt::{self, Debug},
         iter::FusedIterator,
         marker::PhantomData,
+        mem::ManuallyDrop,
         ptr::{self, NonNull},
     },
 };
@@ -48,7 +50,7 @@ macro_rules! unsafe_marker_impl {
 }
 
 pub struct IndexSTSeqDllIterUnordKV<'a, K: 'a, V: 'a> {
-    i: Iter<'a, IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>>,
+    i: StdMapIter<'a, IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>>,
 }
 
 // UNSAFE(@ohsayan): aliasing guarantees correctness
@@ -260,6 +262,118 @@ impl<K, V> IndexSTSeqDllIterOrdConfig<K, V> for IndexSTSeqDllIterOrdConfigValue 
         V: 'a,
     {
         Some(&(*ptr).v)
+    }
+}
+
+pub(super) struct OrderedOwnedIteratorRaw<K, V> {
+    h: *mut IndexSTSeqDllNode<K, V>,
+    t: *mut IndexSTSeqDllNode<K, V>,
+    r: usize,
+}
+
+impl<K: AsKey, V: AsValue> OrderedOwnedIteratorRaw<K, V> {
+    pub(super) fn new<Mc: Config<K, V>>(mut idx: IndexSTSeqDll<K, V, Mc>) -> Self {
+        // clean up if needed
+        idx.vacuum_full();
+        let mut idx = ManuallyDrop::new(idx);
+        // chuck the map
+        drop(unsafe { ptr::read((&mut idx.m) as *mut _) });
+        // we own everything now
+        unsafe {
+            Self {
+                h: if idx.h.is_null() {
+                    ptr::null_mut()
+                } else {
+                    (*idx.h).p
+                },
+                t: idx.h,
+                r: idx.len(),
+            }
+        }
+    }
+}
+
+impl<K, V> OrderedOwnedIteratorRaw<K, V> {
+    #[inline(always)]
+    fn _next(&mut self) -> Option<(K, V)> {
+        if self.h == self.t {
+            None
+        } else {
+            self.r -= 1;
+            unsafe {
+                // UNSAFE(@ohsayan): +nullck
+                let this = ptr::read(self.h);
+                // destroy this node
+                IndexSTSeqDllNode::dealloc_headless(self.h);
+                self.h = (*self.h).p;
+                Some((this.k, this.v))
+            }
+        }
+    }
+    #[inline(always)]
+    fn _next_back(&mut self) -> Option<(K, V)> {
+        if self.h == self.t {
+            None
+        } else {
+            self.r -= 1;
+            unsafe {
+                // UNSAFE(@ohsayan): +nullck
+                self.t = (*self.t).n;
+                let this = ptr::read(self.t);
+                IndexSTSeqDllNode::dealloc_headless(self.t);
+                Some((this.k, this.v))
+            }
+        }
+    }
+}
+
+impl<K, V> Drop for OrderedOwnedIteratorRaw<K, V> {
+    fn drop(&mut self) {
+        // clean up what's left
+        while let Some(_) = self._next() {}
+    }
+}
+
+pub struct OrderedOwnedIteratorKV<K, V>(pub(super) OrderedOwnedIteratorRaw<K, V>);
+
+impl<K: AsKey, V: AsValue> Iterator for OrderedOwnedIteratorKV<K, V> {
+    type Item = (K, V);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0._next()
+    }
+}
+
+impl<K: AsKey, V: AsValue> DoubleEndedIterator for OrderedOwnedIteratorKV<K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0._next_back()
+    }
+}
+
+pub struct OrderedOwnedIteratorKey<K, V>(pub(super) OrderedOwnedIteratorRaw<K, V>);
+
+impl<K: AsKey, V: AsValue> Iterator for OrderedOwnedIteratorKey<K, V> {
+    type Item = K;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0._next().map(|(k, _)| k)
+    }
+}
+impl<K: AsKey, V: AsValue> DoubleEndedIterator for OrderedOwnedIteratorKey<K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0._next_back().map(|(k, _)| k)
+    }
+}
+
+pub struct OrderedOwnedIteratorValue<K, V>(pub(super) OrderedOwnedIteratorRaw<K, V>);
+
+impl<K: AsKey, V: AsValue> Iterator for OrderedOwnedIteratorValue<K, V> {
+    type Item = V;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0._next().map(|(_, v)| v)
+    }
+}
+impl<K: AsKey, V: AsValue> DoubleEndedIterator for OrderedOwnedIteratorValue<K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0._next_back().map(|(_, v)| v)
     }
 }
 

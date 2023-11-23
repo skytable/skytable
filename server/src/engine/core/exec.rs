@@ -24,18 +24,16 @@
  *
 */
 
-use {
-    crate::engine::{
-        core::{dml, model::Model, space::Space},
-        error::{QueryError, QueryResult},
-        fractal::Global,
-        net::protocol::{ClientLocalState, Response, SQuery},
-        ql::{
-            ast::{traits::ASTNode, InplaceData, State},
-            lex::{Keyword, KeywordStmt, Token},
-        },
+use crate::engine::{
+    core::{dml, model::Model, space::Space},
+    error::{QueryError, QueryResult},
+    fractal::Global,
+    mem::RawSlice,
+    net::protocol::{ClientLocalState, Response, SQuery},
+    ql::{
+        ast::{traits::ASTNode, InplaceData, State},
+        lex::{Keyword, KeywordStmt, Token},
     },
-    core::ops::Deref,
 };
 
 pub async fn dispatch_to_executor<'a>(
@@ -64,32 +62,6 @@ pub async fn dispatch_to_executor<'a>(
     ---
     trigger warning: disgusting hacks below (why can't async play nice with lifetimes :|)
 */
-
-struct RawSlice<T> {
-    t: *const T,
-    l: usize,
-}
-
-unsafe impl<T: Send> Send for RawSlice<T> {}
-unsafe impl<T: Sync> Sync for RawSlice<T> {}
-
-impl<T> RawSlice<T> {
-    #[inline(always)]
-    unsafe fn new(t: *const T, l: usize) -> Self {
-        Self { t, l }
-    }
-}
-
-impl<T> Deref for RawSlice<T> {
-    type Target = [T];
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        unsafe {
-            // UNSAFE(@ohsayan): the caller MUST guarantee that this remains valid throughout the usage of the slice
-            core::slice::from_raw_parts(self.t, self.l)
-        }
-    }
-}
 
 #[inline(always)]
 fn call<A: ASTNode<'static> + core::fmt::Debug, T>(

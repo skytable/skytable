@@ -31,6 +31,7 @@ use {
             core::model::{DeltaState, DeltaVersion, SchemaDeltaKind},
             data::cell::Datacell,
             idx::{meta::hash::HasherNativeFx, mtchm::meta::TreeElement, IndexST, STIndex},
+            mem::RawStr,
             sync::smart::RawRC,
         },
         util::compiler,
@@ -39,7 +40,7 @@ use {
     std::mem::ManuallyDrop,
 };
 
-pub type DcFieldIndex = IndexST<Box<str>, Datacell, HasherNativeFx>;
+pub type DcFieldIndex = IndexST<RawStr, Datacell, HasherNativeFx>;
 
 #[derive(Debug)]
 pub struct Row {
@@ -145,7 +146,7 @@ impl Row {
             .read()
             .fields()
             .st_iter_kv()
-            .map(|(id, data)| (id.clone(), data.clone()))
+            .map(|(id, data)| (id.as_str().to_owned().into_boxed_str(), data.clone()))
             .collect()
     }
 }
@@ -171,7 +172,15 @@ impl Row {
         for (delta_id, delta) in delta_state.resolve_iter_since(wl.txn_revised_schema_version) {
             match delta.kind() {
                 SchemaDeltaKind::FieldAdd(f) => {
-                    wl.fields.st_insert(f.clone(), Datacell::null());
+                    wl.fields.st_insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): a row is inside a model and is valid as long as it is in there!
+                            // even if the model was chucked and the row was lying around it won't cause any harm because it
+                            // neither frees anything nor allocates
+                            f.clone()
+                        },
+                        Datacell::null(),
+                    );
                 }
                 SchemaDeltaKind::FieldRem(f) => {
                     wl.fields.st_delete(f);

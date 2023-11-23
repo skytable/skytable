@@ -27,6 +27,7 @@
 mod astr;
 mod ll;
 mod numbuf;
+mod rawslice;
 pub mod scanner;
 mod stackop;
 mod uarray;
@@ -39,11 +40,12 @@ mod tests;
 pub use {
     astr::AStr,
     ll::CachePadded,
+    numbuf::IntegerRepr,
+    rawslice::{RawSlice, RawStr},
     scanner::BufferedScanner,
     uarray::UArray,
     vinline::VInline,
     word::{DwordNN, DwordQN, WordIO, ZERO_BLOCK},
-    numbuf::IntegerRepr,
 };
 // imports
 use std::alloc::{self, Layout};

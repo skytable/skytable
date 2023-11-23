@@ -40,8 +40,8 @@ use {
         },
         error::{QueryError, QueryResult},
         fractal::{GenericTask, GlobalInstanceLike, Task},
-        idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
-        mem::VInline,
+        idx::{self, IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
+        mem::{RawStr, VInline},
         ql::ddl::{
             crt::CreateModel,
             drop::DropModel,
@@ -49,21 +49,23 @@ use {
         },
         txn::gns::{self as gnstxn, SpaceIDRef},
     },
+    std::collections::hash_map::{Entry, HashMap},
 };
 
 pub(in crate::engine::core) use self::delta::{DeltaState, DeltaVersion, SchemaDeltaKind};
 
 use super::util::{EntityID, EntityIDRef};
-type Fields = IndexSTSeqCns<Box<str>, Field>;
+type Fields = IndexSTSeqCns<RawStr, Field>;
 
 #[derive(Debug)]
 pub struct Model {
     uuid: Uuid,
-    p_key: Box<str>,
+    p_key: RawStr,
     p_tag: FullTag,
     fields: Fields,
     data: PrimaryIndex,
     delta: DeltaState,
+    private: ModelPrivate,
 }
 
 #[cfg(test)]
@@ -77,23 +79,6 @@ impl PartialEq for Model {
 }
 
 impl Model {
-    pub fn new(
-        uuid: Uuid,
-        p_key: Box<str>,
-        p_tag: FullTag,
-        fields: Fields,
-        data: PrimaryIndex,
-        delta: DeltaState,
-    ) -> Self {
-        Self {
-            uuid,
-            p_key,
-            p_tag,
-            fields,
-            data,
-            delta,
-        }
-    }
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
@@ -122,27 +107,59 @@ impl Model {
     pub fn delta_state(&self) -> &DeltaState {
         &self.delta
     }
-    pub fn delta_state_mut(&mut self) -> &mut DeltaState {
-        &mut self.delta
-    }
-    pub fn fields_mut(&mut self) -> &mut Fields {
-        &mut self.fields
-    }
     pub fn fields(&self) -> &Fields {
         &self.fields
+    }
+    pub fn model_mutator<'a>(&'a mut self) -> ModelMutator<'a> {
+        ModelMutator { model: self }
     }
 }
 
 impl Model {
-    pub fn new_restore(uuid: Uuid, p_key: Box<str>, p_tag: FullTag, fields: Fields) -> Self {
-        Self::new(
+    fn new_with_private(
+        uuid: Uuid,
+        p_key: RawStr,
+        p_tag: FullTag,
+        fields: Fields,
+        private: ModelPrivate,
+    ) -> Self {
+        Self {
             uuid,
             p_key,
             p_tag,
             fields,
-            PrimaryIndex::new_empty(),
-            DeltaState::new_resolved(),
-        )
+            data: PrimaryIndex::new_empty(),
+            delta: DeltaState::new_resolved(),
+            private,
+        }
+    }
+    pub fn new_restore(
+        uuid: Uuid,
+        p_key: Box<str>,
+        p_tag: FullTag,
+        decl_fields: IndexSTSeqCns<Box<str>, Field>,
+    ) -> Self {
+        let mut private = ModelPrivate::empty();
+        let p_key = unsafe {
+            // UNSAFE(@ohsayan): once again, all cool since we maintain the allocation
+            private.push_allocated(p_key)
+        };
+        let mut fields = IndexSTSeqCns::idx_init();
+        decl_fields
+            .stseq_owned_kv()
+            .map(|(field_key, field)| {
+                (
+                    unsafe {
+                        // UNSAFE(@ohsayan): we ensure that priv is dropped iff model is dropped
+                        private.push_allocated(field_key)
+                    },
+                    field,
+                )
+            })
+            .for_each(|(field_key, field)| {
+                fields.st_insert(field_key, field);
+            });
+        Self::new_with_private(uuid, p_key, p_tag, fields, private)
     }
     pub fn process_create(
         CreateModel {
@@ -151,6 +168,7 @@ impl Model {
             props,
         }: CreateModel,
     ) -> QueryResult<Self> {
+        let mut private = ModelPrivate::empty();
         let mut okay = props.is_empty() & !fields.is_empty();
         // validate fields
         let mut field_spec = fields.into_iter();
@@ -164,20 +182,36 @@ impl Model {
                 null,
                 primary,
             } = field_spec.next().unwrap();
+            let this_field_ptr = unsafe {
+                // UNSAFE(@ohsayan): this is going to go with our alloc, so we're good! if we fail too, the dtor for private will run
+                private.allocate_or_recycle(field_name.as_str())
+            };
             if primary {
                 pk_cnt += 1usize;
-                last_pk = Some(field_name.as_str());
+                last_pk = Some(unsafe {
+                    // UNSAFE(@ohsayan): totally cool, it's all allocated
+                    this_field_ptr.clone()
+                });
                 okay &= !null;
             }
             let layer = Field::parse_layers(layers, null)?;
-            okay &= fields.st_insert(field_name.as_str().to_string().into_boxed_str(), layer);
+            okay &= fields.st_insert(this_field_ptr, layer);
         }
         okay &= pk_cnt <= 1;
         if okay {
-            let last_pk = last_pk.unwrap_or(fields.stseq_ord_key().next().unwrap());
-            let tag = fields.st_get(last_pk).unwrap().layers()[0].tag;
+            let last_pk = last_pk.unwrap_or(unsafe {
+                // UNSAFE(@ohsayan): once again, all of this is allocated
+                fields.stseq_ord_key().next().unwrap().clone()
+            });
+            let tag = fields.st_get(&last_pk).unwrap().layers()[0].tag;
             if tag.tag_unique().is_unique() {
-                return Ok(Self::new_restore(Uuid::new(), last_pk.into(), tag, fields));
+                return Ok(Self::new_with_private(
+                    Uuid::new(),
+                    last_pk,
+                    tag,
+                    fields,
+                    private,
+                ));
             }
         }
         Err(QueryError::QExecDdlModelBadDefinition)
@@ -283,6 +317,92 @@ impl Model {
             let _ = space.models_mut().remove(model_name.as_str());
             Ok(())
         })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct ModelPrivate {
+    alloc: HashMap<Box<str>, bool, idx::meta::hash::HasherNativeFx>,
+}
+
+impl ModelPrivate {
+    fn empty() -> Self {
+        Self {
+            alloc: HashMap::with_hasher(Default::default()),
+        }
+    }
+    pub(self) unsafe fn allocate_or_recycle(&mut self, new: &str) -> RawStr {
+        match self.alloc.get_key_value(new) {
+            Some((prev_alloc, _)) => {
+                // already allocated this
+                let ret = RawStr::new(prev_alloc.as_ptr(), prev_alloc.len());
+                // set live!
+                *self.alloc.get_mut(ret.as_str()).unwrap() = false;
+                return ret;
+            }
+            None => {
+                // need to allocate
+                let alloc = new.to_owned().into_boxed_str();
+                let ret = RawStr::new(alloc.as_ptr(), alloc.len());
+                let _ = self.alloc.insert(alloc, false);
+                return ret;
+            }
+        }
+    }
+    pub(self) unsafe fn mark_pending_remove(&mut self, v: &str) -> RawStr {
+        let ret = self.alloc.get_key_value(v).unwrap().0;
+        let ret = RawStr::new(ret.as_ptr(), ret.len());
+        *self.alloc.get_mut(v).unwrap() = true;
+        ret
+    }
+    pub(self) unsafe fn vacuum_marked(&mut self) {
+        self.alloc.retain(|_, dead| !*dead)
+    }
+    pub(self) unsafe fn push_allocated(&mut self, alloc: Box<str>) -> RawStr {
+        match self.alloc.entry(alloc) {
+            Entry::Occupied(mut oe) => {
+                oe.insert(false);
+                RawStr::new(oe.key().as_ptr(), oe.key().len())
+            }
+            Entry::Vacant(ve) => {
+                let ret = RawStr::new(ve.key().as_ptr(), ve.key().len());
+                ve.insert(false);
+                return ret;
+            }
+        }
+    }
+}
+
+pub struct ModelMutator<'a> {
+    model: &'a mut Model,
+}
+
+impl<'a> ModelMutator<'a> {
+    pub unsafe fn vacuum_stashed(&mut self) {
+        self.model.private.vacuum_marked()
+    }
+    pub fn remove_field(&mut self, name: &str) -> bool {
+        // remove
+        let r = self.model.fields.st_delete(name);
+        // recycle
+        let ptr = unsafe { self.model.private.mark_pending_remove(name) };
+        // publish delta
+        self.model.delta.unresolved_append_field_rem(ptr);
+        r
+    }
+    pub fn add_field(&mut self, name: Box<str>, field: Field) -> bool {
+        unsafe {
+            // allocate
+            let fkeyptr = self.model.private.push_allocated(name);
+            // add
+            let r = self.model.fields.st_insert(fkeyptr.clone(), field);
+            // delta
+            self.model.delta.unresolved_append_field_add(fkeyptr);
+            r
+        }
+    }
+    pub fn update_field(&mut self, name: &str, field: Field) -> bool {
+        self.model.fields.st_update(name, field)
     }
 }
 

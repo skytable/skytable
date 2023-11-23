@@ -35,7 +35,7 @@ mod tests;
 use crate::engine::{
     error::{RuntimeResult, StorageError},
     idx::{AsKey, AsValue, STIndex},
-    mem::BufferedScanner,
+    mem::{BufferedScanner, StatelessLen},
 };
 
 type VecU8 = Vec<u8>;
@@ -142,64 +142,74 @@ pub trait PersistObject {
     map spec
 */
 
-/// specification for a persist map
-pub trait PersistMapSpec {
-    /// map type
-    type MapType: STIndex<Self::Key, Self::Value>;
-    /// map iter
-    type MapIter<'a>: Iterator<Item = (&'a Self::Key, &'a Self::Value)>
+pub trait AbstractMap<K, V> {
+    fn map_new() -> Self;
+    fn map_insert(&mut self, k: K, v: V) -> bool;
+    fn map_length(&self) -> usize;
+}
+
+impl<K: AsKey, V: AsValue, M: STIndex<K, V>> AbstractMap<K, V> for M {
+    fn map_new() -> Self {
+        Self::idx_init()
+    }
+    fn map_insert(&mut self, k: K, v: V) -> bool {
+        self.st_insert(k, v)
+    }
+    fn map_length(&self) -> usize {
+        self.st_len()
+    }
+}
+
+pub trait MapStorageSpec {
+    // in memory
+    type InMemoryMap: StatelessLen;
+    type InMemoryKey: ?Sized;
+    type InMemoryVal;
+    type InMemoryMapIter<'a>: Iterator<Item = (&'a Self::InMemoryKey, &'a Self::InMemoryVal)>
     where
-        Self: 'a;
-    /// metadata type
-    type EntryMD;
-    /// key type (NOTE: set this to the true key type; handle any differences using the spec unless you have an entirely different
-    /// wrapper type)
-    type Key: AsKey;
-    /// value type (NOTE: see [`PersistMapSpec::Key`])
-    type Value: AsValue;
-    /// coupled enc
-    const ENC_COUPLED: bool;
-    /// coupled dec
-    const DEC_COUPLED: bool;
-    // collection misc
-    fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a>;
-    // collection meta
-    /// pretest before jmp to routine for entire collection
-    fn pretest_collection_using_size(_: &BufferedScanner, _: usize) -> bool {
+        Self: 'a,
+        Self::InMemoryKey: 'a,
+        Self::InMemoryVal: 'a;
+    // from disk
+    type RestoredKey: AsKey;
+    type RestoredVal: AsValue;
+    type RestoredMap: AbstractMap<Self::RestoredKey, Self::RestoredVal>;
+    // metadata
+    type EntryMetadata;
+    // settings
+    const ENC_AS_ENTRY: bool;
+    const DEC_AS_ENTRY: bool;
+    // iterator
+    fn get_iter_from_memory<'a>(map: &'a Self::InMemoryMap) -> Self::InMemoryMapIter<'a>;
+    // encode
+    fn encode_entry_meta(buf: &mut VecU8, key: &Self::InMemoryKey, val: &Self::InMemoryVal);
+    fn encode_entry_data(buf: &mut VecU8, key: &Self::InMemoryKey, val: &Self::InMemoryVal);
+    fn encode_entry_key(buf: &mut VecU8, key: &Self::InMemoryKey);
+    fn encode_entry_val(buf: &mut VecU8, val: &Self::InMemoryVal);
+    // decode
+    fn decode_pretest_for_map(_: &BufferedScanner, _: usize) -> bool {
         true
     }
-    /// pretest before jmp to entry dec routine
-    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool;
-    /// pretest the src before jmp to entry data dec routine
-    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool;
-    // entry meta
-    /// enc the entry meta
-    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
-    /// dec the entry meta
-    /// SAFETY: ensure that all pretests have passed (we expect the caller to not be stupid)
-    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD>;
-    // independent packing
-    /// enc key (non-packed)
-    fn enc_key(buf: &mut VecU8, key: &Self::Key);
-    /// enc val (non-packed)
-    fn enc_val(buf: &mut VecU8, key: &Self::Value);
-    /// dec key (non-packed)
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key>;
-    /// dec val (non-packed)
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value>;
-    // coupled packing
-    /// entry packed enc
-    fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
-    /// entry packed dec
-    unsafe fn dec_entry(
-        scanner: &mut BufferedScanner,
-        md: Self::EntryMD,
-    ) -> Option<(Self::Key, Self::Value)>;
+    fn decode_pretest_for_entry_meta(scanner: &mut BufferedScanner) -> bool;
+    fn decode_pretest_for_entry_data(s: &mut BufferedScanner, md: &Self::EntryMetadata) -> bool;
+    unsafe fn decode_entry_meta(s: &mut BufferedScanner) -> Option<Self::EntryMetadata>;
+    unsafe fn decode_entry_data(
+        s: &mut BufferedScanner,
+        md: Self::EntryMetadata,
+    ) -> Option<(Self::RestoredKey, Self::RestoredVal)>;
+    unsafe fn decode_entry_key(
+        s: &mut BufferedScanner,
+        md: &Self::EntryMetadata,
+    ) -> Option<Self::RestoredKey>;
+    unsafe fn decode_entry_val(
+        s: &mut BufferedScanner,
+        md: &Self::EntryMetadata,
+    ) -> Option<Self::RestoredVal>;
 }
 
 // enc
 pub mod enc {
-    use super::{map, PersistMapSpec, PersistObject, VecU8};
+    use super::{map, MapStorageSpec, PersistObject, VecU8};
     // obj
     #[cfg(test)]
     pub fn enc_full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
@@ -215,12 +225,12 @@ pub mod enc {
         enc_full::<Obj>(obj)
     }
     // dict
-    pub fn enc_dict_full<PM: PersistMapSpec>(dict: &PM::MapType) -> Vec<u8> {
+    pub fn enc_dict_full<PM: MapStorageSpec>(dict: &PM::InMemoryMap) -> Vec<u8> {
         let mut v = vec![];
         enc_dict_full_into_buffer::<PM>(&mut v, dict);
         v
     }
-    pub fn enc_dict_full_into_buffer<PM: PersistMapSpec>(buf: &mut VecU8, dict: &PM::MapType) {
+    pub fn enc_dict_full_into_buffer<PM: MapStorageSpec>(buf: &mut VecU8, dict: &PM::InMemoryMap) {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_enc(buf, dict)
     }
 }
@@ -228,7 +238,7 @@ pub mod enc {
 // dec
 pub mod dec {
     use {
-        super::{map, PersistMapSpec, PersistObject},
+        super::{map, MapStorageSpec, PersistObject},
         crate::engine::{error::RuntimeResult, mem::BufferedScanner},
     };
     // obj
@@ -243,13 +253,13 @@ pub mod dec {
         Obj::default_full_dec(scanner)
     }
     // dec
-    pub fn dec_dict_full<PM: PersistMapSpec>(data: &[u8]) -> RuntimeResult<PM::MapType> {
+    pub fn dec_dict_full<PM: MapStorageSpec>(data: &[u8]) -> RuntimeResult<PM::RestoredMap> {
         let mut scanner = BufferedScanner::new(data);
         dec_dict_full_from_scanner::<PM>(&mut scanner)
     }
-    fn dec_dict_full_from_scanner<PM: PersistMapSpec>(
+    fn dec_dict_full_from_scanner<PM: MapStorageSpec>(
         scanner: &mut BufferedScanner,
-    ) -> RuntimeResult<PM::MapType> {
+    ) -> RuntimeResult<PM::RestoredMap> {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_dec(scanner)
     }
     pub mod utils {

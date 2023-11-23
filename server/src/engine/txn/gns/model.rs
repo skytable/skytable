@@ -158,7 +158,7 @@ impl<'a> PersistObject for ModelID<'a> {
 fn with_space<T>(
     gns: &GlobalNS,
     space_id: &super::SpaceIDRes,
-    mut f: impl FnMut(&Space) -> RuntimeResult<T>,
+    f: impl FnOnce(&Space) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
     let spaces = gns.idx().read();
     let Some(space) = spaces.st_get(&space_id.name) else {
@@ -191,7 +191,7 @@ fn with_model_mut<T>(
     gns: &GlobalNS,
     space_id: &super::SpaceIDRes,
     model_id: &ModelIDRes,
-    mut f: impl FnMut(&mut Model) -> RuntimeResult<T>,
+    f: impl FnOnce(&mut Model) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
     with_space(gns, space_id, |_| {
         let mut models = gns.idx_models().write();
@@ -394,14 +394,14 @@ impl<'a> PersistObject for AlterModelAddTxn<'a> {
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
-        <map::PersistMapImpl<map::FieldMapSpec> as PersistObject>::obj_enc(buf, data.new_fields);
+        <map::PersistMapImpl<map::FieldMapSpec<_>> as PersistObject>::obj_enc(buf, data.new_fields);
     }
     unsafe fn obj_dec(
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_meta)?;
-        let new_fields = <map::PersistMapImpl<map::FieldMapSpec> as PersistObject>::obj_dec(
+        let new_fields = <map::PersistMapImpl<map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>> as PersistObject>::obj_dec(
             s,
             map::MapIndexSizeMD(md.new_field_c as usize),
         )?;
@@ -424,24 +424,11 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
         with_model_mut(gns, &model_id.space_id, &model_id, |model| {
-            for (i, (field_name, field)) in new_fields.stseq_ord_kv().enumerate() {
-                if !model
-                    .fields_mut()
-                    .st_insert(field_name.to_owned(), field.clone())
-                {
-                    // rollback; corrupted
-                    new_fields.stseq_ord_key().take(i).for_each(|field_id| {
-                        let _ = model.fields_mut().st_delete(field_id);
-                    });
+            let mut mutator = model.model_mutator();
+            for (field_name, field) in new_fields.stseq_owned_kv() {
+                if !mutator.add_field(field_name, field) {
                     return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
-            }
-            // TODO(@ohsayan): avoid double iteration
-            // publish deltas
-            for field_name in new_fields.stseq_ord_key() {
-                model
-                    .delta_state_mut()
-                    .schema_append_unresolved_wl_field_add(field_name);
             }
             Ok(())
         })
@@ -542,27 +529,11 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
         with_model_mut(gns, &model_id.space_id, &model_id, |model| {
-            let mut removed_fields_rb = vec![];
+            let mut mutator = model.model_mutator();
             for removed_field in removed_fields.iter() {
-                match model.fields_mut().st_delete_return(removed_field) {
-                    Some(field) => {
-                        removed_fields_rb.push((removed_field as &str, field));
-                    }
-                    None => {
-                        // rollback
-                        removed_fields_rb.into_iter().for_each(|(field_id, field)| {
-                            let _ = model.fields_mut().st_insert(field_id.into(), field);
-                        });
-                        return Err(TransactionError::OnRestoreDataConflictMismatch.into());
-                    }
+                if !mutator.remove_field(&removed_field) {
+                    return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
-            }
-            // TODO(@ohsayan): avoid double iteration
-            // publish deltas
-            for field_name in removed_fields.iter() {
-                model
-                    .delta_state_mut()
-                    .schema_append_unresolved_wl_field_rem(field_name);
             }
             Ok(())
         })
@@ -598,7 +569,7 @@ pub struct AlterModelUpdateTxnMD {
 #[derive(Debug, PartialEq)]
 pub struct AlterModelUpdateTxnRestorePL {
     pub(super) model_id: ModelIDRes,
-    pub(super) updated_fields: IndexST<Box<str>, Field>,
+    pub(super) updated_fields: IndexSTSeqCns<Box<str>, Field>,
 }
 
 impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
@@ -624,7 +595,7 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
-        <map::PersistMapImpl<map::FieldMapSpecST> as PersistObject>::obj_enc(
+        <map::PersistMapImpl<map::FieldMapSpec<_>> as PersistObject>::obj_enc(
             buf,
             data.updated_fields,
         );
@@ -634,10 +605,11 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_md)?;
-        let updated_fields = <map::PersistMapImpl<map::FieldMapSpecST> as PersistObject>::obj_dec(
-            s,
-            map::MapIndexSizeMD(md.updated_field_c as usize),
-        )?;
+        let updated_fields =
+            <map::PersistMapImpl<map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>> as PersistObject>::obj_dec(
+                s,
+                map::MapIndexSizeMD(md.updated_field_c as usize),
+            )?;
         Ok(AlterModelUpdateTxnRestorePL {
             model_id,
             updated_fields,
@@ -657,17 +629,10 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
         with_model_mut(gns, &model_id.space_id, &model_id, |model| {
-            let mut fields_rb = vec![];
-            for (field_id, field) in updated_fields.iter() {
-                match model.fields_mut().st_update_return(field_id, field.clone()) {
-                    Some(f) => fields_rb.push((field_id as &str, f)),
-                    None => {
-                        // rollback
-                        fields_rb.into_iter().for_each(|(field_id, field)| {
-                            let _ = model.fields_mut().st_update(field_id, field);
-                        });
-                        return Err(TransactionError::OnRestoreDataConflictMismatch.into());
-                    }
+            let mut mutator = model.model_mutator();
+            for (field_id, field) in updated_fields.stseq_owned_kv() {
+                if !mutator.update_field(&field_id, field) {
+                    return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
             }
             Ok(())

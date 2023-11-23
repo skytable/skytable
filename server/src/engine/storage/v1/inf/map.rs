@@ -30,56 +30,53 @@ use {
             cell::{self, CanYieldDict, StorageCellTypeID},
             FieldMD,
         },
-        PersistMapSpec, PersistObject, VecU8,
+        AbstractMap, MapStorageSpec, PersistObject, VecU8,
     },
     crate::{
         engine::{
             core::model::Field,
-            data::{dict::DictEntryGeneric, DictGeneric},
+            data::dict::DictEntryGeneric,
             error::{RuntimeResult, StorageError},
-            idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
-            mem::BufferedScanner,
+            idx::{IndexSTSeqCns, STIndexSeq},
+            mem::{BufferedScanner, StatelessLen},
             storage::v1::inf,
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
-    core::marker::PhantomData,
+    std::{collections::HashMap, marker::PhantomData},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
 pub struct MapIndexSizeMD(pub usize);
 
 /// This is more of a lazy hack than anything sensible. Just implement a spec and then use this wrapper for any enc/dec operations
-pub struct PersistMapImpl<'a, M: PersistMapSpec>(PhantomData<&'a M::MapType>);
+pub struct PersistMapImpl<'a, M: MapStorageSpec>(PhantomData<&'a M::InMemoryMap>);
 
-impl<'a, M: PersistMapSpec> PersistObject for PersistMapImpl<'a, M>
-where
-    M::MapType: 'a + STIndex<M::Key, M::Value>,
-{
+impl<'a, M: MapStorageSpec> PersistObject for PersistMapImpl<'a, M> {
     const METADATA_SIZE: usize = sizeof!(u64);
-    type InputType = &'a M::MapType;
-    type OutputType = M::MapType;
+    type InputType = &'a M::InMemoryMap;
+    type OutputType = M::RestoredMap;
     type Metadata = MapIndexSizeMD;
     fn pretest_can_dec_object(
         s: &BufferedScanner,
         MapIndexSizeMD(dict_size): &Self::Metadata,
     ) -> bool {
-        M::pretest_collection_using_size(s, *dict_size)
+        M::decode_pretest_for_map(s, *dict_size)
     }
     fn meta_enc(buf: &mut VecU8, data: Self::InputType) {
-        buf.extend(data.st_len().u64_bytes_le());
+        buf.extend(data.stateless_len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(MapIndexSizeMD(scanner.next_u64_le() as usize))
     }
     fn obj_enc(buf: &mut VecU8, map: Self::InputType) {
-        for (key, val) in M::_get_iter(map) {
-            M::entry_md_enc(buf, key, val);
-            if M::ENC_COUPLED {
-                M::enc_entry(buf, key, val);
+        for (key, val) in M::get_iter_from_memory(map) {
+            M::encode_entry_meta(buf, key, val);
+            if M::ENC_AS_ENTRY {
+                M::encode_entry_data(buf, key, val);
             } else {
-                M::enc_key(buf, key);
-                M::enc_val(buf, val);
+                M::encode_entry_key(buf, key);
+                M::encode_entry_val(buf, val);
             }
         }
     }
@@ -87,22 +84,23 @@ where
         scanner: &mut BufferedScanner,
         MapIndexSizeMD(dict_size): Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let mut dict = M::MapType::idx_init();
-        while M::pretest_entry_metadata(scanner) & (dict.st_len() != dict_size) {
+        let mut dict = M::RestoredMap::map_new();
+        let decode_pretest_for_entry_meta = M::decode_pretest_for_entry_meta(scanner);
+        while decode_pretest_for_entry_meta & (dict.map_length() != dict_size) {
             let md = unsafe {
                 // UNSAFE(@ohsayan): +pretest
-                M::entry_md_dec(scanner).ok_or::<StorageError>(
+                M::decode_entry_meta(scanner).ok_or::<StorageError>(
                     StorageError::InternalDecodeStructureCorruptedPayload.into(),
                 )?
             };
-            if !M::pretest_entry_data(scanner, &md) {
+            if !M::decode_pretest_for_entry_data(scanner, &md) {
                 return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
             }
             let key;
             let val;
             unsafe {
-                if M::DEC_COUPLED {
-                    match M::dec_entry(scanner, md) {
+                if M::DEC_AS_ENTRY {
+                    match M::decode_entry_data(scanner, md) {
                         Some((_k, _v)) => {
                             key = _k;
                             val = _v;
@@ -112,8 +110,8 @@ where
                         }
                     }
                 } else {
-                    let _k = M::dec_key(scanner, &md);
-                    let _v = M::dec_val(scanner, &md);
+                    let _k = M::decode_entry_key(scanner, &md);
+                    let _v = M::decode_entry_val(scanner, &md);
                     match (_k, _v) {
                         (Some(_k), Some(_v)) => {
                             key = _k;
@@ -125,11 +123,11 @@ where
                     }
                 }
             }
-            if !dict.st_insert(key, val) {
+            if !dict.map_insert(key, val) {
                 return Err(StorageError::InternalDecodeStructureIllegalData.into());
             }
         }
-        if dict.st_len() == dict_size {
+        if dict.map_length() == dict_size {
             Ok(dict)
         } else {
             Err(StorageError::InternalDecodeStructureIllegalData.into())
@@ -141,12 +139,12 @@ where
 pub struct GenericDictSpec;
 
 /// generic dict entry metadata
-pub struct GenericDictEntryMD {
+pub struct GenericDictEntryMetadata {
     pub(crate) klen: usize,
     pub(crate) dscr: u8,
 }
 
-impl GenericDictEntryMD {
+impl GenericDictEntryMetadata {
     /// decode md (no need for any validation since that has to be handled later and can only produce incorrect results
     /// if unsafe code is used to translate an incorrect dscr)
     pub(crate) fn decode(data: [u8; 9]) -> Self {
@@ -157,32 +155,25 @@ impl GenericDictEntryMD {
     }
 }
 
-impl PersistMapSpec for GenericDictSpec {
-    type MapIter<'a> = std::collections::hash_map::Iter<'a, Box<str>, DictEntryGeneric>;
-    type MapType = DictGeneric;
-    type Key = Box<str>;
-    type Value = DictEntryGeneric;
-    type EntryMD = GenericDictEntryMD;
-    const DEC_COUPLED: bool = false;
-    const ENC_COUPLED: bool = true;
-    fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a> {
+impl MapStorageSpec for GenericDictSpec {
+    type InMemoryMap = HashMap<Self::InMemoryKey, Self::InMemoryVal>;
+    type InMemoryKey = Box<str>;
+    type InMemoryVal = DictEntryGeneric;
+    type InMemoryMapIter<'a> =
+        std::collections::hash_map::Iter<'a, Self::InMemoryKey, Self::InMemoryVal>;
+    type RestoredKey = Self::InMemoryKey;
+    type RestoredMap = Self::InMemoryMap;
+    type RestoredVal = Self::InMemoryVal;
+    type EntryMetadata = GenericDictEntryMetadata;
+    const DEC_AS_ENTRY: bool = false;
+    const ENC_AS_ENTRY: bool = true;
+    fn get_iter_from_memory<'a>(map: &'a Self::InMemoryMap) -> Self::InMemoryMapIter<'a> {
         map.iter()
     }
-    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
-        // we just need to see if we can decode the entry metadata
-        scanner.has_left(9)
-    }
-    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
-        StorageCellTypeID::is_valid(md.dscr)
-            & scanner.has_left(StorageCellTypeID::expect_atleast(md.dscr))
-    }
-    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
+    fn encode_entry_meta(buf: &mut VecU8, key: &Self::InMemoryKey, _: &Self::InMemoryVal) {
         buf.extend(key.len().u64_bytes_le());
     }
-    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
-        Some(Self::EntryMD::decode(scanner.next_chunk()))
-    }
-    fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
+    fn encode_entry_data(buf: &mut VecU8, key: &Self::InMemoryKey, val: &Self::InMemoryVal) {
         match val {
             DictEntryGeneric::Map(map) => {
                 buf.push(StorageCellTypeID::Dict.value_u8());
@@ -196,12 +187,41 @@ impl PersistMapSpec for GenericDictSpec {
             }
         }
     }
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
-        inf::dec::utils::decode_string(scanner, md.klen as usize)
+    fn encode_entry_key(_: &mut VecU8, _: &Self::InMemoryKey) {
+        unimplemented!()
+    }
+    fn encode_entry_val(_: &mut VecU8, _: &Self::InMemoryVal) {
+        unimplemented!()
+    }
+    fn decode_pretest_for_entry_meta(scanner: &mut BufferedScanner) -> bool {
+        // we just need to see if we can decode the entry metadata
+        scanner.has_left(9)
+    }
+    fn decode_pretest_for_entry_data(s: &mut BufferedScanner, md: &Self::EntryMetadata) -> bool {
+        StorageCellTypeID::is_valid(md.dscr)
+            & s.has_left(StorageCellTypeID::expect_atleast(md.dscr))
+    }
+    unsafe fn decode_entry_meta(s: &mut BufferedScanner) -> Option<Self::EntryMetadata> {
+        Some(Self::EntryMetadata::decode(s.next_chunk()))
+    }
+    unsafe fn decode_entry_data(
+        _: &mut BufferedScanner,
+        _: Self::EntryMetadata,
+    ) -> Option<(Self::RestoredKey, Self::RestoredVal)> {
+        unimplemented!()
+    }
+    unsafe fn decode_entry_key(
+        s: &mut BufferedScanner,
+        md: &Self::EntryMetadata,
+    ) -> Option<Self::RestoredKey> {
+        inf::dec::utils::decode_string(s, md.klen as usize)
             .map(|s| s.into_boxed_str())
             .ok()
     }
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
+    unsafe fn decode_entry_val(
+        scanner: &mut BufferedScanner,
+        md: &Self::EntryMetadata,
+    ) -> Option<Self::RestoredVal> {
         Some(
             match cell::decode_element::<CanYieldDict, BufferedScanner>(
                 scanner,
@@ -217,30 +237,16 @@ impl PersistMapSpec for GenericDictSpec {
             },
         )
     }
-    // not implemented
-    fn enc_key(_: &mut VecU8, _: &Self::Key) {
-        unimplemented!()
-    }
-    fn enc_val(_: &mut VecU8, _: &Self::Value) {
-        unimplemented!()
-    }
-    unsafe fn dec_entry(
-        _: &mut BufferedScanner,
-        _: Self::EntryMD,
-    ) -> Option<(Self::Key, Self::Value)> {
-        unimplemented!()
-    }
 }
 
-pub struct FieldMapSpec;
-pub struct FieldMapEntryMD {
+pub struct FieldMapEntryMetadata {
     field_id_l: u64,
     field_prop_c: u64,
     field_layer_c: u64,
     null: u8,
 }
 
-impl FieldMapEntryMD {
+impl FieldMapEntryMetadata {
     const fn new(field_id_l: u64, field_prop_c: u64, field_layer_c: u64, null: u8) -> Self {
         Self {
             field_id_l,
@@ -251,130 +257,127 @@ impl FieldMapEntryMD {
     }
 }
 
-impl PersistMapSpec for FieldMapSpec {
-    type MapIter<'a> = crate::engine::idx::IndexSTSeqDllIterOrdKV<'a, Box<str>, Field>;
-    type MapType = IndexSTSeqCns<Self::Key, Self::Value>;
-    type EntryMD = FieldMapEntryMD;
-    type Key = Box<str>;
-    type Value = Field;
-    const ENC_COUPLED: bool = false;
-    const DEC_COUPLED: bool = false;
-    fn _get_iter<'a>(m: &'a Self::MapType) -> Self::MapIter<'a> {
-        m.stseq_ord_kv()
+pub trait FieldMapAny: StatelessLen {
+    type Iterator<'a>: Iterator<Item = (&'a str, &'a Field)>
+    where
+        Self: 'a;
+    fn get_iter<'a>(&'a self) -> Self::Iterator<'a>
+    where
+        Self: 'a;
+}
+
+impl FieldMapAny for HashMap<Box<str>, Field> {
+    type Iterator<'a> = std::iter::Map<
+        std::collections::hash_map::Iter<'a, Box<str>, Field>,
+        fn((&Box<str>, &Field)) -> (&'a str, &'a Field),
+    >;
+    fn get_iter<'a>(&'a self) -> Self::Iterator<'a>
+    where
+        Self: 'a,
+    {
+        self.iter()
+            .map(|(a, b)| unsafe { core::mem::transmute((a.as_ref(), b)) })
     }
-    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 3) + 1)
+}
+impl FieldMapAny for IndexSTSeqCns<crate::engine::mem::RawStr, Field> {
+    type Iterator<'a> = std::iter::Map<
+    crate::engine::idx::stdord_iter::IndexSTSeqDllIterOrdKV<'a, crate::engine::mem::RawStr, Field>,
+    fn((&crate::engine::mem::RawStr, &Field)) -> (&'a str, &'a Field)>
+    where
+        Self: 'a;
+
+    fn get_iter<'a>(&'a self) -> Self::Iterator<'a>
+    where
+        Self: 'a,
+    {
+        self.stseq_ord_kv()
+            .map(|(k, v)| unsafe { core::mem::transmute((k.as_str(), v)) })
     }
-    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
-        scanner.has_left(md.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
-    }
-    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
-        buf.extend(key.len().u64_bytes_le());
-        buf.extend(0u64.to_le_bytes()); // TODO(@ohsayan): props
-        buf.extend(val.layers().len().u64_bytes_le());
-        buf.push(val.is_nullable() as u8);
-    }
-    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
-        Some(FieldMapEntryMD::new(
-            scanner.next_u64_le(),
-            scanner.next_u64_le(),
-            scanner.next_u64_le(),
-            scanner.next_byte(),
-        ))
-    }
-    fn enc_key(buf: &mut VecU8, key: &Self::Key) {
-        buf.extend(key.as_bytes());
-    }
-    fn enc_val(buf: &mut VecU8, val: &Self::Value) {
-        for layer in val.layers() {
-            super::obj::LayerRef::default_full_enc(buf, super::obj::LayerRef(layer))
-        }
-    }
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
-        inf::dec::utils::decode_string(scanner, md.field_id_l as usize)
-            .map(|s| s.into_boxed_str())
-            .ok()
-    }
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
-        super::obj::FieldRef::obj_dec(
-            scanner,
-            FieldMD::new(md.field_prop_c, md.field_layer_c, md.null),
-        )
-        .ok()
-    }
-    // unimplemented
-    fn enc_entry(_: &mut VecU8, _: &Self::Key, _: &Self::Value) {
-        unimplemented!()
-    }
-    unsafe fn dec_entry(
-        _: &mut BufferedScanner,
-        _: Self::EntryMD,
-    ) -> Option<(Self::Key, Self::Value)> {
-        unimplemented!()
+}
+impl FieldMapAny for IndexSTSeqCns<Box<str>, Field> {
+    type Iterator<'a> = std::iter::Map<
+    crate::engine::idx::stdord_iter::IndexSTSeqDllIterOrdKV<'a, Box<str>, Field>,
+    fn((&Box<str>, &Field)) -> (&'a str, &'a Field)>
+    where
+        Self: 'a;
+
+    fn get_iter<'a>(&'a self) -> Self::Iterator<'a>
+    where
+        Self: 'a,
+    {
+        self.stseq_ord_kv()
+            .map(|(k, v)| unsafe { core::mem::transmute((k.as_ref(), v)) })
     }
 }
 
-// TODO(@ohsayan): common trait for k/v associations, independent of underlying maptype
-pub struct FieldMapSpecST;
-impl PersistMapSpec for FieldMapSpecST {
-    type MapIter<'a> = std::collections::hash_map::Iter<'a, Box<str>, Field>;
-    type MapType = std::collections::HashMap<Box<str>, Field>;
-    type EntryMD = FieldMapEntryMD;
-    type Key = Box<str>;
-    type Value = Field;
-    const ENC_COUPLED: bool = false;
-    const DEC_COUPLED: bool = false;
-    fn _get_iter<'a>(m: &'a Self::MapType) -> Self::MapIter<'a> {
-        m.iter()
+pub struct FieldMapSpec<FM>(PhantomData<FM>);
+impl<FM: FieldMapAny> MapStorageSpec for FieldMapSpec<FM> {
+    type InMemoryMap = FM;
+    type InMemoryKey = str;
+    type InMemoryVal = Field;
+    type InMemoryMapIter<'a> = FM::Iterator<'a> where FM: 'a;
+    type RestoredKey = Box<str>;
+    type RestoredVal = Field;
+    type RestoredMap = IndexSTSeqCns<Box<str>, Field>;
+    type EntryMetadata = FieldMapEntryMetadata;
+    const ENC_AS_ENTRY: bool = false;
+    const DEC_AS_ENTRY: bool = false;
+    fn get_iter_from_memory<'a>(map: &'a Self::InMemoryMap) -> Self::InMemoryMapIter<'a> {
+        map.get_iter()
     }
-    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 3) + 1)
-    }
-    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
-        scanner.has_left(md.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
-    }
-    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
+    fn encode_entry_meta(buf: &mut VecU8, key: &Self::InMemoryKey, val: &Self::InMemoryVal) {
         buf.extend(key.len().u64_bytes_le());
         buf.extend(0u64.to_le_bytes()); // TODO(@ohsayan): props
         buf.extend(val.layers().len().u64_bytes_le());
         buf.push(val.is_nullable() as u8);
     }
-    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
-        Some(FieldMapEntryMD::new(
+    fn encode_entry_data(_: &mut VecU8, _: &Self::InMemoryKey, _: &Self::InMemoryVal) {
+        unimplemented!()
+    }
+    fn encode_entry_key(buf: &mut VecU8, key: &Self::InMemoryKey) {
+        buf.extend(key.as_bytes());
+    }
+    fn encode_entry_val(buf: &mut VecU8, val: &Self::InMemoryVal) {
+        for layer in val.layers() {
+            super::obj::LayerRef::default_full_enc(buf, super::obj::LayerRef(layer))
+        }
+    }
+    fn decode_pretest_for_entry_meta(scanner: &mut BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64, 3) + 1)
+    }
+    fn decode_pretest_for_entry_data(s: &mut BufferedScanner, md: &Self::EntryMetadata) -> bool {
+        s.has_left(md.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
+    }
+    unsafe fn decode_entry_meta(scanner: &mut BufferedScanner) -> Option<Self::EntryMetadata> {
+        Some(FieldMapEntryMetadata::new(
             scanner.next_u64_le(),
             scanner.next_u64_le(),
             scanner.next_u64_le(),
             scanner.next_byte(),
         ))
     }
-    fn enc_key(buf: &mut VecU8, key: &Self::Key) {
-        buf.extend(key.as_bytes());
+    unsafe fn decode_entry_data(
+        _: &mut BufferedScanner,
+        _: Self::EntryMetadata,
+    ) -> Option<(Self::RestoredKey, Self::RestoredVal)> {
+        unimplemented!()
     }
-    fn enc_val(buf: &mut VecU8, val: &Self::Value) {
-        for layer in val.layers() {
-            super::obj::LayerRef::default_full_enc(buf, super::obj::LayerRef(layer))
-        }
-    }
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
+    unsafe fn decode_entry_key(
+        scanner: &mut BufferedScanner,
+        md: &Self::EntryMetadata,
+    ) -> Option<Self::RestoredKey> {
         inf::dec::utils::decode_string(scanner, md.field_id_l as usize)
             .map(|s| s.into_boxed_str())
             .ok()
     }
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
+    unsafe fn decode_entry_val(
+        scanner: &mut BufferedScanner,
+        md: &Self::EntryMetadata,
+    ) -> Option<Self::RestoredVal> {
         super::obj::FieldRef::obj_dec(
             scanner,
             FieldMD::new(md.field_prop_c, md.field_layer_c, md.null),
         )
         .ok()
-    }
-    // unimplemented
-    fn enc_entry(_: &mut VecU8, _: &Self::Key, _: &Self::Value) {
-        unimplemented!()
-    }
-    unsafe fn dec_entry(
-        _: &mut BufferedScanner,
-        _: Self::EntryMD,
-    ) -> Option<(Self::Key, Self::Value)> {
-        unimplemented!()
     }
 }

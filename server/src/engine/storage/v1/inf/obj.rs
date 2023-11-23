@@ -38,6 +38,7 @@ use {
                 DictGeneric,
             },
             error::{RuntimeResult, StorageError},
+            idx::IndexSTSeqCns,
             mem::{BufferedScanner, VInline},
             storage::v1::inf,
         },
@@ -378,6 +379,7 @@ impl<'a> PersistObject for FieldRef<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct ModelLayoutMD {
     model_uuid: Uuid,
     p_key_len: u64,
@@ -435,7 +437,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
     }
     fn obj_enc(buf: &mut VecU8, ModelLayoutRef(model_definition): Self::InputType) {
         buf.extend(model_definition.p_key().as_bytes());
-        <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_enc(
+        <super::map::PersistMapImpl<super::map::FieldMapSpec<_>> as PersistObject>::obj_enc(
             buf,
             model_definition.fields(),
         )
@@ -445,11 +447,11 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
         let key = inf::dec::utils::decode_string(scanner, md.p_key_len as usize)?;
-        let fieldmap =
-            <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_dec(
-                scanner,
-                super::map::MapIndexSizeMD(md.field_c as usize),
-            )?;
+        let fieldmap = <super::map::PersistMapImpl<
+            super::map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>,
+        > as PersistObject>::obj_dec(
+            scanner, super::map::MapIndexSizeMD(md.field_c as usize)
+        )?;
         let ptag = if md.p_key_tag > TagSelector::MAX as u64 {
             return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
         } else {

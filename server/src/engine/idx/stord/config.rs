@@ -115,7 +115,7 @@ pub trait Config<K, V> {
     type AllocStrategy: AllocStrategy<K, V>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ConservativeConfig<K, V>(PhantomData<super::IndexSTSeqDll<K, V, Self>>);
 
 impl<K, V> Config<K, V> for ConservativeConfig<K, V> {
@@ -123,7 +123,7 @@ impl<K, V> Config<K, V> for ConservativeConfig<K, V> {
     type AllocStrategy = ConservativeStrategy<K, V>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LiberalConfig<K, V>(PhantomData<super::IndexSTSeqDll<K, V, Self>>);
 
 impl<K, V> Config<K, V> for LiberalConfig<K, V> {

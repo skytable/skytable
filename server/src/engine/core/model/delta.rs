@@ -29,6 +29,7 @@ use {
     crate::engine::{
         core::{dml::QueryExecMeta, index::Row},
         fractal::{FractalToken, GlobalInstanceLike},
+        mem::RawStr,
         sync::atm::Guard,
         sync::queue::Queue,
     },
@@ -116,10 +117,10 @@ impl DeltaState {
     pub fn schema_current_version(&self) -> DeltaVersion {
         DeltaVersion(self.schema_current_version)
     }
-    pub fn schema_append_unresolved_wl_field_add(&mut self, field_name: &str) {
+    pub fn unresolved_append_field_add(&mut self, field_name: RawStr) {
         self.__schema_append_unresolved_delta(SchemaDeltaPart::field_add(field_name));
     }
-    pub fn schema_append_unresolved_wl_field_rem(&mut self, field_name: &str) {
+    pub fn unresolved_append_field_rem(&mut self, field_name: RawStr) {
         self.__schema_append_unresolved_delta(SchemaDeltaPart::field_rem(field_name));
     }
 }
@@ -178,23 +179,19 @@ impl SchemaDeltaPart {
 
 #[derive(Debug)]
 pub enum SchemaDeltaKind {
-    FieldAdd(Box<str>),
-    FieldRem(Box<str>),
+    FieldAdd(RawStr),
+    FieldRem(RawStr),
 }
 
 impl SchemaDeltaPart {
     fn new(kind: SchemaDeltaKind) -> Self {
         Self { kind }
     }
-    fn field_add(field_name: &str) -> Self {
-        Self::new(SchemaDeltaKind::FieldAdd(
-            field_name.to_owned().into_boxed_str(),
-        ))
+    fn field_add(field_name: RawStr) -> Self {
+        Self::new(SchemaDeltaKind::FieldAdd(field_name))
     }
-    fn field_rem(field_name: &str) -> Self {
-        Self::new(SchemaDeltaKind::FieldRem(
-            field_name.to_owned().into_boxed_str(),
-        ))
+    fn field_rem(field_name: RawStr) -> Self {
+        Self::new(SchemaDeltaKind::FieldRem(field_name))
     }
 }
 

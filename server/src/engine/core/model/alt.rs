@@ -127,7 +127,7 @@ impl<'a> AlterPlan<'a> {
                     okay &= no_field(mdl, &field_name) & mdl.not_pk(&field_name);
                     let is_nullable = check_nullable(&mut props)?;
                     let layers = Field::parse_layers(layers, is_nullable)?;
-                    okay &= add.st_insert(field_name.to_string().into_boxed_str(), layers);
+                    okay &= add.st_insert(field_name.as_str().into(), layers);
                 }
                 can_ignore!(AlterAction::Add(add))
             }
@@ -155,8 +155,7 @@ impl<'a> AlterPlan<'a> {
                     let (anydelta, new_field) =
                         Self::ldeltas(current_field, layers, is_nullable, &mut no_lock, &mut okay)?;
                     any_delta += anydelta as usize;
-                    okay &=
-                        new_fields.st_insert(field_name.to_string().into_boxed_str(), new_field);
+                    okay &= new_fields.st_insert(field_name.as_str().into(), new_field);
                 }
                 if any_delta == 0 {
                     AlterAction::Ignore
@@ -281,14 +280,12 @@ impl Model {
                             // commit txn
                             global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
+                        let mut mutator = model.model_mutator();
                         new_fields
                             .stseq_ord_kv()
                             .map(|(x, y)| (x.clone(), y.clone()))
                             .for_each(|(field_id, field)| {
-                                model
-                                    .delta_state_mut()
-                                    .schema_append_unresolved_wl_field_add(&field_id);
-                                model.fields_mut().st_insert(field_id, field);
+                                mutator.add_field(field_id, field);
                             });
                     }
                     AlterAction::Remove(removed) => {
@@ -301,11 +298,9 @@ impl Model {
                             // commit txn
                             global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
+                        let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
-                            model
-                                .delta_state_mut()
-                                .schema_append_unresolved_wl_field_rem(field_id.as_str());
-                            model.fields_mut().st_delete(field_id.as_str());
+                            mutator.remove_field(field_id.as_str());
                         });
                     }
                     AlterAction::Update(updated) => {
@@ -318,8 +313,9 @@ impl Model {
                             // commit txn
                             global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
+                        let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {
-                            model.fields_mut().st_update(&field_id, field);
+                            mutator.update_field(field_id.as_ref(), field);
                         });
                     }
                 }

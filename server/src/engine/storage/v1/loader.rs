@@ -76,20 +76,24 @@ impl SEInitState {
                 std::fs::create_dir(DATA_DIR).inherit_set_dmsg("creating data directory")?;
             }
             if !is_new {
-                let models = gns.idx_models().read();
+                let mut models = gns.idx_models().write();
                 // this is an existing instance, so read in all data
                 for (space_name, space) in gns.idx().read().iter() {
                     let space = space.read();
                     let space_uuid = space.get_uuid();
                     for model_name in space.models().iter() {
                         let model = models
-                            .get(&EntityIDRef::new(&space_name, &model_name))
+                            .get_mut(&EntityIDRef::new(&space_name, &model_name))
                             .unwrap();
                         let path =
                             Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
                         let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(
                             format!("failed to restore model data from journal in `{path}`"),
                         )?;
+                        unsafe {
+                            // UNSAFE(@ohsayan): all pieces of data are upgraded by now, so vacuum
+                            model.model_mutator().vacuum_stashed();
+                        }
                         let _ = model_drivers.insert(
                             ModelUniqueID::new(space_name, model_name, model.get_uuid()),
                             FractalModelDriver::init(persist_driver),

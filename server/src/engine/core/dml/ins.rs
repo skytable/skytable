@@ -87,23 +87,35 @@ fn prepare_insert(
                 }
                 let (field_id, field) = field;
                 okay &= field.vt_data_fpath(&mut data);
-                okay &= prepared_data.st_insert(field_id.clone(), data);
+                okay &= prepared_data.st_insert(
+                    unsafe {
+                        // UNSAFE(@ohsayan): the model is right here, so we're good
+                        field_id.clone()
+                    },
+                    data,
+                );
             }
         }
         InsertData::Map(map) => {
-            let mut map = map.into_iter();
-            while (map.len() != 0) & okay {
-                let (field_id, mut field_data) = unsafe {
+            let mut inserted = 0;
+            let mut iter = fields.st_iter_kv().zip(map.into_iter());
+            while (iter.len() != 0) & (okay) {
+                let ((model_field_key, model_field_spec), (this_field_key, mut this_field_data)) = unsafe {
                     // UNSAFE(@ohsayan): safe because of loop invariant
-                    map.next().unwrap_unchecked()
+                    iter.next().unwrap_unchecked()
                 };
-                let Some(field) = fields.st_get_cloned(field_id.as_str()) else {
-                    okay = false;
-                    break;
-                };
-                okay &= field.vt_data_fpath(&mut field_data);
-                prepared_data.st_insert(field_id.boxed_str(), field_data);
+                okay &= model_field_spec.vt_data_fpath(&mut this_field_data);
+                okay &= model_field_key.as_str() == this_field_key.as_str();
+                prepared_data.st_insert(
+                    unsafe {
+                        // UNSAFE(@ohsayan): the model is right here. it saves us the work!
+                        model_field_key.clone()
+                    },
+                    this_field_data,
+                );
+                inserted += 1;
             }
+            okay &= inserted == fields.len();
         }
     }
     let primary_key = prepared_data.remove(model.p_key());
