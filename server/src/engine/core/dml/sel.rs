@@ -33,6 +33,7 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{STIndex, STIndexSeq},
+    mem::IntegerRepr,
     net::protocol::Response,
     ql::dml::sel::SelectStatement,
     sync,
@@ -42,20 +43,13 @@ pub fn select_resp(
     global: &impl GlobalInstanceLike,
     select: SelectStatement,
 ) -> QueryResult<Response> {
-    let mut resp_b = vec![];
-    let mut resp_a = vec![];
-    let mut i = 0u64;
+    let mut data = vec![];
+    let mut i = 0usize;
     self::select_custom(global, select, |item| {
-        encode_cell(&mut resp_b, item);
+        encode_cell(&mut data, item);
         i += 1;
     })?;
-    resp_a.push(0x11);
-    resp_a.extend(i.to_string().as_bytes());
-    resp_a.push(b'\n');
-    Ok(Response::EncodedAB(
-        resp_a.into_boxed_slice(),
-        resp_b.into_boxed_slice(),
-    ))
+    Ok(Response::Row { size: i, data })
 }
 
 fn encode_cell(resp: &mut Vec<u8>, item: &Datacell) {
@@ -65,15 +59,14 @@ fn encode_cell(resp: &mut Vec<u8>, item: &Datacell) {
     }
     unsafe {
         // UNSAFE(@ohsayan): +tagck
-        // NOTE(@ohsayan): optimize out unwanted alloc
         match item.tag().tag_class() {
             TagClass::Bool => resp.push(item.read_bool() as _),
-            TagClass::UnsignedInt => resp.extend(item.read_uint().to_string().as_bytes()),
-            TagClass::SignedInt => resp.extend(item.read_sint().to_string().as_bytes()),
+            TagClass::UnsignedInt => IntegerRepr::scoped(item.read_uint(), |b| resp.extend(b)),
+            TagClass::SignedInt => IntegerRepr::scoped(item.read_sint(), |b| resp.extend(b)),
             TagClass::Float => resp.extend(item.read_float().to_string().as_bytes()),
             TagClass::Bin | TagClass::Str => {
                 let slc = item.read_bin();
-                resp.extend(slc.len().to_string().as_bytes());
+                IntegerRepr::scoped(slc.len() as u64, |b| resp.extend(b));
                 resp.push(b'\n');
                 resp.extend(slc);
                 return;
@@ -81,7 +74,7 @@ fn encode_cell(resp: &mut Vec<u8>, item: &Datacell) {
             TagClass::List => {
                 let list = item.read_list();
                 let ls = list.read();
-                resp.extend(ls.len().to_string().as_bytes());
+                IntegerRepr::scoped(ls.len() as u64, |b| resp.extend(b));
                 resp.push(b'\n');
                 for item in ls.iter() {
                     encode_cell(resp, item);

@@ -26,6 +26,7 @@
 
 mod astr;
 mod ll;
+mod numbuf;
 pub mod scanner;
 mod stackop;
 mod uarray;
@@ -42,6 +43,7 @@ pub use {
     uarray::UArray,
     vinline::VInline,
     word::{DwordNN, DwordQN, WordIO, ZERO_BLOCK},
+    numbuf::IntegerRepr,
 };
 // imports
 use std::alloc::{self, Layout};

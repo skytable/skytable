@@ -45,7 +45,7 @@ use {
         self,
         error::QueryError,
         fractal::{Global, GlobalInstanceLike},
-        mem::BufferedScanner,
+        mem::{BufferedScanner, IntegerRepr},
     },
     bytes::{Buf, BytesMut},
     tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter},
@@ -73,7 +73,7 @@ impl ClientLocalState {
 #[derive(Debug, PartialEq)]
 pub enum Response {
     Empty,
-    EncodedAB(Box<[u8]>, Box<[u8]>),
+    Row { size: usize, data: Vec<u8> },
 }
 
 pub(super) async fn query_loop<S: Socket>(
@@ -139,9 +139,12 @@ pub(super) async fn query_loop<S: Socket>(
             Ok(Response::Empty) => {
                 con.write_all(&[0x12]).await?;
             }
-            Ok(Response::EncodedAB(a, b)) => {
-                con.write_all(&a).await?;
-                con.write_all(&b).await?;
+            Ok(Response::Row { size, data }) => {
+                con.write_u8(0x11).await?;
+                let mut irep = IntegerRepr::new();
+                con.write_all(irep.as_bytes(size as u64)).await?;
+                con.write_u8(b'\n').await?;
+                con.write_all(&data).await?;
             }
             Err(e) => {
                 let [a, b] = (e.value_u8() as u16).to_le_bytes();

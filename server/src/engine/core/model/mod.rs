@@ -54,7 +54,7 @@ use {
 pub(in crate::engine::core) use self::delta::{DeltaState, DeltaVersion, SchemaDeltaKind};
 
 use super::util::{EntityID, EntityIDRef};
-pub(in crate::engine) type Fields = IndexSTSeqCns<Box<str>, Field>;
+type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
 pub struct Model {
