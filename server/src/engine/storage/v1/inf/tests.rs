@@ -102,8 +102,7 @@ fn model() {
             "profile_pic" => Field::new([Layer::bin()].into(), true),
         },
     );
-    let model_irm = model.intent_read_model();
-    let enc = super::enc::enc_full::<obj::ModelLayoutRef>(obj::ModelLayoutRef(&model, &model_irm));
+    let enc = super::enc::enc_full::<obj::ModelLayoutRef>(obj::ModelLayoutRef(&model));
     let dec = super::dec::dec_full::<obj::ModelLayoutRef>(&enc).unwrap();
     assert_eq!(model, dec);
 }

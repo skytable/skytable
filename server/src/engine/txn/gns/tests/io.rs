@@ -118,15 +118,8 @@ mod model_tests {
     #[test]
     fn create() {
         let (space, model) = default_space_model();
-        let irm = model.intent_read_model();
-        let txn = CreateModelTxn::new(
-            super::SpaceIDRef::new("myspace", &space),
-            "mymodel",
-            &model,
-            &irm,
-        );
+        let txn = CreateModelTxn::new(super::SpaceIDRef::new("myspace", &space), "mymodel", &model);
         let encoded = super::enc::enc_full_self(txn);
-        core::mem::drop(irm);
         let decoded = super::dec::dec_full::<CreateModelTxn>(&encoded).unwrap();
         assert_eq!(
             CreateModelTxnRestorePL {

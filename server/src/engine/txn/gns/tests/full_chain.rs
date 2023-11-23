@@ -219,11 +219,7 @@ fn alter_model_add() {
                 .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
-                        model
-                            .intent_read_model()
-                            .fields()
-                            .st_get("profile_pic")
-                            .unwrap(),
+                        model.fields().st_get("profile_pic").unwrap(),
                         &Field::new([Layer::bin()].into(), true)
                     );
                     Ok(())
@@ -257,9 +253,8 @@ fn alter_model_remove() {
             global
                 .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
-                    let irm = model.intent_read_model();
-                    assert!(irm.fields().st_get("has_secure_key").is_none());
-                    assert!(irm.fields().st_get("is_dumb").is_none());
+                    assert!(model.fields().st_get("has_secure_key").is_none());
+                    assert!(model.fields().st_get("is_dumb").is_none());
                     Ok(())
                 })
                 .unwrap();
@@ -291,11 +286,7 @@ fn alter_model_update() {
                 .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
-                        model
-                            .intent_read_model()
-                            .fields()
-                            .st_get("profile_pic")
-                            .unwrap(),
+                        model.fields().st_get("profile_pic").unwrap(),
                         &Field::new([Layer::bin()].into(), true)
                     );
                     Ok(())

@@ -87,13 +87,13 @@ impl GlobalNS {
         let mut space = space.write();
         f(&mut space)
     }
-    pub fn with_model_space<'a, T, F>(&self, entity: Entity<'a>, f: F) -> QueryResult<T>
+    pub fn with_model_space_mut_for_ddl<'a, T, F>(&self, entity: Entity<'a>, f: F) -> QueryResult<T>
     where
-        F: FnOnce(&Space, &Model) -> QueryResult<T>,
+        F: FnOnce(&Space, &mut Model) -> QueryResult<T>,
     {
         let (space, model_name) = entity.into_full_result()?;
-        let mdl_idx = self.idx_mdl.read();
-        let Some(model) = mdl_idx.get(&EntityIDRef::new(&space, &model_name)) else {
+        let mut mdl_idx = self.idx_mdl.write();
+        let Some(model) = mdl_idx.get_mut(&EntityIDRef::new(&space, &model_name)) else {
             return Err(QueryError::QExecObjectNotFound);
         };
         let space_read = self.idx.read();

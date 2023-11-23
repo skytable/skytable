@@ -266,8 +266,6 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
         let mut ret = Ok(QueryExecMeta::zero());
         // prepare row fetch
         let key = mdl.resolve_where(update.clauses_mut())?;
-        // freeze schema
-        let irm = mdl.intent_read_model();
         // fetch row
         let g = sync::atm::cpin();
         let Some(row) = mdl.primary_index().select(key, &g) else {
@@ -298,7 +296,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
             let field_definition;
             let field_data;
             match (
-                irm.fields().st_get(lhs.as_str()),
+                mdl.fields().st_get(lhs.as_str()),
                 row_data_wl.fields_mut().st_get_mut(lhs.as_str()),
             ) {
                 (Some(fdef), Some(fdata)) => {

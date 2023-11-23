@@ -29,7 +29,7 @@ use crate::engine::{
         self,
         dml::QueryExecMeta,
         index::{DcFieldIndex, PrimaryIndexKey, Row},
-        model::{delta::DataDeltaKind, Fields, Model},
+        model::{delta::DataDeltaKind, Model},
     },
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
@@ -48,8 +48,7 @@ pub fn insert_resp(
 
 pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, insert.entity(), |mdl| {
-        let irmwd = mdl.intent_write_new_data();
-        let (pk, data) = prepare_insert(mdl, irmwd.fields(), insert.data())?;
+        let (pk, data) = prepare_insert(mdl, insert.data())?;
         let g = cpin();
         let ds = mdl.delta_state();
         // create new version
@@ -68,9 +67,9 @@ pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> Quer
 // TODO(@ohsayan): optimize null case
 fn prepare_insert(
     model: &Model,
-    fields: &Fields,
     insert: InsertData,
 ) -> QueryResult<(PrimaryIndexKey, DcFieldIndex)> {
+    let fields = model.fields();
     let mut okay = fields.len() == insert.column_count();
     let mut prepared_data = DcFieldIndex::idx_init_cap(fields.len());
     match insert {

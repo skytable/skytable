@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             core::{
-                model::{delta::IRModel, Field, Model},
+                model::{Field, Model},
                 space::Space,
                 GlobalNS, {EntityID, EntityIDRef},
             },
@@ -187,15 +187,15 @@ fn with_space_mut<T>(
     f(&mut space)
 }
 
-fn with_model<T>(
+fn with_model_mut<T>(
     gns: &GlobalNS,
     space_id: &super::SpaceIDRes,
     model_id: &ModelIDRes,
-    mut f: impl FnMut(&Model) -> RuntimeResult<T>,
+    mut f: impl FnMut(&mut Model) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
     with_space(gns, space_id, |_| {
-        let models = gns.idx_models().read();
-        let Some(model) = models.get(&EntityIDRef::new(&space_id.name, &model_id.model_name))
+        let mut models = gns.idx_models().write();
+        let Some(model) = models.get_mut(&EntityIDRef::new(&space_id.name, &model_id.model_name))
         else {
             return Err(TransactionError::OnRestoreDataMissing.into());
         };
@@ -217,7 +217,6 @@ pub struct CreateModelTxn<'a> {
     space_id: super::SpaceIDRef<'a>,
     model_name: &'a str,
     model: &'a Model,
-    model_read: &'a IRModel<'a>,
 }
 
 impl<'a> CreateModelTxn<'a> {
@@ -225,13 +224,11 @@ impl<'a> CreateModelTxn<'a> {
         space_id: super::SpaceIDRef<'a>,
         model_name: &'a str,
         model: &'a Model,
-        model_read: &'a IRModel<'a>,
     ) -> Self {
         Self {
             space_id,
             model_name,
             model,
-            model_read,
         }
     }
 }
@@ -266,10 +263,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
         // model name
         buf.extend(data.model_name.len().u64_bytes_le());
         // model meta dump
-        <obj::ModelLayoutRef as PersistObject>::meta_enc(
-            buf,
-            obj::ModelLayoutRef::from((data.model, data.model_read)),
-        )
+        <obj::ModelLayoutRef as PersistObject>::meta_enc(buf, obj::ModelLayoutRef::from(data.model))
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         let space_id = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
@@ -287,10 +281,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
         // model name
         buf.extend(data.model_name.as_bytes());
         // model dump
-        <obj::ModelLayoutRef as PersistObject>::obj_enc(
-            buf,
-            obj::ModelLayoutRef::from((data.model, data.model_read)),
-        )
+        <obj::ModelLayoutRef as PersistObject>::obj_enc(buf, obj::ModelLayoutRef::from(data.model))
     }
     unsafe fn obj_dec(
         s: &mut BufferedScanner,
@@ -432,16 +423,15 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        with_model(gns, &model_id.space_id, &model_id, |model| {
-            let mut wmodel = model.intent_write_model();
+        with_model_mut(gns, &model_id.space_id, &model_id, |model| {
             for (i, (field_name, field)) in new_fields.stseq_ord_kv().enumerate() {
-                if !wmodel
+                if !model
                     .fields_mut()
                     .st_insert(field_name.to_owned(), field.clone())
                 {
                     // rollback; corrupted
                     new_fields.stseq_ord_key().take(i).for_each(|field_id| {
-                        let _ = wmodel.fields_mut().st_delete(field_id);
+                        let _ = model.fields_mut().st_delete(field_id);
                     });
                     return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
@@ -450,8 +440,8 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
             // publish deltas
             for field_name in new_fields.stseq_ord_key() {
                 model
-                    .delta_state()
-                    .schema_append_unresolved_field_add(field_name);
+                    .delta_state_mut()
+                    .schema_append_unresolved_wl_field_add(field_name);
             }
             Ok(())
         })
@@ -551,18 +541,17 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        with_model(gns, &model_id.space_id, &model_id, |model| {
-            let mut iwm = model.intent_write_model();
+        with_model_mut(gns, &model_id.space_id, &model_id, |model| {
             let mut removed_fields_rb = vec![];
             for removed_field in removed_fields.iter() {
-                match iwm.fields_mut().st_delete_return(removed_field) {
+                match model.fields_mut().st_delete_return(removed_field) {
                     Some(field) => {
                         removed_fields_rb.push((removed_field as &str, field));
                     }
                     None => {
                         // rollback
                         removed_fields_rb.into_iter().for_each(|(field_id, field)| {
-                            let _ = iwm.fields_mut().st_insert(field_id.into(), field);
+                            let _ = model.fields_mut().st_insert(field_id.into(), field);
                         });
                         return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                     }
@@ -572,8 +561,8 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
             // publish deltas
             for field_name in removed_fields.iter() {
                 model
-                    .delta_state()
-                    .schema_append_unresolved_field_rem(field_name);
+                    .delta_state_mut()
+                    .schema_append_unresolved_wl_field_rem(field_name);
             }
             Ok(())
         })
@@ -667,16 +656,15 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        with_model(gns, &model_id.space_id, &model_id, |model| {
-            let mut iwm = model.intent_write_model();
+        with_model_mut(gns, &model_id.space_id, &model_id, |model| {
             let mut fields_rb = vec![];
             for (field_id, field) in updated_fields.iter() {
-                match iwm.fields_mut().st_update_return(field_id, field.clone()) {
+                match model.fields_mut().st_update_return(field_id, field.clone()) {
                     Some(f) => fields_rb.push((field_id as &str, f)),
                     None => {
                         // rollback
                         fields_rb.into_iter().for_each(|(field_id, field)| {
-                            let _ = iwm.fields_mut().st_update(field_id, field);
+                            let _ = model.fields_mut().st_update(field_id, field);
                         });
                         return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                     }

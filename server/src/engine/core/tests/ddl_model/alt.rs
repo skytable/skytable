@@ -39,8 +39,7 @@ fn with_plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) -> QueryResult<()> 
     let model = create(model)?;
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full(&tok[2..]).unwrap();
-    let model_write = model.intent_write_model();
-    let mv = AlterPlan::fdeltas(&model, &model_write, alter)?;
+    let mv = AlterPlan::fdeltas(&model, alter)?;
     Ok(f(mv))
 }
 fn plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) {
@@ -366,9 +365,8 @@ mod exec {
             "create model myspace.mymodel(username: string, col1: uint64)",
             "alter model myspace.mymodel add (col2 { type: uint32, nullable: true }, col3 { type: uint16, nullable: true })",
             |model| {
-                let schema = model.intent_read_model();
                 assert_eq!(
-                    schema
+                    model
                         .fields()
                         .stseq_ord_kv()
                         .rev()
@@ -397,9 +395,8 @@ mod exec {
             "create model myspace.mymodel(username: string, col1: uint64, col2: uint32, col3: uint16, col4: uint8)",
             "alter model myspace.mymodel remove (col1, col2, col3, col4)",
             |mdl| {
-                let schema = mdl.intent_read_model();
                 assert_eq!(
-                    schema
+                    mdl
                         .fields()
                         .stseq_ord_kv()
                         .rev()
@@ -423,8 +420,7 @@ mod exec {
             "create model myspace.mymodel(username: string, password: binary)",
             "alter model myspace.mymodel update password { nullable: true }",
             |model| {
-                let schema = model.intent_read_model();
-                assert!(schema.fields().st_get("password").unwrap().is_nullable());
+                assert!(model.fields().st_get("password").unwrap().is_nullable());
                 assert_eq!(
                     model.delta_state().schema_current_version(),
                     DeltaVersion::genesis()

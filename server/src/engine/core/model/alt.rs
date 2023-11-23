@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{Field, IWModel, Layer, Model},
+    super::{Field, Layer, Model},
     crate::{
         engine::{
             data::{
@@ -76,7 +76,7 @@ macro_rules! can_ignore {
 }
 
 #[inline(always)]
-fn no_field(mr: &IWModel, new: &str) -> bool {
+fn no_field(mr: &Model, new: &str) -> bool {
     !mr.fields().st_contains(new)
 }
 
@@ -90,8 +90,7 @@ fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> QueryResul
 
 impl<'a> AlterPlan<'a> {
     pub fn fdeltas(
-        mv: &Model,
-        wm: &IWModel,
+        mdl: &Model,
         AlterModel { model, kind }: AlterModel<'a>,
     ) -> QueryResult<AlterPlan<'a>> {
         let mut no_lock = true;
@@ -104,8 +103,8 @@ impl<'a> AlterPlan<'a> {
                 }
                 let mut not_found = false;
                 if r.iter().all(|id| {
-                    let not_pk = mv.not_pk(id);
-                    let exists = !no_field(wm, id.as_str());
+                    let not_pk = mdl.not_pk(id);
+                    let exists = !no_field(mdl, id.as_str());
                     not_found = !exists;
                     not_pk & exists
                 }) {
@@ -125,7 +124,7 @@ impl<'a> AlterPlan<'a> {
                         layers,
                         mut props,
                     } = fields.next().unwrap();
-                    okay &= no_field(wm, &field_name) & mv.not_pk(&field_name);
+                    okay &= no_field(mdl, &field_name) & mdl.not_pk(&field_name);
                     let is_nullable = check_nullable(&mut props)?;
                     let layers = Field::parse_layers(layers, is_nullable)?;
                     okay &= add.st_insert(field_name.to_string().into_boxed_str(), layers);
@@ -144,9 +143,9 @@ impl<'a> AlterPlan<'a> {
                         mut props,
                     } = updated_fields.next().unwrap();
                     // enforce pk
-                    mv.guard_pk(&field_name)?;
+                    mdl.guard_pk(&field_name)?;
                     // get the current field
-                    let Some(current_field) = wm.fields().st_get(field_name.as_str()) else {
+                    let Some(current_field) = mdl.fields().st_get(field_name.as_str()) else {
                         return Err(QueryError::QExecUnknownField);
                     };
                     // check props
@@ -255,22 +254,18 @@ impl Model {
         let (space_name, model_name) = alter.model.into_full_result()?;
         global
             .namespace()
-            .with_model_space(alter.model, |space, model| {
-                // make intent
-                let iwm = model.intent_write_model();
+            .with_model_space_mut_for_ddl(alter.model, |space, model| {
                 // prepare plan
-                let plan = AlterPlan::fdeltas(model, &iwm, alter)?;
+                let plan = AlterPlan::fdeltas(model, alter)?;
                 // we have a legal plan; acquire exclusive if we need it
                 if !plan.no_lock {
                     // TODO(@ohsayan): allow this later on, once we define the syntax
                     return Err(QueryError::QExecNeedLock);
                 }
                 // fine, we're good
-                let mut iwm = iwm;
                 match plan.action {
-                    AlterAction::Ignore => drop(iwm),
+                    AlterAction::Ignore => {}
                     AlterAction::Add(new_fields) => {
-                        let mut guard = model.delta_state().schema_delta_write();
                         // TODO(@ohsayan): this impacts lockdown duration; fix it
                         if G::FS_IS_NON_NULL {
                             // prepare txn
@@ -291,13 +286,12 @@ impl Model {
                             .map(|(x, y)| (x.clone(), y.clone()))
                             .for_each(|(field_id, field)| {
                                 model
-                                    .delta_state()
-                                    .schema_append_unresolved_wl_field_add(&mut guard, &field_id);
-                                iwm.fields_mut().st_insert(field_id, field);
+                                    .delta_state_mut()
+                                    .schema_append_unresolved_wl_field_add(&field_id);
+                                model.fields_mut().st_insert(field_id, field);
                             });
                     }
                     AlterAction::Remove(removed) => {
-                        let mut guard = model.delta_state().schema_delta_write();
                         if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelRemoveTxn::new(
@@ -308,11 +302,10 @@ impl Model {
                             global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
                         removed.iter().for_each(|field_id| {
-                            model.delta_state().schema_append_unresolved_wl_field_rem(
-                                &mut guard,
-                                field_id.as_str(),
-                            );
-                            iwm.fields_mut().st_delete(field_id.as_str());
+                            model
+                                .delta_state_mut()
+                                .schema_append_unresolved_wl_field_rem(field_id.as_str());
+                            model.fields_mut().st_delete(field_id.as_str());
                         });
                     }
                     AlterAction::Update(updated) => {
@@ -326,7 +319,7 @@ impl Model {
                             global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
                         updated.into_iter().for_each(|(field_id, field)| {
-                            iwm.fields_mut().st_update(&field_id, field);
+                            model.fields_mut().st_update(&field_id, field);
                         });
                     }
                 }

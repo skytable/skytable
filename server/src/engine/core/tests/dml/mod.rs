@@ -74,7 +74,6 @@ fn _exec_only_read_key_and_then<T>(
 ) -> QueryResult<T> {
     let guard = sync::atm::cpin();
     global.namespace().with_model(entity, |mdl| {
-        let _irm = mdl.intent_read_model();
         let row = mdl
             .primary_index()
             .select(Lit::from(key_name), &guard)
@@ -92,7 +91,6 @@ fn _exec_delete_only(global: &impl GlobalInstanceLike, delete: &str, key: &str) 
     dml::delete(global, delete)?;
     assert_eq!(
         global.namespace().with_model(entity, |model| {
-            let _ = model.intent_read_model();
             let g = sync::atm::cpin();
             Ok(model.primary_index().select(key.into(), &g).is_none())
         }),

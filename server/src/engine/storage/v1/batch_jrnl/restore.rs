@@ -215,7 +215,6 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     ) -> RuntimeResult<()> {
         // NOTE(@ohsayan): current complexity is O(n) which is good enough (in the future I might revise this to a fancier impl)
         // pin model
-        let irm = m.intent_read_model();
         let g = unsafe { crossbeam_epoch::unprotected() };
         let mut pending_delete = HashMap::new();
         let p_index = m.primary_index().__raw_index();
@@ -235,7 +234,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                             // new row (logically)
                             let _ = p_index.mt_delete(&pk, &g);
                             let mut data = DcFieldIndex::default();
-                            for (field_name, new_data) in irm
+                            for (field_name, new_data) in m
                                 .fields()
                                 .stseq_ord_key()
                                 .filter(|key| key.as_ref() != m.p_key())

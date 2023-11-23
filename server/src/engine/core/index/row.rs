@@ -167,9 +167,8 @@ impl Row {
         }
         // we have deltas to apply
         let mut wl = RwLockUpgradableReadGuard::upgrade(rwl_ug);
-        let delta_read = delta_state.schema_delta_read();
         let mut max_delta = wl.txn_revised_schema_version;
-        for (delta_id, delta) in delta_read.resolve_iter_since(wl.txn_revised_schema_version) {
+        for (delta_id, delta) in delta_state.resolve_iter_since(wl.txn_revised_schema_version) {
             match delta.kind() {
                 SchemaDeltaKind::FieldAdd(f) => {
                     wl.fields.st_insert(f.clone(), Datacell::null());

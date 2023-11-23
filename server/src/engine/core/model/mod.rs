@@ -31,7 +31,6 @@ pub(in crate::engine) mod delta;
 use std::cell::RefCell;
 
 use {
-    self::delta::{IRModel, IRModelSMData, ISyncMatrix, IWModel},
     super::index::PrimaryIndex,
     crate::engine::{
         data::{
@@ -50,7 +49,6 @@ use {
         },
         txn::gns::{self as gnstxn, SpaceIDRef},
     },
-    std::cell::UnsafeCell,
 };
 
 pub(in crate::engine::core) use self::delta::{DeltaState, DeltaVersion, SchemaDeltaKind};
@@ -63,8 +61,7 @@ pub struct Model {
     uuid: Uuid,
     p_key: Box<str>,
     p_tag: FullTag,
-    fields: UnsafeCell<Fields>,
-    sync_matrix: ISyncMatrix,
+    fields: Fields,
     data: PrimaryIndex,
     delta: DeltaState,
 }
@@ -72,11 +69,10 @@ pub struct Model {
 #[cfg(test)]
 impl PartialEq for Model {
     fn eq(&self, m: &Self) -> bool {
-        let mdl1 = self.intent_read_model();
-        let mdl2 = m.intent_read_model();
-        ((self.p_key == m.p_key) & (self.p_tag == m.p_tag))
-            && self.uuid == m.uuid
-            && mdl1.fields() == mdl2.fields()
+        self.uuid == m.uuid
+            && self.p_key == m.p_key
+            && self.p_tag == m.p_tag
+            && self.fields == m.fields
     }
 }
 
@@ -85,8 +81,7 @@ impl Model {
         uuid: Uuid,
         p_key: Box<str>,
         p_tag: FullTag,
-        fields: UnsafeCell<Fields>,
-        sync_matrix: ISyncMatrix,
+        fields: Fields,
         data: PrimaryIndex,
         delta: DeltaState,
     ) -> Self {
@@ -95,12 +90,10 @@ impl Model {
             p_key,
             p_tag,
             fields,
-            sync_matrix,
             data,
             delta,
         }
     }
-
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
@@ -109,24 +102,6 @@ impl Model {
     }
     pub fn p_tag(&self) -> FullTag {
         self.p_tag
-    }
-    pub fn sync_matrix(&self) -> &ISyncMatrix {
-        &self.sync_matrix
-    }
-    unsafe fn _read_fields<'a>(&'a self) -> &'a Fields {
-        &*self.fields.get().cast_const()
-    }
-    unsafe fn _read_fields_mut<'a>(&'a self) -> &'a mut Fields {
-        &mut *self.fields.get()
-    }
-    pub fn intent_read_model<'a>(&'a self) -> IRModel<'a> {
-        IRModel::new(self)
-    }
-    pub fn intent_write_model<'a>(&'a self) -> IWModel<'a> {
-        IWModel::new(self)
-    }
-    pub fn intent_write_new_data<'a>(&'a self) -> IRModelSMData<'a> {
-        IRModelSMData::new(self)
     }
     fn is_pk(&self, new: &str) -> bool {
         self.p_key.as_bytes() == new.as_bytes()
@@ -147,6 +122,15 @@ impl Model {
     pub fn delta_state(&self) -> &DeltaState {
         &self.delta
     }
+    pub fn delta_state_mut(&mut self) -> &mut DeltaState {
+        &mut self.delta
+    }
+    pub fn fields_mut(&mut self) -> &mut Fields {
+        &mut self.fields
+    }
+    pub fn fields(&self) -> &Fields {
+        &self.fields
+    }
 }
 
 impl Model {
@@ -155,8 +139,7 @@ impl Model {
             uuid,
             p_key,
             p_tag,
-            UnsafeCell::new(fields),
-            ISyncMatrix::new(),
+            fields,
             PrimaryIndex::new_empty(),
             DeltaState::new_resolved(),
         )
@@ -215,14 +198,12 @@ impl Model {
             }
             // since we've locked this down, no one else can parallely create another model in the same space (or remove)
             if G::FS_IS_NON_NULL {
-                let irm = model.intent_read_model();
                 let mut txn_driver = global.namespace_txn_driver().lock();
                 // prepare txn
                 let txn = gnstxn::CreateModelTxn::new(
                     SpaceIDRef::new(&space_name, &space),
                     &model_name,
                     &model,
-                    &irm,
                 );
                 // attempt to initialize driver
                 global.initialize_model_driver(

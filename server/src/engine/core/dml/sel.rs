@@ -102,7 +102,6 @@ where
     F: FnMut(&Datacell),
 {
     global.namespace().with_model(select.entity(), |mdl| {
-        let irm = mdl.intent_read_model();
         let target_key = mdl.resolve_where(select.clauses_mut())?;
         let pkdc = VirtualDatacell::new(target_key.clone());
         let g = sync::atm::cpin();
@@ -118,7 +117,7 @@ where
             Some(row) => {
                 let r = row.resolve_schema_deltas_and_freeze(mdl.delta_state());
                 if select.is_wildcard() {
-                    for key in irm.fields().stseq_ord_key() {
+                    for key in mdl.fields().stseq_ord_key() {
                         read_field(key.as_ref(), r.fields())?;
                     }
                 } else {

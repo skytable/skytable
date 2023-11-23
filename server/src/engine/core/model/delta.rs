@@ -25,136 +25,25 @@
 */
 
 use {
-    super::{Fields, Model},
+    super::Model,
     crate::engine::{
         core::{dml::QueryExecMeta, index::Row},
         fractal::{FractalToken, GlobalInstanceLike},
         sync::atm::Guard,
         sync::queue::Queue,
     },
-    parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     std::{
         collections::btree_map::{BTreeMap, Range},
         sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     },
 };
 
-/*
-    sync matrix
-*/
-
-// FIXME(@ohsayan): This an inefficient repr of the matrix; replace it with my other design
-#[derive(Debug)]
-/// A sync matrix enables different queries to have different access permissions on the data model, and the data in the
-/// index
-pub struct ISyncMatrix {
-    // virtual privileges
-    /// read/write model
-    v_priv_model_alter: RwLock<()>,
-    /// RW data/block all
-    v_priv_data_new_or_revise: RwLock<()>,
-}
-
-#[cfg(test)]
-impl PartialEq for ISyncMatrix {
-    fn eq(&self, _: &Self) -> bool {
-        true
-    }
-}
-
-#[derive(Debug)]
-/// Read model, write new data
-pub struct IRModelSMData<'a> {
-    _rmodel: RwLockReadGuard<'a, ()>,
-    _mdata: RwLockReadGuard<'a, ()>,
-    fields: &'a Fields,
-}
-
-impl<'a> IRModelSMData<'a> {
-    pub fn new(m: &'a Model) -> Self {
-        let rmodel = m.sync_matrix().v_priv_model_alter.read();
-        let mdata = m.sync_matrix().v_priv_data_new_or_revise.read();
-        Self {
-            _rmodel: rmodel,
-            _mdata: mdata,
-            fields: unsafe {
-                // UNSAFE(@ohsayan): we already have acquired this resource
-                m._read_fields()
-            },
-        }
-    }
-    pub fn fields(&'a self) -> &'a Fields {
-        self.fields
-    }
-}
-
-#[derive(Debug)]
-/// Read model
-pub struct IRModel<'a> {
-    _rmodel: RwLockReadGuard<'a, ()>,
-    fields: &'a Fields,
-}
-
-impl<'a> IRModel<'a> {
-    pub fn new(m: &'a Model) -> Self {
-        Self {
-            _rmodel: m.sync_matrix().v_priv_model_alter.read(),
-            fields: unsafe {
-                // UNSAFE(@ohsayan): we already have acquired this resource
-                m._read_fields()
-            },
-        }
-    }
-    pub fn fields(&'a self) -> &'a Fields {
-        self.fields
-    }
-}
-
-#[derive(Debug)]
-/// Write model
-pub struct IWModel<'a> {
-    _wmodel: RwLockWriteGuard<'a, ()>,
-    fields: &'a mut Fields,
-}
-
-impl<'a> IWModel<'a> {
-    pub fn new(m: &'a Model) -> Self {
-        Self {
-            _wmodel: m.sync_matrix().v_priv_model_alter.write(),
-            fields: unsafe {
-                // UNSAFE(@ohsayan): we have exclusive access to this resource
-                m._read_fields_mut()
-            },
-        }
-    }
-    pub fn fields(&'a self) -> &'a Fields {
-        self.fields
-    }
-    // ALIASING
-    pub fn fields_mut(&mut self) -> &mut Fields {
-        self.fields
-    }
-}
-
-impl ISyncMatrix {
-    pub const fn new() -> Self {
-        Self {
-            v_priv_model_alter: RwLock::new(()),
-            v_priv_data_new_or_revise: RwLock::new(()),
-        }
-    }
-}
-
-/*
-    delta
-*/
-
 #[derive(Debug)]
 /// A delta state for the model
 pub struct DeltaState {
     // schema
-    schema_current_version: AtomicU64,
-    schema_deltas: RwLock<BTreeMap<DeltaVersion, SchemaDeltaPart>>,
+    schema_current_version: u64,
+    schema_deltas: BTreeMap<DeltaVersion, SchemaDeltaPart>,
     // data
     data_current_version: AtomicU64,
     data_deltas: Queue<DataDelta>,
@@ -165,8 +54,8 @@ impl DeltaState {
     /// A new, fully resolved delta state with version counters set to 0
     pub fn new_resolved() -> Self {
         Self {
-            schema_current_version: AtomicU64::new(0),
-            schema_deltas: RwLock::new(BTreeMap::new()),
+            schema_current_version: 0,
+            schema_deltas: BTreeMap::new(),
             data_current_version: AtomicU64::new(0),
             data_deltas: Queue::new(),
             data_deltas_size: AtomicUsize::new(0),
@@ -218,51 +107,32 @@ impl DeltaState {
 
 // schema
 impl DeltaState {
-    pub fn schema_delta_write<'a>(&'a self) -> SchemaDeltaIndexWGuard<'a> {
-        SchemaDeltaIndexWGuard(self.schema_deltas.write())
-    }
-    pub fn schema_delta_read<'a>(&'a self) -> SchemaDeltaIndexRGuard<'a> {
-        SchemaDeltaIndexRGuard(self.schema_deltas.read())
+    pub fn resolve_iter_since(
+        &self,
+        current_version: DeltaVersion,
+    ) -> Range<DeltaVersion, SchemaDeltaPart> {
+        self.schema_deltas.range(current_version.step()..)
     }
     pub fn schema_current_version(&self) -> DeltaVersion {
-        self.__schema_delta_current()
+        DeltaVersion(self.schema_current_version)
     }
-    pub fn schema_append_unresolved_wl_field_add(
-        &self,
-        guard: &mut SchemaDeltaIndexWGuard,
-        field_name: &str,
-    ) {
-        self.__schema_append_unresolved_delta(&mut guard.0, SchemaDeltaPart::field_add(field_name));
+    pub fn schema_append_unresolved_wl_field_add(&mut self, field_name: &str) {
+        self.__schema_append_unresolved_delta(SchemaDeltaPart::field_add(field_name));
     }
-    pub fn schema_append_unresolved_wl_field_rem(
-        &self,
-        guard: &mut SchemaDeltaIndexWGuard,
-        field_name: &str,
-    ) {
-        self.__schema_append_unresolved_delta(&mut guard.0, SchemaDeltaPart::field_rem(field_name));
-    }
-    pub fn schema_append_unresolved_field_add(&self, field_name: &str) {
-        self.schema_append_unresolved_wl_field_add(&mut self.schema_delta_write(), field_name);
-    }
-    pub fn schema_append_unresolved_field_rem(&self, field_name: &str) {
-        self.schema_append_unresolved_wl_field_rem(&mut self.schema_delta_write(), field_name);
+    pub fn schema_append_unresolved_wl_field_rem(&mut self, field_name: &str) {
+        self.__schema_append_unresolved_delta(SchemaDeltaPart::field_rem(field_name));
     }
 }
 
 impl DeltaState {
-    fn __schema_delta_step(&self) -> DeltaVersion {
-        DeltaVersion(self.schema_current_version.fetch_add(1, Ordering::AcqRel))
+    fn __schema_delta_step(&mut self) -> DeltaVersion {
+        let current = self.schema_current_version;
+        self.schema_current_version += 1;
+        DeltaVersion(current)
     }
-    fn __schema_delta_current(&self) -> DeltaVersion {
-        DeltaVersion(self.schema_current_version.load(Ordering::Acquire))
-    }
-    fn __schema_append_unresolved_delta(
-        &self,
-        w: &mut BTreeMap<DeltaVersion, SchemaDeltaPart>,
-        part: SchemaDeltaPart,
-    ) -> DeltaVersion {
+    fn __schema_append_unresolved_delta(&mut self, part: SchemaDeltaPart) -> DeltaVersion {
         let v = self.__schema_delta_step();
-        w.insert(v, part);
+        self.schema_deltas.insert(v, part);
         v
     }
 }
@@ -325,19 +195,6 @@ impl SchemaDeltaPart {
         Self::new(SchemaDeltaKind::FieldRem(
             field_name.to_owned().into_boxed_str(),
         ))
-    }
-}
-
-pub struct SchemaDeltaIndexWGuard<'a>(
-    RwLockWriteGuard<'a, BTreeMap<DeltaVersion, SchemaDeltaPart>>,
-);
-pub struct SchemaDeltaIndexRGuard<'a>(RwLockReadGuard<'a, BTreeMap<DeltaVersion, SchemaDeltaPart>>);
-impl<'a> SchemaDeltaIndexRGuard<'a> {
-    pub fn resolve_iter_since(
-        &self,
-        current_version: DeltaVersion,
-    ) -> Range<DeltaVersion, SchemaDeltaPart> {
-        self.0.range(current_version.step()..)
     }
 }
 

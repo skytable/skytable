@@ -42,7 +42,6 @@ mod validation {
         assert_eq!(model.p_tag(), FullTag::STR);
         assert_eq!(
             model
-                .intent_read_model()
                 .fields()
                 .stseq_ord_value()
                 .cloned()
@@ -66,7 +65,6 @@ mod validation {
         assert_eq!(model.p_tag(), FullTag::STR);
         assert_eq!(
             model
-                .intent_read_model()
                 .fields()
                 .stseq_ord_value()
                 .cloned()
@@ -153,7 +151,6 @@ mod exec {
         .unwrap();
         with_model(&global, SPACE, "mymodel", |model| {
             let models: Vec<(String, Field)> = model
-                .intent_read_model()
                 .fields()
                 .stseq_ord_kv()
                 .map(|(k, v)| (k.to_string(), v.clone()))

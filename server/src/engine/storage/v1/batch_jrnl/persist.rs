@@ -36,7 +36,7 @@ use {
             core::{
                 index::{PrimaryIndexKey, RowData},
                 model::{
-                    delta::{DataDelta, DataDeltaKind, DeltaVersion, IRModel},
+                    delta::{DataDelta, DataDeltaKind, DeltaVersion},
                     Model,
                 },
             },
@@ -76,7 +76,6 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     }
     pub fn write_new_batch(&mut self, model: &Model, observed_len: usize) -> RuntimeResult<()> {
         // pin model
-        let irm = model.intent_read_model();
         let schema_version = model.delta_state().schema_current_version();
         let g = pin();
         // init restore list
@@ -90,7 +89,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
                 observed_len,
                 schema_version,
                 model.p_tag().tag_unique(),
-                irm.fields().len() - 1,
+                model.fields().len() - 1,
             )?;
             while i < observed_len {
                 let delta = model.delta_state().__data_delta_dequeue(&g).unwrap();
@@ -116,7 +115,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
                         self.write_batch_item_common_row_data(&delta)?;
                         // encode data
                         self.encode_pk_only(delta.row().d_key())?;
-                        self.encode_row_data(model, &irm, &row_data)?;
+                        self.encode_row_data(model, &row_data)?;
                     }
                 }
                 i += 1;
@@ -227,18 +226,13 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         Ok(())
     }
     /// Encode row data
-    fn encode_row_data(
-        &mut self,
-        mdl: &Model,
-        irm: &IRModel,
-        row_data: &RowData,
-    ) -> RuntimeResult<()> {
-        for field_name in irm.fields().stseq_ord_key() {
+    fn encode_row_data(&mut self, model: &Model, row_data: &RowData) -> RuntimeResult<()> {
+        for field_name in model.fields().stseq_ord_key() {
             match row_data.fields().get(field_name) {
                 Some(cell) => {
                     self.encode_cell(cell)?;
                 }
-                None if field_name.as_ref() == mdl.p_key() => {}
+                None if field_name.as_ref() == model.p_key() => {}
                 None => self.f.write_unfsynced(&[0])?,
             }
         }

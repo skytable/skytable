@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             core::{
-                model::{delta::IRModel, Field, Layer, Model},
+                model::{Field, Layer, Model},
                 space::Space,
             },
             data::{
@@ -405,10 +405,10 @@ impl ModelLayoutMD {
 }
 
 #[derive(Clone, Copy)]
-pub struct ModelLayoutRef<'a>(pub(super) &'a Model, pub(super) &'a IRModel<'a>);
-impl<'a> From<(&'a Model, &'a IRModel<'a>)> for ModelLayoutRef<'a> {
-    fn from((mdl, irm): (&'a Model, &'a IRModel<'a>)) -> Self {
-        Self(mdl, irm)
+pub struct ModelLayoutRef<'a>(pub(super) &'a Model);
+impl<'a> From<&'a Model> for ModelLayoutRef<'a> {
+    fn from(mdl: &'a Model) -> Self {
+        Self(mdl)
     }
 }
 impl<'a> PersistObject for ModelLayoutRef<'a> {
@@ -419,11 +419,11 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.p_key_len as usize)
     }
-    fn meta_enc(buf: &mut VecU8, ModelLayoutRef(v, irm): Self::InputType) {
-        buf.extend(v.get_uuid().to_le_bytes());
-        buf.extend(v.p_key().len().u64_bytes_le());
-        buf.extend(v.p_tag().tag_selector().value_qword().to_le_bytes());
-        buf.extend(irm.fields().len().u64_bytes_le());
+    fn meta_enc(buf: &mut VecU8, ModelLayoutRef(model_def): Self::InputType) {
+        buf.extend(model_def.get_uuid().to_le_bytes());
+        buf.extend(model_def.p_key().len().u64_bytes_le());
+        buf.extend(model_def.p_tag().tag_selector().value_qword().to_le_bytes());
+        buf.extend(model_def.fields().len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> RuntimeResult<Self::Metadata> {
         Ok(ModelLayoutMD::new(
@@ -433,11 +433,11 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
             scanner.next_u64_le(),
         ))
     }
-    fn obj_enc(buf: &mut VecU8, ModelLayoutRef(mdl, irm): Self::InputType) {
-        buf.extend(mdl.p_key().as_bytes());
+    fn obj_enc(buf: &mut VecU8, ModelLayoutRef(model_definition): Self::InputType) {
+        buf.extend(model_definition.p_key().as_bytes());
         <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_enc(
             buf,
-            irm.fields(),
+            model_definition.fields(),
         )
     }
     unsafe fn obj_dec(
