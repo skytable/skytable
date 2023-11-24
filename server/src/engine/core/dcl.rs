@@ -29,12 +29,24 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     net::protocol::ClientLocalState,
-    ql::dcl::{UserAdd, UserDel},
+    ql::dcl::{SysctlCommand, UserAdd, UserDel},
 };
 
 const KEY_PASSWORD: &str = "password";
 
-pub fn create_user(global: &impl GlobalInstanceLike, mut user_add: UserAdd<'_>) -> QueryResult<()> {
+pub fn exec<G: GlobalInstanceLike>(
+    g: G,
+    current_user: &ClientLocalState,
+    cmd: SysctlCommand,
+) -> QueryResult<()> {
+    match cmd {
+        SysctlCommand::CreateUser(new) => create_user(&g, new),
+        SysctlCommand::DropUser(drop) => drop_user(&g, current_user, drop),
+        SysctlCommand::ReportStatus => Ok(()),
+    }
+}
+
+fn create_user(global: &impl GlobalInstanceLike, mut user_add: UserAdd<'_>) -> QueryResult<()> {
     let username = user_add.username().to_owned();
     let password = match user_add.options_mut().remove(KEY_PASSWORD) {
         Some(DictEntryGeneric::Data(d))
@@ -48,7 +60,7 @@ pub fn create_user(global: &impl GlobalInstanceLike, mut user_add: UserAdd<'_>) 
     global.sys_store().create_new_user(username, password)
 }
 
-pub fn drop_user(
+fn drop_user(
     global: &impl GlobalInstanceLike,
     cstate: &ClientLocalState,
     user_del: UserDel<'_>,

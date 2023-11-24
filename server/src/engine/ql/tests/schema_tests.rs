@@ -142,12 +142,12 @@ mod tymeta {
         //        ^^^^^^^^^^^^^^^^^^ cursor should be at string
         let tok = lex_insecure(br#"{maxlen: 100, type: string, unique: true }"#).unwrap();
         let mut state = State::new_inplace(&tok);
-        let tymeta: DictTypeMeta = ASTNode::from_state(&mut state).unwrap();
+        let tymeta: DictTypeMeta = ASTNode::test_parse_from_state(&mut state).unwrap();
         assert_eq!(state.cursor(), 6);
         assert!(Token![:].eq(state.fw_read()));
         assert!(Token::Ident(Ident::from("string")).eq(state.fw_read()));
         assert!(Token![,].eq(state.fw_read()));
-        let tymeta2: DictTypeMetaSplit = ASTNode::from_state(&mut state).unwrap();
+        let tymeta2: DictTypeMetaSplit = ASTNode::test_parse_from_state(&mut state).unwrap();
         assert!(state.exhausted());
         let mut final_ret = tymeta.into_inner();
         final_ret.extend(tymeta2.into_inner());
@@ -167,12 +167,12 @@ mod tymeta {
             lex_insecure(br#"{maxlen: 100, this: { is: "cool" }, type: string, unique: true }"#)
                 .unwrap();
         let mut state = State::new_inplace(&tok);
-        let tymeta: DictTypeMeta = ASTNode::from_state(&mut state).unwrap();
+        let tymeta: DictTypeMeta = ASTNode::test_parse_from_state(&mut state).unwrap();
         assert_eq!(state.cursor(), 14);
         assert!(Token![:].eq(state.fw_read()));
         assert!(Token::Ident(Ident::from("string")).eq(state.fw_read()));
         assert!(Token![,].eq(state.fw_read()));
-        let tymeta2: DictTypeMetaSplit = ASTNode::from_state(&mut state).unwrap();
+        let tymeta2: DictTypeMetaSplit = ASTNode::test_parse_from_state(&mut state).unwrap();
         assert!(state.exhausted());
         let mut final_ret = tymeta.into_inner();
         final_ret.extend(tymeta2.into_inner());

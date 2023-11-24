@@ -52,15 +52,13 @@ impl<'a> DropSpace<'a> {
             let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
             state.cursor_ahead_if(force);
             // either `force` or nothing
-            if state.exhausted() {
-                return Ok(DropSpace::new(
-                    unsafe {
-                        // UNSAFE(@ohsayan): Safe because the if predicate ensures that tok[0] (relative) is indeed an ident
-                        ident.uck_read_ident()
-                    },
-                    force,
-                ));
-            }
+            return Ok(DropSpace::new(
+                unsafe {
+                    // UNSAFE(@ohsayan): Safe because the if predicate ensures that tok[0] (relative) is indeed an ident
+                    ident.uck_read_ident()
+                },
+                force,
+            ));
         }
         Err(QueryError::QLInvalidSyntax)
     }
@@ -81,11 +79,7 @@ impl<'a> DropModel<'a> {
         let e = Entity::parse_from_state_rounded_result(state)?;
         let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
         state.cursor_ahead_if(force);
-        if state.exhausted() {
-            return Ok(DropModel::new(e, force));
-        } else {
-            Err(QueryError::QLInvalidSyntax)
-        }
+        Ok(DropModel::new(e, force))
     }
 }
 
@@ -112,19 +106,31 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for DropModel<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for DropSpace<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DropStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for DropStatementAST<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             super::parse_drop(state).map(Self)
         }
     }

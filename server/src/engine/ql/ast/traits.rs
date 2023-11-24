@@ -33,17 +33,47 @@ use crate::engine::{
 
 /// An AST node
 pub trait ASTNode<'a>: Sized {
-    const VERIFY: bool = false;
+    /// This AST node MUST use the full token range
+    const MUST_USE_FULL_TOKEN_RANGE: bool;
+    /// This AST node MUST use the full token range, and it also verifies that this is the case
+    const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool;
+    /// This AST node doesn't handle "deep errors" (for example, recursive collections)
+    const VERIFY_STATE_BEFORE_RETURN: bool = false;
+    /// A hardened parse that guarantees:
+    /// - The result is verified (even if it is a deep error)
+    /// - The result utilizes the full token range
+    fn parse_from_state_hardened<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> QueryResult<Self> {
+        let r = Self::__base_impl_parse_from_state(state)?;
+        if Self::VERIFY_STATE_BEFORE_RETURN {
+            // must verify
+            if !state.okay() {
+                return Err(QueryError::QLInvalidSyntax);
+            }
+        }
+        if Self::MUST_USE_FULL_TOKEN_RANGE {
+            if !Self::VERIFIES_FULL_TOKEN_RANGE_USAGE {
+                if state.not_exhausted() {
+                    return Err(QueryError::QLInvalidSyntax);
+                }
+            }
+        }
+        Ok(r)
+    }
     /// Parse this AST node from the given state
     ///
     /// Note to implementors:
     /// - If the implementor uses a cow style parse, then set [`ASTNode::VERIFY`] to
     /// true
     /// - Try to propagate errors via [`State`] if possible
-    fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self>;
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-        let r = <Self as ASTNode>::_from_state(state);
-        if Self::VERIFY {
+    fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> QueryResult<Self>;
+    #[cfg(test)]
+    fn test_parse_from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        let r = <Self as ASTNode>::__base_impl_parse_from_state(state);
+        if Self::VERIFY_STATE_BEFORE_RETURN {
             return if state.okay() {
                 r
             } else {
@@ -60,7 +90,7 @@ pub trait ASTNode<'a>: Sized {
     #[cfg(test)]
     fn multiple_from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Vec<Self>> {
         let r = <Self as ASTNode>::_multiple_from_state(state);
-        if Self::VERIFY {
+        if Self::VERIFY_STATE_BEFORE_RETURN {
             return if state.okay() {
                 r
             } else {
@@ -73,7 +103,7 @@ pub trait ASTNode<'a>: Sized {
     /// Parse this AST node utilizing the full token-stream. Intended for the test suite.
     fn from_insecure_tokens_full(tok: &'a [Token<'a>]) -> QueryResult<Self> {
         let mut state = State::new(tok, InplaceData::new());
-        let r = <Self as ASTNode>::from_state(&mut state)?;
+        let r = <Self as ASTNode>::test_parse_from_state(&mut state)?;
         assert!(state.exhausted());
         Ok(r)
     }

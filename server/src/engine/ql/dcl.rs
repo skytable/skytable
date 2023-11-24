@@ -36,6 +36,47 @@ use crate::engine::{
     },
 };
 
+#[derive(Debug, PartialEq)]
+pub enum SysctlCommand<'a> {
+    /// `sysctl create user ...`
+    CreateUser(UserAdd<'a>),
+    /// `sysctl drop user ...`
+    DropUser(UserDel<'a>),
+    /// `sysctl status`
+    ReportStatus,
+}
+
+impl<'a> traits::ASTNode<'a> for SysctlCommand<'a> {
+    const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+    const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+    fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> QueryResult<Self> {
+        if state.remaining() < 1 {
+            return Err(QueryError::QLUnexpectedEndOfStatement);
+        }
+        let token = state.fw_read();
+        let create = Token![create].eq(token);
+        let drop = Token![drop].eq(token);
+        let status = token.ident_eq("status");
+        if status {
+            return Ok(SysctlCommand::ReportStatus);
+        }
+        if state.exhausted() {
+            return Err(QueryError::QLUnexpectedEndOfStatement);
+        }
+        let create_or_drop = state.fw_read();
+        if !create_or_drop.ident_eq("user") & !(create | drop) {
+            return Err(QueryError::QLUnknownStatement);
+        }
+        if create {
+            UserAdd::parse(state).map(SysctlCommand::CreateUser)
+        } else {
+            UserDel::parse(state).map(SysctlCommand::DropUser)
+        }
+    }
+}
+
 fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMeta<'a>> {
     /*
         [username] with { password: [password], ... }
@@ -106,12 +147,6 @@ impl<'a> UserAdd<'a> {
     }
 }
 
-impl<'a> traits::ASTNode<'a> for UserAdd<'a> {
-    fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-        Self::parse(state)
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct UserDel<'a> {
     username: &'a str,
@@ -142,11 +177,5 @@ impl<'a> UserDel<'a> {
     }
     pub fn username(&self) -> &str {
         self.username
-    }
-}
-
-impl<'a> traits::ASTNode<'a> for UserDel<'a> {
-    fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-        Self::parse(state)
     }
 }

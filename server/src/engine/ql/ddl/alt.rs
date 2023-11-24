@@ -196,12 +196,20 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for AlterModel<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for AlterSpace<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse(state)
         }
     }

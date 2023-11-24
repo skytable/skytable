@@ -26,8 +26,6 @@
 
 pub mod traits;
 
-#[cfg(debug_assertions)]
-use self::traits::ASTNode;
 #[cfg(test)]
 pub use traits::{parse_ast_node_full, parse_ast_node_multiple_full};
 use {
@@ -504,9 +502,10 @@ pub enum Statement<'a> {
 }
 
 #[inline(always)]
-#[cfg(debug_assertions)]
+#[cfg(test)]
 #[allow(dead_code)] // TODO(@ohsayan): get rid of this
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResult<Statement<'a>> {
+    use self::traits::ASTNode;
     if compiler::unlikely(tok.len() < 2) {
         return Err(QueryError::QLUnexpectedEndOfStatement);
     }
@@ -515,13 +514,13 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResul
         // DDL
         Token![use] => Entity::parse_from_state_rounded_result(&mut state).map(Statement::Use),
         Token![create] => match state.fw_read() {
-            Token![model] => ASTNode::from_state(&mut state).map(Statement::CreateModel),
-            Token![space] => ASTNode::from_state(&mut state).map(Statement::CreateSpace),
+            Token![model] => ASTNode::test_parse_from_state(&mut state).map(Statement::CreateModel),
+            Token![space] => ASTNode::test_parse_from_state(&mut state).map(Statement::CreateSpace),
             _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
         },
         Token![alter] => match state.fw_read() {
-            Token![model] => ASTNode::from_state(&mut state).map(Statement::AlterModel),
-            Token![space] => ASTNode::from_state(&mut state).map(Statement::AlterSpace),
+            Token![model] => ASTNode::test_parse_from_state(&mut state).map(Statement::AlterModel),
+            Token![space] => ASTNode::test_parse_from_state(&mut state).map(Statement::AlterSpace),
             _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
@@ -529,10 +528,10 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResul
             ddl::ins::parse_inspect(&mut state)
         }
         // DML
-        Token![insert] => ASTNode::from_state(&mut state).map(Statement::Insert),
-        Token![select] => ASTNode::from_state(&mut state).map(Statement::Select),
-        Token![update] => ASTNode::from_state(&mut state).map(Statement::Update),
-        Token![delete] => ASTNode::from_state(&mut state).map(Statement::Delete),
+        Token![insert] => ASTNode::test_parse_from_state(&mut state).map(Statement::Insert),
+        Token![select] => ASTNode::test_parse_from_state(&mut state).map(Statement::Select),
+        Token![update] => ASTNode::test_parse_from_state(&mut state).map(Statement::Update),
+        Token![delete] => ASTNode::test_parse_from_state(&mut state).map(Statement::Delete),
         _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
     }
 }

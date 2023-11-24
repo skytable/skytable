@@ -170,15 +170,23 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for WhereClause<'a> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
         // important: upstream must verify this
-        const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const VERIFY_STATE_BEFORE_RETURN: bool = true;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             let wh = Self::parse_where(state);
             Ok(wh)
         }
     }
     impl<'a> ASTNode<'a> for RelationalExpr<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::try_parse(state).ok_or(QueryError::QLInvalidSyntax)
         }
     }

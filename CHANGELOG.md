@@ -27,9 +27,25 @@ All changes in this project will be noted in this file.
   - **All actions removed**: All the prior `SET`, `GET` and other actions have been removed in favor of the new query language
   - The following queries were added:
     - `INSERT INTO <space>.<model>(col, col2, col3, ...)`
+      - Insert queries can use several ways of insertion including:
+        - a standard order of declared columns like this:
+          ```sql
+          INSERT INTO myspace.mymodel(col1, col2, col3, ...)
+          ```
+        - using a map:
+          ```sql
+          INSERT INTO myspace.mymodel { col1: val1, col2: val2, col4: val4, col3: val3 }
+          ```
+      - Inserts can also make use of function calls during inserts:
+        - It can be called like this: `INSERT INTO myspace.mymodel(@uuidstr, ...)`
+        - The following functions are available:
+          - `@uuidstr`: returns a string with a randomly generated v4 UUID
+          - `@uuidbin`: same as `@uuidstr` but returns it as a blob
+          - `@timesec`: returns a 64-bit integer with the current time in seconds
     - `SELECT field1, field2, ... FROM <space>.<model> WHERE <primary_key_column> = <value>`
-    - New data manipulation via `UPDATE` allows arithmetic operations, string manipulation and more!:
+    - New data manipulation via `UPDATE` allows arithmetic operations, string manipulation and more! Examples:
       - `UPDATE <space>.<model> SET col_num += 1 WHERE <primary_key_column> = <value>`
+      - `UPDATE <space>.<model> SET mystring += " last part of string" WHERE ...`
     - `DELETE FROM <space>.<model> WHERE <primary_key_column> = <value>`
 - DCL:
   - `SYSCTL CREATE USER <name> WITH { password: <password> }`

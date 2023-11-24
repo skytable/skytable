@@ -400,7 +400,11 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for InsertStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse_insert(state)
         }
     }
@@ -418,9 +422,13 @@ mod impls {
         #[derive(sky_macros::Wrapper, Debug)]
         pub struct List(Vec<Datacell>);
         impl<'a> ASTNode<'a> for List {
+            const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+            const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
             // important: upstream must verify this
-            const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+            const VERIFY_STATE_BEFORE_RETURN: bool = true;
+            fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+                state: &mut State<'a, Qd>,
+            ) -> QueryResult<Self> {
                 let mut l = Vec::new();
                 parse_list(state, &mut l);
                 Ok(List(l))
@@ -429,9 +437,13 @@ mod impls {
         #[derive(sky_macros::Wrapper, Debug)]
         pub struct DataTuple(Vec<Datacell>);
         impl<'a> ASTNode<'a> for DataTuple {
+            const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+            const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
             // important: upstream must verify this
-            const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+            const VERIFY_STATE_BEFORE_RETURN: bool = true;
+            fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+                state: &mut State<'a, Qd>,
+            ) -> QueryResult<Self> {
                 let r = parse_data_tuple_syntax(state);
                 Ok(Self(r))
             }
@@ -439,9 +451,13 @@ mod impls {
         #[derive(sky_macros::Wrapper, Debug)]
         pub struct DataMap(HashMap<Box<str>, Datacell>);
         impl<'a> ASTNode<'a> for DataMap {
+            const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+            const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
             // important: upstream must verify this
-            const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+            const VERIFY_STATE_BEFORE_RETURN: bool = true;
+            fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+                state: &mut State<'a, Qd>,
+            ) -> QueryResult<Self> {
                 let r = parse_data_map_syntax(state);
                 Ok(Self(
                     r.into_iter()

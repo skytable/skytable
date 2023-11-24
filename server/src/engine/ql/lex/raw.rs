@@ -135,6 +135,9 @@ impl<'a> Token<'a> {
     pub unsafe fn uck_read_lit(&self) -> &Lit<'a> {
         extract!(self, Self::Lit(l) => l)
     }
+    pub fn ident_eq(&self, ident: &str) -> bool {
+        matches!(self, Token::Ident(id) if id.eq_ignore_ascii_case(ident))
+    }
 }
 
 impl<'a> ToString for Token<'a> {

@@ -161,7 +161,11 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for SelectStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse_select(state)
         }
     }

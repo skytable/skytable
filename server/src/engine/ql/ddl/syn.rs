@@ -535,7 +535,11 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for ExpandedField<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse(state)
         }
         fn _multiple_from_state<Qd: QueryData<'a>>(
@@ -545,9 +549,13 @@ mod impls {
         }
     }
     impl<'a> ASTNode<'a> for LayerSpec<'a> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
         // important: upstream must verify this
-        const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const VERIFY_STATE_BEFORE_RETURN: bool = true;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             let mut layers = Vec::new();
             rfold_layers(state, &mut layers);
             assert!(layers.len() == 1);
@@ -564,9 +572,13 @@ mod impls {
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DictBasic(DictGeneric);
     impl<'a> ASTNode<'a> for DictBasic {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
         // important: upstream must verify this
-        const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const VERIFY_STATE_BEFORE_RETURN: bool = true;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             let mut dict = DictGeneric::new();
             rfold_dict(DictFoldState::OB, state, &mut dict);
             Ok(Self(dict))
@@ -575,9 +587,13 @@ mod impls {
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DictTypeMetaSplit(DictGeneric);
     impl<'a> ASTNode<'a> for DictTypeMetaSplit {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
         // important: upstream must verify this
-        const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const VERIFY_STATE_BEFORE_RETURN: bool = true;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             let mut dict = DictGeneric::new();
             rfold_tymeta(DictFoldState::CB_OR_IDENT, state, &mut dict);
             Ok(Self(dict))
@@ -586,16 +602,24 @@ mod impls {
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DictTypeMeta(DictGeneric);
     impl<'a> ASTNode<'a> for DictTypeMeta {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
         // important: upstream must verify this
-        const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const VERIFY_STATE_BEFORE_RETURN: bool = true;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             let mut dict = DictGeneric::new();
             rfold_tymeta(DictFoldState::OB, state, &mut dict);
             Ok(Self(dict))
         }
     }
     impl<'a> ASTNode<'a> for FieldSpec<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse(state)
         }
     }

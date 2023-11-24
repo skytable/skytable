@@ -80,7 +80,11 @@ mod impls {
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct InspectStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for InspectStatementAST<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             super::parse_inspect(state).map(Self)
         }
     }

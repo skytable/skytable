@@ -82,7 +82,7 @@ fn _call<A: ASTNode<'static> + core::fmt::Debug, T>(
     state: &mut State<'static, InplaceData>,
     f: impl FnOnce(&Global, A) -> Result<T, QueryError>,
 ) -> QueryResult<T> {
-    let cs = ASTNode::from_state(state)?;
+    let cs = ASTNode::parse_from_state_hardened(state)?;
     f(&g, cs)
 }
 
@@ -143,30 +143,8 @@ fn blocking_exec_sysctl(
     tokens: RawSlice<Token<'static>>,
 ) -> QueryResult<()> {
     let mut state = State::new_inplace(&tokens);
-    /*
-        currently supported: sysctl create user, sysctl drop user
-    */
-    if state.remaining() < 2 {
-        return Err(QueryError::QLInvalidSyntax);
-    }
-    let (a, b) = (state.fw_read(), state.fw_read());
-    match (a, b) {
-        (Token![create], Token::Ident(id)) if id.eq_ignore_ascii_case("user") => {
-            let useradd = ASTNode::from_state(&mut state)?;
-            super::dcl::create_user(&g, useradd)
-        }
-        (Token![drop], Token::Ident(id)) if id.eq_ignore_ascii_case("user") => {
-            let userdel = ASTNode::from_state(&mut state)?;
-            super::dcl::drop_user(&g, cstate, userdel)
-        }
-        (Token::Ident(k1), Token::Ident(k2))
-            if k1.eq_ignore_ascii_case("report") && k2.eq_ignore_ascii_case("status") =>
-        {
-            // TODO(@ohsayan): replace dummy endpoint with actual `system report status` responses
-            Ok(())
-        }
-        _ => Err(QueryError::QLUnknownStatement),
-    }
+    let r = ASTNode::parse_from_state_hardened(&mut state)?;
+    super::dcl::exec(g, cstate, r)
 }
 
 /*

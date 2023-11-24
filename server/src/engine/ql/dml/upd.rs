@@ -219,7 +219,11 @@ mod impls {
         },
     };
     impl<'a> ASTNode<'a> for UpdateStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
             Self::parse_update(state)
         }
     }
@@ -227,9 +231,13 @@ mod impls {
     mod test {
         use super::{super::AssignmentExpression, ASTNode, QueryData, QueryResult, State};
         impl<'a> ASTNode<'a> for AssignmentExpression<'a> {
+            const MUST_USE_FULL_TOKEN_RANGE: bool = false;
+            const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
             // important: upstream must verify this
-            const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+            const VERIFY_STATE_BEFORE_RETURN: bool = true;
+            fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+                state: &mut State<'a, Qd>,
+            ) -> QueryResult<Self> {
                 let mut expr = Vec::new();
                 AssignmentExpression::parse_and_append_expression(state, &mut expr);
                 state.poison_if_not(expr.len() == 1);
