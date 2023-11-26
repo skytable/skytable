@@ -25,9 +25,10 @@
 */
 
 use crate::engine::{
+    core::EntityIDRef,
     error::{QueryError, QueryResult},
     ql::{
-        ast::{Entity, QueryData, State, Statement},
+        ast::{QueryData, State, Statement},
         lex::{Ident, Token},
     },
 };
@@ -66,17 +67,17 @@ impl<'a> DropSpace<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct DropModel<'a> {
-    pub(in crate::engine) entity: Entity<'a>,
+    pub(in crate::engine) entity: EntityIDRef<'a>,
     pub(in crate::engine) force: bool,
 }
 
 impl<'a> DropModel<'a> {
     #[inline(always)]
-    pub fn new(entity: Entity<'a>, force: bool) -> Self {
+    pub fn new(entity: EntityIDRef<'a>, force: bool) -> Self {
         Self { entity, force }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-        let e = Entity::parse_from_state_rounded_result(state)?;
+        let e = state.try_entity_ref_result()?;
         let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
         state.cursor_ahead_if(force);
         Ok(DropModel::new(e, force))

@@ -108,6 +108,17 @@ pub trait ASTNode<'a>: Sized {
         Ok(r)
     }
     #[cfg(test)]
+    fn from_insecure_tokens_full_with_space(
+        tok: &'a [Token<'a>],
+        space_name: &'static str,
+    ) -> QueryResult<Self> {
+        let mut state = State::new(tok, InplaceData::new());
+        state.set_space(space_name);
+        let r = <Self as ASTNode>::test_parse_from_state(&mut state)?;
+        assert!(state.exhausted());
+        Ok(r)
+    }
+    #[cfg(test)]
     /// Parse multiple nodes of this AST node type, utilizing the full token stream.
     /// Intended for the test suite.
     fn multiple_from_insecure_tokens_full(tok: &'a [Token<'a>]) -> QueryResult<Vec<Self>> {
@@ -124,6 +135,13 @@ pub trait ASTNode<'a>: Sized {
 #[cfg(test)]
 pub fn parse_ast_node_full<'a, N: ASTNode<'a>>(tok: &'a [Token<'a>]) -> QueryResult<N> {
     N::from_insecure_tokens_full(tok)
+}
+#[cfg(test)]
+pub fn parse_ast_node_full_with_space<'a, N: ASTNode<'a>>(
+    tok: &'a [Token<'a>],
+    space_name: &'static str,
+) -> QueryResult<N> {
+    N::from_insecure_tokens_full_with_space(tok, space_name)
 }
 #[cfg(test)]
 pub fn parse_ast_node_multiple_full<'a, N: ASTNode<'a>>(

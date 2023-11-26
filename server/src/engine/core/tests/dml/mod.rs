@@ -30,12 +30,12 @@ mod select;
 mod update;
 
 use crate::engine::{
-    core::{dml, index::Row, model::Model, space::Space},
+    core::{dml, index::Row, model::Model, space::Space, EntityIDRef},
     data::{cell::Datacell, lit::Lit},
     error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{
-        ast::{parse_ast_node_full, Entity},
+        ast::parse_ast_node_full,
         dml::{del::DeleteStatement, ins::InsertStatement},
         tests::lex_insecure,
     },
@@ -56,7 +56,7 @@ fn _exec_only_create_space_model(global: &impl GlobalInstanceLike, model: &str) 
 fn _exec_only_insert<T>(
     global: &impl GlobalInstanceLike,
     insert: &str,
-    and_then: impl Fn(Entity) -> T,
+    and_then: impl Fn(EntityIDRef) -> T,
 ) -> QueryResult<T> {
     let lex_insert = lex_insecure(insert.as_bytes()).unwrap();
     let stmt_insert = parse_ast_node_full::<InsertStatement>(&lex_insert[1..]).unwrap();
@@ -68,7 +68,7 @@ fn _exec_only_insert<T>(
 
 fn _exec_only_read_key_and_then<T>(
     global: &impl GlobalInstanceLike,
-    entity: Entity,
+    entity: EntityIDRef,
     key_name: &str,
     and_then: impl Fn(Row) -> T,
 ) -> QueryResult<T> {

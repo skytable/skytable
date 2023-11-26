@@ -52,27 +52,22 @@ impl<'a> traits::ASTNode<'a> for SysctlCommand<'a> {
     fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
         state: &mut State<'a, Qd>,
     ) -> QueryResult<Self> {
-        if state.remaining() < 1 {
+        if state.remaining() < 2 {
             return Err(QueryError::QLUnexpectedEndOfStatement);
         }
-        let token = state.fw_read();
-        let create = Token![create].eq(token);
-        let drop = Token![drop].eq(token);
-        let status = token.ident_eq("status");
-        if status {
-            return Ok(SysctlCommand::ReportStatus);
-        }
-        if state.exhausted() {
-            return Err(QueryError::QLUnexpectedEndOfStatement);
-        }
-        let create_or_drop = state.fw_read();
-        if !create_or_drop.ident_eq("user") & !(create | drop) {
+        let (a, b) = (state.fw_read(), state.fw_read());
+        let create = Token![create].eq(a) & b.ident_eq("user");
+        let drop = Token![drop].eq(a) & b.ident_eq("user");
+        let status = a.ident_eq("report") & b.ident_eq("status");
+        if !(create | drop | status) {
             return Err(QueryError::QLUnknownStatement);
         }
         if create {
             UserAdd::parse(state).map(SysctlCommand::CreateUser)
-        } else {
+        } else if drop {
             UserDel::parse(state).map(SysctlCommand::DropUser)
+        } else {
+            Ok(SysctlCommand::ReportStatus)
         }
     }
 }

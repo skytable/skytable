@@ -27,53 +27,39 @@
 use crate::engine::{
     core::{dml, model::Model, space::Space},
     error::{QueryError, QueryResult},
-    fractal::Global,
-    mem::RawSlice,
+    fractal::{Global, GlobalInstanceLike},
     net::protocol::{ClientLocalState, Response, SQuery},
     ql::{
         ast::{traits::ASTNode, InplaceData, State},
-        lex::{Keyword, KeywordStmt, Token},
+        ddl::Use,
+        lex::KeywordStmt,
     },
 };
 
+/*
+    ---
+    trigger warning: disgusting hacks below owing to token lifetimes
+*/
+
 pub async fn dispatch_to_executor<'a>(
     global: &Global,
-    cstate: &ClientLocalState,
+    cstate: &mut ClientLocalState,
     query: SQuery<'a>,
 ) -> QueryResult<Response> {
     let tokens =
         crate::engine::ql::lex::SecureLexer::new_with_segments(query.query(), query.params())
             .lex()?;
     let mut state = State::new_inplace(&tokens);
-    let stmt = match state.read() {
-        Token::Keyword(Keyword::Statement(stmt)) if state.remaining() >= 3 => *stmt,
-        _ => return Err(QueryError::QLExpectedStatement),
-    };
-    state.cursor_ahead();
+    state.set_space_maybe(unsafe {
+        // UNSAFE(@ohsayan): exclusively used within this scope
+        core::mem::transmute(cstate.get_cs())
+    });
+    let stmt = state.try_statement()?;
     if stmt.is_blocking() {
         run_blocking_stmt(global, cstate, state, stmt).await
     } else {
         run_nb(global, cstate, state, stmt)
     }
-}
-
-/*
-    blocking exec
-    ---
-    trigger warning: disgusting hacks below (why can't async play nice with lifetimes :|)
-*/
-
-#[inline(always)]
-fn call<A: ASTNode<'static> + core::fmt::Debug, T>(
-    g: Global,
-    tokens: RawSlice<Token<'static>>,
-    f: impl FnOnce(&Global, A) -> QueryResult<T>,
-) -> QueryResult<T> {
-    let mut state = State::new_inplace(unsafe {
-        // UNSAFE(@ohsayan): nothing to drop. all cool
-        core::mem::transmute(tokens)
-    });
-    _call(&g, &mut state, f)
 }
 
 #[inline(always)]
@@ -88,7 +74,7 @@ fn _call<A: ASTNode<'static> + core::fmt::Debug, T>(
 
 async fn run_blocking_stmt(
     global: &Global,
-    cstate: &ClientLocalState,
+    cstate: &mut ClientLocalState,
     mut state: State<'_, InplaceData>,
     stmt: KeywordStmt,
 ) -> Result<Response, QueryError> {
@@ -96,6 +82,12 @@ async fn run_blocking_stmt(
         // all the actions here need root permission
         return Err(QueryError::SysPermissionDenied);
     }
+    state.ensure_minimum_for_blocking_stmt()?;
+    /*
+        IMPORTANT: DDL queries will NOT pick up the currently set space. instead EVERY DDL query must manually fully specify the entity that
+        they want to manipulate. this prevents a whole set of exciting errors like dropping a model with the same model name from another space
+    */
+    state.unset_space();
     let (a, b) = (&state.current()[0], &state.current()[1]);
     let sysctl = stmt == KeywordStmt::Sysctl;
     let create = stmt == KeywordStmt::Create;
@@ -110,26 +102,28 @@ async fn run_blocking_stmt(
     let d_m = (drop & Token![model].eq(a) & last_id) as u8 * 7;
     let fc = sysctl as u8 | c_s | c_m | a_s | a_m | d_s | d_m;
     state.cursor_ahead_if(!sysctl);
-    static BLK_EXEC: [fn(Global, &ClientLocalState, RawSlice<Token<'static>>) -> QueryResult<()>;
-        8] = [
+    static BLK_EXEC: [fn(
+        Global,
+        &ClientLocalState,
+        &mut State<'static, InplaceData>,
+    ) -> QueryResult<()>; 8] = [
         |_, _, _| Err(QueryError::QLUnknownStatement), // unknown
         blocking_exec_sysctl,                          // sysctl
-        |g, _, t| call(g, t, Space::transactional_exec_create),
-        |g, _, t| call(g, t, Model::transactional_exec_create),
-        |g, _, t| call(g, t, Space::transactional_exec_alter),
-        |g, _, t| call(g, t, Model::transactional_exec_alter),
-        |g, _, t| call(g, t, Space::transactional_exec_drop),
-        |g, _, t| call(g, t, Model::transactional_exec_drop),
+        |g, _, t| _call(&g, t, Space::transactional_exec_create),
+        |g, _, t| _call(&g, t, Model::transactional_exec_create),
+        |g, _, t| _call(&g, t, Space::transactional_exec_alter),
+        |g, _, t| _call(&g, t, Model::transactional_exec_alter),
+        |g, _, t| _call(&g, t, Space::transactional_exec_drop),
+        |g, _, t| _call(&g, t, Model::transactional_exec_drop),
     ];
     let r = unsafe {
         // UNSAFE(@ohsayan): the only await is within this block
         let c_glob = global.clone();
-        let ptr = state.current().as_ptr() as usize;
-        let len = state.current().len();
-        let cstate: &'static ClientLocalState = core::mem::transmute(cstate);
+        let static_cstate: &'static ClientLocalState = core::mem::transmute(cstate);
+        let static_state: &'static mut State<'static, InplaceData> =
+            core::mem::transmute(&mut state);
         tokio::task::spawn_blocking(move || {
-            let tokens = RawSlice::new(ptr as *const Token, len);
-            BLK_EXEC[fc as usize](c_glob, cstate, tokens)?;
+            BLK_EXEC[fc as usize](c_glob, static_cstate, static_state)?;
             Ok(Response::Empty)
         })
         .await
@@ -140,10 +134,9 @@ async fn run_blocking_stmt(
 fn blocking_exec_sysctl(
     g: Global,
     cstate: &ClientLocalState,
-    tokens: RawSlice<Token<'static>>,
+    state: &mut State<'static, InplaceData>,
 ) -> QueryResult<()> {
-    let mut state = State::new_inplace(&tokens);
-    let r = ASTNode::parse_from_state_hardened(&mut state)?;
+    let r = ASTNode::parse_from_state_hardened(state)?;
     super::dcl::exec(g, cstate, r)
 }
 
@@ -151,28 +144,54 @@ fn blocking_exec_sysctl(
     nb exec
 */
 
+fn cstate_use(
+    global: &Global,
+    cstate: &mut ClientLocalState,
+    state: &mut State<'static, InplaceData>,
+) -> QueryResult<Response> {
+    let use_c = Use::parse_from_state_hardened(state)?;
+    match use_c {
+        Use::Null => cstate.unset_cs(),
+        Use::Space(new_space) => {
+            /*
+                NB: just like SQL, we don't really care about what this is set to as it's basically a shorthand.
+                so we do a simple vanity check
+            */
+            if !global.namespace().contains_space(new_space.as_str()) {
+                return Err(QueryError::QExecObjectNotFound);
+            }
+            cstate.set_cs(new_space.boxed_str());
+        }
+    }
+    Ok(Response::Empty)
+}
+
 fn run_nb(
     global: &Global,
-    _cstate: &ClientLocalState,
+    cstate: &mut ClientLocalState,
     state: State<'_, InplaceData>,
     stmt: KeywordStmt,
 ) -> QueryResult<Response> {
     let stmt = stmt.value_u8() - KeywordStmt::Use.value_u8();
-    static F: [fn(&Global, &mut State<'static, InplaceData>) -> QueryResult<Response>; 8] = [
-        |_, _| Err(QueryError::QLUnknownStatement), // use
-        |_, _| Err(QueryError::QLUnknownStatement), // inspect
-        |_, _| Err(QueryError::QLUnknownStatement), // describe
-        |g, s| _call(g, s, dml::insert_resp),
-        |g, s| _call(g, s, dml::select_resp),
-        |g, s| _call(g, s, dml::update_resp),
-        |g, s| _call(g, s, dml::delete_resp),
-        |_, _| Err(QueryError::QLUnknownStatement), // exists
+    static F: [fn(
+        &Global,
+        &mut ClientLocalState,
+        &mut State<'static, InplaceData>,
+    ) -> QueryResult<Response>; 8] = [
+        cstate_use,                                    // use
+        |_, _, _| Err(QueryError::QLUnknownStatement), // inspect
+        |_, _, _| Err(QueryError::QLUnknownStatement), // describe
+        |g, _, s| _call(g, s, dml::insert_resp),
+        |g, _, s| _call(g, s, dml::select_resp),
+        |g, _, s| _call(g, s, dml::update_resp),
+        |g, _, s| _call(g, s, dml::delete_resp),
+        |_, _, _| Err(QueryError::QLUnknownStatement), // exists
     ];
     {
         let mut state = unsafe {
             // UNSAFE(@ohsayan): this is a lifetime issue with the token handle
             core::mem::transmute(state)
         };
-        F[stmt as usize](global, &mut state)
+        F[stmt as usize](global, cstate, &mut state)
     }
 }

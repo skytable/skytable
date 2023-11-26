@@ -27,25 +27,24 @@
 pub mod traits;
 
 #[cfg(test)]
-pub use traits::{parse_ast_node_full, parse_ast_node_multiple_full};
+pub use traits::{
+    parse_ast_node_full, parse_ast_node_full_with_space, parse_ast_node_multiple_full,
+};
+
 use {
     super::{
         ddl, dml,
-        lex::{Ident, Token},
+        lex::{Ident, Keyword, KeywordStmt, Token},
     },
     crate::{
         engine::{
+            core::EntityIDRef,
             data::{cell::Datacell, lit::Lit},
             error::{QueryError, QueryResult},
         },
-        util::{compiler, MaybeInit},
+        util::MaybeInit,
     },
 };
-
-#[inline(always)]
-pub fn minidx<T>(src: &[T], index: usize) -> usize {
-    (src.len() - 1).min(index)
-}
 
 #[derive(Debug, PartialEq)]
 /// Query parse state
@@ -54,11 +53,85 @@ pub struct State<'a, Qd> {
     d: Qd,
     i: usize,
     f: bool,
+    cs: Option<&'static str>,
 }
 
 impl<'a> State<'a, InplaceData> {
     pub const fn new_inplace(tok: &'a [Token<'a>]) -> Self {
         Self::new(tok, InplaceData::new())
+    }
+}
+
+impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
+    fn _entity_signature_match_self_full(a: &Token<'a>, b: &Token<'a>, c: &Token<'a>) -> bool {
+        a.is_ident() & Token![.].eq(b) & c.is_ident()
+    }
+    fn _entity_signature_match_cs(&self, a: &Token<'a>) -> bool {
+        a.is_ident() & self.cs.is_some()
+    }
+    unsafe fn _entity_new_from_tokens(&mut self) -> EntityIDRef<'a> {
+        let space = self.fw_read().uck_read_ident();
+        self.cursor_ahead();
+        let entity = self.fw_read().uck_read_ident();
+        EntityIDRef::new(space.as_str(), entity.as_str())
+    }
+    unsafe fn _entity_new_from_cs(&mut self) -> EntityIDRef<'a> {
+        let entity = self.fw_read().uck_read_ident();
+        EntityIDRef::new(self.cs.unwrap_unchecked(), entity.as_str())
+    }
+    pub fn set_space_maybe(&mut self, maybe: Option<&'static str>) {
+        self.cs = maybe;
+    }
+    pub fn unset_space(&mut self) {
+        self.set_space_maybe(None)
+    }
+    #[cfg(test)]
+    pub fn set_space(&mut self, s: &'static str) {
+        self.set_space_maybe(Some(s));
+    }
+    pub fn try_entity_buffered_into_state_uninit(&mut self) -> MaybeInit<EntityIDRef<'a>> {
+        let mut ret = MaybeInit::uninit();
+        let self_has_full = Self::_entity_signature_match_self_full(
+            &self.t[self.cursor()],
+            &self.t[self.cursor() + 1],
+            &self.t[self.cursor() + 2],
+        );
+        let self_has_full_cs = self._entity_signature_match_cs(&self.t[self.cursor()]);
+        unsafe {
+            if self_has_full {
+                ret = MaybeInit::new(self._entity_new_from_tokens());
+            } else if self_has_full_cs {
+                ret = MaybeInit::new(self._entity_new_from_cs());
+            }
+        }
+        self.poison_if_not(self_has_full | self_has_full_cs);
+        ret
+    }
+    pub fn try_entity_ref(&mut self) -> Option<EntityIDRef<'a>> {
+        let self_has_full = Self::_entity_signature_match_self_full(
+            &self.t[self.round_cursor()],
+            &self.t[self.round_cursor_up(1)],
+            &self.t[self.round_cursor_up(2)],
+        );
+        let self_has_pre_full = self._entity_signature_match_cs(&self.t[self.round_cursor()]);
+        if self_has_full {
+            unsafe {
+                // UNSAFE(@ohsayan): +branch condition
+                Some(self._entity_new_from_tokens())
+            }
+        } else {
+            if self_has_pre_full {
+                unsafe {
+                    // UNSAFE(@ohsayan): +branch condition
+                    Some(self._entity_new_from_cs())
+                }
+            } else {
+                None
+            }
+        }
+    }
+    pub fn try_entity_ref_result(&mut self) -> QueryResult<EntityIDRef<'a>> {
+        self.try_entity_ref().ok_or(QueryError::QLExpectedEntity)
     }
 }
 
@@ -71,6 +144,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
             f: true,
             t,
             d,
+            cs: None,
         }
     }
     #[inline(always)]
@@ -148,7 +222,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     #[inline(always)]
     /// Check if the current cursor can read a lit (with context from the data source); rounded
     pub fn can_read_lit_rounded(&self) -> bool {
-        let mx = minidx(self.t, self.i);
+        let mx = self.round_cursor();
         Qd::can_read_lit_from(&self.d, &self.t[mx]) && mx == self.i
     }
     #[inline(always)]
@@ -176,7 +250,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     #[inline(always)]
     /// Check if the cursor equals the given token; rounded
     pub fn cursor_rounded_eq(&self, tok: Token<'a>) -> bool {
-        let mx = minidx(self.t, self.i);
+        let mx = self.round_cursor();
         self.t[mx] == tok && mx == self.i
     }
     #[inline(always)]
@@ -196,33 +270,17 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     }
     #[inline(always)]
     pub(crate) fn cursor_has_ident_rounded(&self) -> bool {
-        self.t[minidx(self.t, self.i)].is_ident() && self.not_exhausted()
+        self.t[self.round_cursor()].is_ident() && self.not_exhausted()
     }
     #[inline(always)]
     /// Check if the current token stream matches the signature of an arity(0) fn; rounded
     ///
     /// NOTE: Consider using a direct comparison without rounding
     pub(crate) fn cursor_signature_match_fn_arity0_rounded(&self) -> bool {
-        let rem = self.has_remaining(3);
-        let idx_a = self.i * rem as usize;
-        let idx_b = (self.i + 1) * rem as usize;
-        let idx_c = (self.i + 2) * rem as usize;
-        (self.t[idx_a].is_ident())
-            & (self.t[idx_b] == Token![() open])
-            & (self.t[idx_c] == Token![() close])
-            & rem
-    }
-    #[inline(always)]
-    /// Check if the current token stream matches the signature of a full entity; rounded
-    ///
-    /// NOTE: Consider using a direct comparison without rounding; rounding is always slower
-    pub(crate) fn cursor_signature_match_entity_full_rounded(&self) -> bool {
-        let rem = self.has_remaining(3);
-        let rem_u = rem as usize;
-        let idx_a = self.i * rem_u;
-        let idx_b = (self.i + 1) * rem_u;
-        let idx_c = (self.i + 2) * rem_u;
-        (self.t[idx_a].is_ident()) & (self.t[idx_b] == Token![.]) & (self.t[idx_c].is_ident()) & rem
+        (self.t[self.round_cursor()].is_ident())
+            & (self.t[self.round_cursor_up(1)] == Token![() open])
+            & (self.t[self.round_cursor_up(2)] == Token![() close])
+            & self.has_remaining(3)
     }
     #[inline(always)]
     /// Reads a lit using the given token and the internal data source and return a data type
@@ -240,7 +298,6 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         self.not_exhausted() && self.okay()
     }
     #[inline(always)]
-    #[cfg(test)]
     /// Returns the position of the cursor
     pub(crate) fn cursor(&self) -> usize {
         self.i
@@ -249,6 +306,27 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     /// Returns true if the cursor is an ident
     pub(crate) fn cursor_is_ident(&self) -> bool {
         self.read().is_ident()
+    }
+    #[inline(always)]
+    fn round_cursor_up(&self, up: usize) -> usize {
+        core::cmp::min(self.t.len() - 1, self.i + up)
+    }
+    #[inline(always)]
+    fn round_cursor(&self) -> usize {
+        self.round_cursor_up(0)
+    }
+    pub fn try_statement(&mut self) -> QueryResult<KeywordStmt> {
+        match self.fw_read() {
+            Token::Keyword(Keyword::Statement(stmt)) => Ok(*stmt),
+            _ => Err(QueryError::QLExpectedStatement),
+        }
+    }
+    pub fn ensure_minimum_for_blocking_stmt(&self) -> QueryResult<()> {
+        if self.remaining() < 2 {
+            return Err(QueryError::QLExpectedStatement);
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -297,174 +375,11 @@ impl<'a> QueryData<'a> for InplaceData {
     }
 }
 
-/*
-    AST
-*/
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-/// An [`Entity`] represents the location for a specific structure, such as a model
-pub enum Entity<'a> {
-    /// A single entity is used when switching to a model wrt the currently set space (commonly used
-    /// when running DML queries)
-    ///
-    /// syntax:
-    /// ```sql
-    /// model
-    /// ```
-    Single(Ident<'a>),
-    /// A full entity is a complete definition to a model wrt to the given space (commonly used with
-    /// DML queries)
-    ///
-    /// syntax:
-    /// ```sql
-    /// space.model
-    /// ```
-    Full(Ident<'a>, Ident<'a>),
-}
-
-impl<'a> Entity<'a> {
-    pub fn into_full_result(self) -> QueryResult<(Ident<'a>, Ident<'a>)> {
-        match self {
-            Self::Full(a, b) => Ok((a, b)),
-            _ => Err(QueryError::QLExpectedEntity),
-        }
-    }
-}
-
-impl<'a> From<(&'a str, &'a str)> for Entity<'a> {
-    fn from((s, e): (&'a str, &'a str)) -> Self {
-        Self::Full(s.into(), e.into())
-    }
-}
-
-impl<'a> Entity<'a> {
-    #[cfg(test)]
-    pub fn into_full(self) -> Option<(Ident<'a>, Ident<'a>)> {
-        if let Self::Full(a, b) = self {
-            Some((a, b))
-        } else {
-            None
-        }
-    }
-    #[inline(always)]
-    /// Parse a full entity from the given slice
-    ///
-    /// ## Safety
-    ///
-    /// Caller guarantees that the token stream matches the exact stream of tokens
-    /// expected for a full entity
-    pub(super) unsafe fn parse_uck_tokens_full(sl: &'a [Token]) -> Self {
-        Entity::Full(sl[0].uck_read_ident(), sl[2].uck_read_ident())
-    }
-    #[inline(always)]
-    /// Parse a single entity from the given slice
-    ///
-    /// ## Safety
-    ///
-    /// Caller guarantees that the token stream matches the exact stream of tokens
-    /// expected for a single entity
-    pub(super) unsafe fn parse_uck_tokens_single(sl: &'a [Token]) -> Self {
-        Entity::Single(sl[0].uck_read_ident())
-    }
-    #[inline(always)]
-    #[cfg(test)]
-    /// Returns true if the given token stream matches the signature of single entity syntax
-    ///
-    /// ⚠ WARNING: This will pass for full and single
-    pub(super) fn signature_matches_single_len_checked(tok: &[Token]) -> bool {
-        !tok.is_empty() && tok[0].is_ident()
-    }
-    #[inline(always)]
-    #[cfg(test)]
-    /// Returns true if the given token stream matches the signature of full entity syntax
-    pub(super) fn signature_matches_full_len_checked(tok: &[Token]) -> bool {
-        tok.len() > 2 && tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident()
-    }
-    #[inline(always)]
-    #[cfg(test)]
-    /// Attempt to parse an entity using the given token stream. It also accepts a counter
-    /// argument to forward the cursor
-    pub fn parse_from_tokens_len_checked(tok: &'a [Token], c: &mut usize) -> QueryResult<Self> {
-        let is_current = Self::signature_matches_single_len_checked(tok);
-        let is_full = Self::signature_matches_full_len_checked(tok);
-        let r = match () {
-            _ if is_full => unsafe {
-                // UNSAFE(@ohsayan): just verified signature
-                *c += 3;
-                Self::parse_uck_tokens_full(tok)
-            },
-            _ if is_current => unsafe {
-                // UNSAFE(@ohsayan): just verified signature
-                *c += 1;
-                Self::parse_uck_tokens_single(tok)
-            },
-            _ => return Err(QueryError::QLExpectedEntity),
-        };
-        Ok(r)
-    }
-    #[inline(always)]
-    pub fn parse_from_state_rounded_result<Qd: QueryData<'a>>(
-        state: &mut State<'a, Qd>,
-    ) -> QueryResult<Self> {
-        let mut e = MaybeInit::uninit();
-        Self::parse_from_state_rounded(state, &mut e);
-        if compiler::likely(state.okay()) {
-            unsafe {
-                // UNSAFE(@ohsayan): just checked if okay
-                Ok(e.assume_init())
-            }
-        } else {
-            Err(QueryError::QLExpectedEntity)
-        }
-    }
-    #[inline(always)]
-    pub fn parse_from_state_rounded<Qd: QueryData<'a>>(
-        state: &mut State<'a, Qd>,
-        d: &mut MaybeInit<Entity<'a>>,
-    ) {
-        let tok = state.current();
-        let is_full = state.cursor_signature_match_entity_full_rounded();
-        let is_single = state.cursor_has_ident_rounded();
-        unsafe {
-            // UNSAFE(@ohsayan): verified signatures
-            if is_full {
-                state.cursor_ahead_by(3);
-                *d = MaybeInit::new(Entity::parse_uck_tokens_full(tok));
-            } else if is_single {
-                state.cursor_ahead();
-                *d = MaybeInit::new(Entity::parse_uck_tokens_single(tok));
-            }
-        }
-        state.poison_if_not(is_full | is_single);
-    }
-    pub fn parse_from_state_len_unchecked<Qd: QueryData<'a>>(
-        state: &mut State<'a, Qd>,
-        d: &mut MaybeInit<Entity<'a>>,
-    ) {
-        let tok = state.current();
-        let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
-        let is_single = tok[0].is_ident();
-        unsafe {
-            // UNSAFE(@ohsayan): verified signatures
-            if is_full {
-                state.cursor_ahead_by(3);
-                *d = MaybeInit::new(Entity::parse_uck_tokens_full(tok));
-            } else if is_single {
-                state.cursor_ahead();
-                *d = MaybeInit::new(Entity::parse_uck_tokens_single(tok));
-            }
-        }
-        state.poison_if_not(is_full | is_single);
-    }
-}
-
 #[derive(Debug, PartialEq)]
 #[allow(dead_code)] // TODO(@ohsayan): get rid of this
 /// A [`Statement`] is a fully BlueQL statement that can be executed by the query engine
 // TODO(@ohsayan): Determine whether we actually need this
 pub enum Statement<'a> {
-    /// DDL query to switch between spaces and models
-    Use(Entity<'a>),
     /// DDL query to create a model
     CreateModel(ddl::crt::CreateModel<'a>),
     /// DDL query to create a space
@@ -487,8 +402,6 @@ pub enum Statement<'a> {
     DropSpace(ddl::drop::DropSpace<'a>),
     /// DDL query to inspect a space (returns a list of models in the space)
     InspectSpace(Ident<'a>),
-    /// DDL query to inspect a model (returns the model definition)
-    InspectModel(Entity<'a>),
     /// DDL query to inspect all spaces (returns a list of spaces in the database)
     InspectSpaces,
     /// DML insert
@@ -505,14 +418,13 @@ pub enum Statement<'a> {
 #[cfg(test)]
 #[allow(dead_code)] // TODO(@ohsayan): get rid of this
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResult<Statement<'a>> {
-    use self::traits::ASTNode;
+    use {self::traits::ASTNode, crate::util::compiler};
     if compiler::unlikely(tok.len() < 2) {
         return Err(QueryError::QLUnexpectedEndOfStatement);
     }
     let mut state = State::new(tok, d);
     match state.fw_read() {
         // DDL
-        Token![use] => Entity::parse_from_state_rounded_result(&mut state).map(Statement::Use),
         Token![create] => match state.fw_read() {
             Token![model] => ASTNode::test_parse_from_state(&mut state).map(Statement::CreateModel),
             Token![space] => ASTNode::test_parse_from_state(&mut state).map(Statement::CreateSpace),
@@ -524,9 +436,6 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResul
             _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
-        Token::Ident(id) if id.eq_ignore_ascii_case("inspect") => {
-            ddl::ins::parse_inspect(&mut state)
-        }
         // DML
         Token![insert] => ASTNode::test_parse_from_state(&mut state).map(Statement::Insert),
         Token![select] => ASTNode::test_parse_from_state(&mut state).map(Statement::Select),

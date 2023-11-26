@@ -27,14 +27,15 @@
 use {
     crate::{
         engine::{
+            core::EntityIDRef,
             data::cell::Datacell,
             error::{QueryError, QueryResult},
             ql::{
-                ast::{Entity, QueryData, State},
+                ast::{QueryData, State},
                 lex::{Ident, Token},
             },
         },
-        util::{compiler, MaybeInit},
+        util::compiler,
     },
     std::{
         collections::HashMap,
@@ -321,17 +322,17 @@ impl<'a> From<HashMap<Ident<'static>, Datacell>> for InsertData<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct InsertStatement<'a> {
-    pub(super) entity: Entity<'a>,
+    pub(super) entity: EntityIDRef<'a>,
     pub(super) data: InsertData<'a>,
 }
 
 impl<'a> InsertStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
-    pub fn new(entity: Entity<'a>, data: InsertData<'a>) -> Self {
+    pub fn new(entity: EntityIDRef<'a>, data: InsertData<'a>) -> Self {
         Self { entity, data }
     }
-    pub fn entity(&self) -> Entity<'a> {
+    pub fn entity(&self) -> EntityIDRef<'a> {
         self.entity
     }
     pub fn data(self) -> InsertData<'a> {
@@ -353,8 +354,7 @@ impl<'a> InsertStatement<'a> {
         state.cursor_ahead(); // ignore errors
 
         // entity
-        let mut entity = MaybeInit::uninit();
-        Entity::parse_from_state_len_unchecked(state, &mut entity);
+        let entity = state.try_entity_buffered_into_state_uninit();
         let mut data = None;
         match state.fw_read() {
             Token![() open] if state.not_exhausted() => {

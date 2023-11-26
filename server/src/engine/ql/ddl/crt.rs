@@ -28,14 +28,15 @@ use {
     super::syn::{self, DictFoldState, FieldSpec},
     crate::{
         engine::{
+            core::EntityIDRef,
             data::DictGeneric,
             error::{QueryError, QueryResult},
             ql::{
-                ast::{Entity, QueryData, State},
+                ast::{QueryData, State},
                 lex::Ident,
             },
         },
-        util::{compiler, MaybeInit},
+        util::compiler,
     },
 };
 
@@ -85,7 +86,7 @@ impl<'a> CreateSpace<'a> {
 /// A model definition
 pub struct CreateModel<'a> {
     /// the model name
-    pub(in crate::engine) model_name: Entity<'a>,
+    pub(in crate::engine) model_name: EntityIDRef<'a>,
     /// the fields
     pub(in crate::engine) fields: Vec<FieldSpec<'a>>,
     /// properties
@@ -101,7 +102,11 @@ pub struct CreateModel<'a> {
 
 impl<'a> CreateModel<'a> {
     #[cfg(test)]
-    pub fn new(model_name: Entity<'a>, fields: Vec<FieldSpec<'a>>, props: DictGeneric) -> Self {
+    pub fn new(
+        model_name: EntityIDRef<'a>,
+        fields: Vec<FieldSpec<'a>>,
+        props: DictGeneric,
+    ) -> Self {
         Self {
             model_name,
             fields,
@@ -114,8 +119,7 @@ impl<'a> CreateModel<'a> {
             return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         // model name; ignore errors
-        let mut model_uninit = MaybeInit::uninit();
-        Entity::parse_from_state_len_unchecked(state, &mut model_uninit);
+        let model_uninit = state.try_entity_buffered_into_state_uninit();
         state.poison_if_not(state.cursor_eq(Token![() open]));
         state.cursor_ahead();
         // fields

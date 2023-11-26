@@ -35,8 +35,8 @@ use {
 
 mod dcl;
 mod dml_tests;
-mod entity;
 mod lexer_tests;
+mod misc;
 mod schema_tests;
 mod structure_syn;
 

@@ -93,6 +93,7 @@ impl fmt::Debug for EntityID {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct EntityIDRef<'a> {
     sp: *const u8,
     sl: usize,
@@ -146,5 +147,11 @@ impl<'a> fmt::Debug for EntityIDRef<'a> {
 impl<'a> Borrow<EntityIDRef<'a>> for EntityID {
     fn borrow(&self) -> &EntityIDRef<'a> {
         unsafe { core::mem::transmute(self) }
+    }
+}
+
+impl From<(&'static str, &'static str)> for EntityIDRef<'static> {
+    fn from((s, e): (&'static str, &'static str)) -> Self {
+        Self::new(s, e)
     }
 }

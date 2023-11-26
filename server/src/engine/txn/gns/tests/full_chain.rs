@@ -185,7 +185,7 @@ fn create_model() {
                         &Model::new_restore(
                             uuid_model,
                             "username".into(),
-                            TagSelector::Str.into_full(),
+                            TagSelector::String.into_full(),
                             into_dict! {
                                 "username" => Field::new([Layer::str()].into(), false),
                                 "password" => Field::new([Layer::bin()].into(), false),

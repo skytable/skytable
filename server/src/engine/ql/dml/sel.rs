@@ -30,13 +30,14 @@ use {
     super::WhereClause,
     crate::{
         engine::{
+            core::EntityIDRef,
             error::{QueryError, QueryResult},
             ql::{
-                ast::{Entity, QueryData, State},
+                ast::{QueryData, State},
                 lex::{Ident, Token},
             },
         },
-        util::{compiler, MaybeInit},
+        util::compiler,
     },
 };
 
@@ -47,7 +48,7 @@ use {
 #[derive(Debug, PartialEq)]
 pub struct SelectStatement<'a> {
     /// the entity
-    pub(super) entity: Entity<'a>,
+    pub(super) entity: EntityIDRef<'a>,
     /// fields in order of querying. will be zero when wildcard is set
     pub(super) fields: Vec<Ident<'a>>,
     /// whether a wildcard was passed
@@ -60,7 +61,7 @@ impl<'a> SelectStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
     pub(crate) fn new_test(
-        entity: Entity<'a>,
+        entity: EntityIDRef<'a>,
         fields: Vec<Ident<'a>>,
         wildcard: bool,
         clauses: WhereClauseCollection<'a>,
@@ -70,7 +71,7 @@ impl<'a> SelectStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
     fn new(
-        entity: Entity<'a>,
+        entity: EntityIDRef<'a>,
         fields: Vec<Ident<'a>>,
         wildcard: bool,
         clauses: WhereClauseCollection<'a>,
@@ -82,7 +83,7 @@ impl<'a> SelectStatement<'a> {
             clause: WhereClause::new(clauses),
         }
     }
-    pub fn entity(&self) -> Entity<'a> {
+    pub fn entity(&self) -> EntityIDRef<'a> {
         self.entity
     }
     pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
@@ -128,8 +129,7 @@ impl<'a> SelectStatement<'a> {
         }
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors
-        let mut entity = MaybeInit::uninit();
-        Entity::parse_from_state_rounded(state, &mut entity);
+        let entity = state.try_entity_buffered_into_state_uninit();
         let mut clauses = <_ as Default>::default();
         if state.cursor_rounded_eq(Token![where]) {
             state.cursor_ahead();

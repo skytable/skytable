@@ -89,7 +89,7 @@ mod plan {
             "create model myspace.mymodel(username: string, password: binary)",
             "alter model myspace.mymodel add myfield { type: string, nullable: true }",
             |plan| {
-                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
+                assert_eq!(plan.model.entity(), "mymodel");
                 assert!(plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -106,7 +106,7 @@ mod plan {
             "create model myspace.mymodel(username: string, password: binary, useless_field: uint8)",
             "alter model myspace.mymodel remove useless_field",
             |plan| {
-                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
+                assert_eq!(plan.model.entity(), "mymodel");
                 assert!(plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -122,7 +122,7 @@ mod plan {
             "create model myspace.mymodel(username: string, password: binary)",
             "alter model myspace.mymodel update password { nullable: true }",
             |plan| {
-                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
+                assert_eq!(plan.model.entity(), "mymodel");
                 assert!(plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -140,7 +140,7 @@ mod plan {
             "create model myspace.mymodel(username: string, null password: binary)",
             "alter model myspace.mymodel update password { nullable: false }",
             |plan| {
-                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
+                assert_eq!(plan.model.entity(), "mymodel");
                 assert!(!plan.no_lock);
                 assert_eq!(
                     plan.action,

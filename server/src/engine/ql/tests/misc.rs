@@ -25,17 +25,51 @@
 */
 
 use super::*;
-use crate::engine::ql::{ast::Entity, lex::Ident};
+use crate::engine::ql::{
+    ast::{traits::ASTNode, State},
+    ddl::Use,
+};
+
+/*
+    entity
+*/
+
 #[test]
 fn entity_current() {
     let t = lex_insecure(b"hello").unwrap();
-    let r = Entity::parse_from_tokens_len_checked(&t, &mut 0).unwrap();
-    assert_eq!(r, Entity::Single(Ident::from("hello")))
+    let mut state = State::new_inplace(&t);
+    state.set_space("apps");
+    let r = state.try_entity_ref().unwrap();
+    assert_eq!(r, ("apps", "hello").into());
 }
 
 #[test]
 fn entity_full() {
     let t = lex_insecure(b"hello.world").unwrap();
-    let r = Entity::parse_from_tokens_len_checked(&t, &mut 0).unwrap();
-    assert_eq!(r, Entity::Full(Ident::from("hello"), Ident::from("world")))
+    let mut state = State::new_inplace(&t);
+    assert_eq!(
+        state.try_entity_ref().unwrap(),
+        (("hello"), ("world")).into()
+    )
+}
+
+/*
+    use
+*/
+
+#[test]
+fn use_new() {
+    let t = lex_insecure(b"use myspace").unwrap();
+    let mut state = State::new_inplace(&t);
+    assert_eq!(
+        Use::test_parse_from_state(&mut state).unwrap(),
+        Use::Space("myspace".into())
+    );
+}
+
+#[test]
+fn use_null() {
+    let t = lex_insecure(b"use null").unwrap();
+    let mut state = State::new_inplace(&t);
+    assert_eq!(Use::test_parse_from_state(&mut state).unwrap(), Use::Null);
 }

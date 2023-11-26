@@ -295,7 +295,7 @@ mod stmt_insert {
     use {
         super::*,
         crate::engine::ql::{
-            ast::{parse_ast_node_full, Entity},
+            ast::parse_ast_node_full,
             dml::{self, ins::InsertStatement},
             lex::Ident,
         },
@@ -311,7 +311,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            ("twitter", "users").into(),
             into_array_nullable!["sayan"].to_vec().into(),
         );
         assert_eq!(e, r);
@@ -333,7 +333,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            ("twitter", "users").into(),
             into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
                 .to_vec()
                 .into(),
@@ -360,7 +360,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            ("twitter", "users").into(),
             into_array_nullable![
                 "sayan",
                 "Sayan",
@@ -387,7 +387,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
+            ("jotsy", "app").into(),
             dict_nullable! {
                 Ident::from("username") => "sayan"
             }
@@ -412,7 +412,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
+            ("jotsy", "app").into(),
             dict_nullable! {
                 Ident::from("username") => "sayan",
                 Ident::from("name") => "Sayan",
@@ -445,7 +445,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
+            ("jotsy", "app").into(),
             dict_nullable! {
                 Ident::from("username") => "sayan",
                 "password" => "pass123",
@@ -467,7 +467,7 @@ mod stmt_insert {
             lex_insecure(br#"insert into jotsy.app(@uuidstr(), "sayan", @timesec())"#).unwrap();
         let ret = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
-            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
+            ("jotsy", "app").into(),
             into_array_nullable![dml::ins::T_UUIDSTR, "sayan", dml::ins::T_TIMESEC]
                 .to_vec()
                 .into(),
@@ -481,7 +481,7 @@ mod stmt_insert {
         ).unwrap();
         let ret = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
-            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
+            ("jotsy", "app").into(),
             dict_nullable! {
                 "uuid" => dml::ins::T_UUIDSTR,
                 Ident::from("username") => "sayan",
@@ -499,7 +499,7 @@ mod stmt_select {
         crate::engine::{
             data::lit::Lit,
             ql::{
-                ast::{parse_ast_node_full, Entity},
+                ast::{parse_ast_node_full, parse_ast_node_full_with_space},
                 dml::{sel::SelectStatement, RelationalExpr},
                 lex::Ident,
             },
@@ -513,9 +513,9 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
+        let r = parse_ast_node_full_with_space::<SelectStatement>(&tok[1..], "apps").unwrap();
         let e = SelectStatement::new_test(
-            Entity::Single(Ident::from("users")),
+            ("apps", "users").into(),
             [].to_vec(),
             true,
             dict! {
@@ -534,9 +534,9 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
+        let r = parse_ast_node_full_with_space::<SelectStatement>(&tok[1..], "apps").unwrap();
         let e = SelectStatement::new_test(
-            Entity::Single(Ident::from("users")),
+            ("apps", "users").into(),
             [Ident::from("field1")].to_vec(),
             false,
             dict! {
@@ -557,7 +557,7 @@ mod stmt_select {
         .unwrap();
         let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            ("twitter", "users").into(),
             [Ident::from("field1")].to_vec(),
             false,
             dict! {
@@ -578,7 +578,7 @@ mod stmt_select {
         .unwrap();
         let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            ("twitter", "users").into(),
             [Ident::from("field1"), Ident::from("field2")].to_vec(),
             false,
             dict! {
@@ -672,7 +672,7 @@ mod update_statement {
             core::query_meta::AssignmentOperator,
             data::lit::Lit,
             ql::{
-                ast::{parse_ast_node_full, Entity},
+                ast::{parse_ast_node_full, parse_ast_node_full_with_space},
                 dml::{
                     upd::{AssignmentExpression, UpdateStatement},
                     RelationalExpr, WhereClause,
@@ -689,9 +689,9 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<UpdateStatement>(&tok[1..]).unwrap();
+        let r = parse_ast_node_full_with_space::<UpdateStatement>(&tok[1..], "apps").unwrap();
         let e = UpdateStatement::new(
-            Entity::Single(Ident::from("app")),
+            ("apps", "app").into(),
             vec![AssignmentExpression::new(
                 Ident::from("notes"),
                 Lit::new_str("this is my new note"),
@@ -723,7 +723,7 @@ mod update_statement {
         .unwrap();
         let r = parse_ast_node_full::<UpdateStatement>(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
-            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
+            ("jotsy", "app").into(),
             vec![
                 AssignmentExpression::new(
                     Ident::from("notes"),
@@ -753,7 +753,7 @@ mod delete_stmt {
         crate::engine::{
             data::lit::Lit,
             ql::{
-                ast::{parse_ast_node_full, Entity},
+                ast::{parse_ast_node_full, parse_ast_node_full_with_space},
                 dml::{del::DeleteStatement, RelationalExpr},
                 lex::Ident,
             },
@@ -769,7 +769,7 @@ mod delete_stmt {
         )
         .unwrap();
         let e = DeleteStatement::new_test(
-            Entity::Single(Ident::from("users")),
+            ("apps", "users").into(),
             dict! {
                 Ident::from("username") => RelationalExpr::new(
                     Ident::from("username"),
@@ -779,7 +779,7 @@ mod delete_stmt {
             },
         );
         assert_eq!(
-            parse_ast_node_full::<DeleteStatement>(&tok[1..]).unwrap(),
+            parse_ast_node_full_with_space::<DeleteStatement>(&tok[1..], "apps").unwrap(),
             e
         );
     }
@@ -792,7 +792,7 @@ mod delete_stmt {
         )
         .unwrap();
         let e = DeleteStatement::new_test(
-            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            ("twitter", "users").into(),
             dict! {
                 Ident::from("username") => RelationalExpr::new(
                     Ident::from("username"),

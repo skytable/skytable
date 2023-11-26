@@ -23,6 +23,9 @@ All changes in this project will be noted in this file.
     - `ALTER MODEL ...`
     - `DROP SPACE ...`
     - `DROP MODEL ...`
+    - `USE <space>`:
+      - works just like SQL
+      - **does not work with DDL queries**: the reason it works in this way is to prevent accidental deletes
 - DML:
   - **All actions removed**: All the prior `SET`, `GET` and other actions have been removed in favor of the new query language
   - The following queries were added:

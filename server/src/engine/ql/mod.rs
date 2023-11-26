@@ -27,9 +27,6 @@
 #[macro_use]
 mod macros;
 pub(super) mod ast;
-#[cfg(feature = "nightly")]
-#[cfg(test)]
-mod benches;
 pub(super) mod dcl;
 pub(super) mod ddl;
 pub(super) mod dml;

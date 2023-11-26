@@ -28,10 +28,11 @@ use {
     super::syn::{self, DictFoldState, ExpandedField},
     crate::{
         engine::{
+            core::EntityIDRef,
             data::DictGeneric,
             error::{QueryError, QueryResult},
             ql::{
-                ast::{Entity, QueryData, State},
+                ast::{QueryData, State},
                 lex::{Ident, Token},
             },
         },
@@ -90,13 +91,13 @@ impl<'a> AlterSpace<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct AlterModel<'a> {
-    pub(in crate::engine) model: Entity<'a>,
+    pub(in crate::engine) model: EntityIDRef<'a>,
     pub(in crate::engine) kind: AlterKind<'a>,
 }
 
 impl<'a> AlterModel<'a> {
     #[inline(always)]
-    pub fn new(model: Entity<'a>, kind: AlterKind<'a>) -> Self {
+    pub fn new(model: EntityIDRef<'a>, kind: AlterKind<'a>) -> Self {
         Self { model, kind }
     }
 }
@@ -118,7 +119,7 @@ impl<'a> AlterModel<'a> {
             return compiler::cold_rerr(QueryError::QLInvalidSyntax);
             // FIXME(@ohsayan): bad because no specificity
         }
-        let model_name = Entity::parse_from_state_rounded_result(state)?;
+        let model_name = state.try_entity_ref_result()?;
         let kind = match state.fw_read() {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),

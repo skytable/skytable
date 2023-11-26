@@ -28,44 +28,6 @@ use {
     super::{super::lex::Ident, lex_insecure, *},
     crate::engine::data::lit::Lit,
 };
-mod inspect {
-    use {
-        super::*,
-        crate::engine::ql::{
-            ast::{parse_ast_node_full, Entity, Statement},
-            ddl::ins::InspectStatementAST,
-        },
-    };
-    #[test]
-    fn inspect_space() {
-        let tok = lex_insecure(b"inspect space myspace").unwrap();
-        assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
-            Statement::InspectSpace(Ident::from("myspace"))
-        );
-    }
-    #[test]
-    fn inspect_model() {
-        let tok = lex_insecure(b"inspect model users").unwrap();
-        assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
-            Statement::InspectModel(Entity::Single(Ident::from("users")))
-        );
-        let tok = lex_insecure(b"inspect model tweeter.users").unwrap();
-        assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
-            Statement::InspectModel(Entity::Full(Ident::from("tweeter"), Ident::from("users")))
-        );
-    }
-    #[test]
-    fn inspect_spaces() {
-        let tok = lex_insecure(b"inspect spaces").unwrap();
-        assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
-            Statement::InspectSpaces
-        );
-    }
-}
 
 mod alter_space {
     use {
@@ -417,7 +379,7 @@ mod fields {
 mod schemas {
     use super::*;
     use crate::engine::ql::{
-        ast::{parse_ast_node_full, Entity},
+        ast::parse_ast_node_full_with_space,
         ddl::{
             crt::CreateModel,
             syn::{FieldSpec, LayerSpec},
@@ -437,12 +399,12 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
+        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
 
         assert_eq!(
             model,
             CreateModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -476,12 +438,12 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
+        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
 
         assert_eq!(
             model,
             CreateModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -526,12 +488,12 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
+        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
 
         assert_eq!(
             model,
             CreateModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -595,12 +557,12 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
+        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
 
         assert_eq!(
             model,
             CreateModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -768,18 +730,18 @@ mod dict_field_syntax {
 mod alter_model_remove {
     use super::*;
     use crate::engine::ql::{
-        ast::{parse_ast_node_full, Entity},
+        ast::parse_ast_node_full_with_space,
         ddl::alt::{AlterKind, AlterModel},
         lex::Ident,
     };
     #[test]
     fn alter_mini() {
         let tok = lex_insecure(b"alter model mymodel remove myfield").unwrap();
-        let remove = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let remove = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             remove,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Remove(Box::from([Ident::from("myfield")]))
             )
         );
@@ -787,11 +749,11 @@ mod alter_model_remove {
     #[test]
     fn alter_mini_2() {
         let tok = lex_insecure(b"alter model mymodel remove (myfield)").unwrap();
-        let remove = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let remove = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             remove,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Remove(Box::from([Ident::from("myfield")]))
             )
         );
@@ -801,11 +763,11 @@ mod alter_model_remove {
         let tok =
             lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)")
                 .unwrap();
-        let remove = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let remove = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             remove,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Remove(Box::from([
                     Ident::from("myfield1"),
                     Ident::from("myfield2"),
@@ -819,7 +781,7 @@ mod alter_model_remove {
 mod alter_model_add {
     use super::*;
     use crate::engine::ql::{
-        ast::{parse_ast_node_full, Entity},
+        ast::parse_ast_node_full_with_space,
         ddl::{
             alt::{AlterKind, AlterModel},
             syn::{ExpandedField, LayerSpec},
@@ -834,9 +796,9 @@ mod alter_model_add {
         )
         .unwrap();
         assert_eq!(
-            parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap(),
+            parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap(),
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -856,11 +818,11 @@ mod alter_model_add {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -882,11 +844,11 @@ mod alter_model_add {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -922,11 +884,11 @@ mod alter_model_add {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Add(
                     [
                         ExpandedField::new(
@@ -967,7 +929,7 @@ mod alter_model_add {
 mod alter_model_update {
     use super::*;
     use crate::engine::ql::{
-        ast::{parse_ast_node_full, Entity},
+        ast::parse_ast_node_full_with_space,
         ddl::{
             alt::{AlterKind, AlterModel},
             syn::{ExpandedField, LayerSpec},
@@ -982,11 +944,11 @@ mod alter_model_update {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -1006,11 +968,11 @@ mod alter_model_update {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -1035,11 +997,11 @@ mod alter_model_update {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -1069,11 +1031,11 @@ mod alter_model_update {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Update(
                     [
                         ExpandedField::new(
@@ -1112,11 +1074,11 @@ mod alter_model_update {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        let r = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
         assert_eq!(
             r,
             AlterModel::new(
-                Entity::Single(Ident::from("mymodel")),
+                ("apps", "mymodel").into(),
                 AlterKind::Update(
                     [
                         ExpandedField::new(
@@ -1147,7 +1109,7 @@ mod ddl_other_query_tests {
     use {
         super::*,
         crate::engine::ql::{
-            ast::{parse_ast_node_full, Entity, Statement},
+            ast::{parse_ast_node_full, parse_ast_node_full_with_space, Statement},
             ddl::drop::{DropModel, DropSpace, DropStatementAST},
             lex::Ident,
         },
@@ -1172,19 +1134,16 @@ mod ddl_other_query_tests {
     fn drop_model() {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
-            Statement::DropModel(DropModel::new(
-                Entity::Single(Ident::from("mymodel")),
-                false
-            ))
+            parse_ast_node_full_with_space::<DropStatementAST>(&src[1..], "apps").unwrap(),
+            Statement::DropModel(DropModel::new(("apps", "mymodel").into(), false))
         );
     }
     #[test]
     fn drop_model_force() {
         let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
-            Statement::DropModel(DropModel::new(Entity::Single(Ident::from("mymodel")), true))
+            parse_ast_node_full_with_space::<DropStatementAST>(&src[1..], "apps").unwrap(),
+            Statement::DropModel(DropModel::new(("apps", "mymodel").into(), true))
         );
     }
 }

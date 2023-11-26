@@ -131,7 +131,7 @@ fn empty_multi_open_reopen() {
     let mdl = Model::new_restore(
         uuid,
         "username".into(),
-        TagSelector::Str.into_full(),
+        TagSelector::String.into_full(),
         into_dict!(
             "username" => Field::new([Layer::str()].into(), false),
             "password" => Field::new([Layer::bin()].into(), false)
@@ -149,7 +149,7 @@ fn unskewed_delta() {
     let mdl = Model::new_restore(
         uuid,
         "username".into(),
-        TagSelector::Str.into_full(),
+        TagSelector::String.into_full(),
         into_dict!(
             "username" => Field::new([Layer::str()].into(), false),
             "password" => Field::new([Layer::bin()].into(), false)
@@ -219,7 +219,7 @@ fn skewed_delta() {
     let mdl = Model::new_restore(
         uuid,
         "catname".into(),
-        TagSelector::Str.into_full(),
+        TagSelector::String.into_full(),
         into_dict!(
             "catname" => Field::new([Layer::str()].into(), false),
             "is_good" => Field::new([Layer::bool()].into(), false),
@@ -302,7 +302,7 @@ fn skewed_shuffled_persist_restore() {
     let model = Model::new_restore(
         uuid,
         "username".into(),
-        TagSelector::Str.into_full(),
+        TagSelector::String.into_full(),
         into_dict!("username" => Field::new([Layer::str()].into(), false), "password" => Field::new([Layer::str()].into(), false)),
     );
     let mongobongo = Row::new(

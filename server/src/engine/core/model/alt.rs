@@ -28,6 +28,7 @@ use {
     super::{Field, Layer, Model},
     crate::{
         engine::{
+            core::EntityIDRef,
             data::{
                 tag::{DataTag, TagClass},
                 DictEntryGeneric,
@@ -36,7 +37,6 @@ use {
             fractal::GlobalInstanceLike,
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
             ql::{
-                ast::Entity,
                 ddl::{
                     alt::{AlterKind, AlterModel},
                     syn::{ExpandedField, LayerSpec},
@@ -52,7 +52,7 @@ use {
 
 #[derive(Debug, PartialEq)]
 pub(in crate::engine::core) struct AlterPlan<'a> {
-    pub(in crate::engine::core) model: Entity<'a>,
+    pub(in crate::engine::core) model: EntityIDRef<'a>,
     pub(in crate::engine::core) no_lock: bool,
     pub(in crate::engine::core) action: AlterAction<'a>,
 }
@@ -250,7 +250,7 @@ impl Model {
         global: &G,
         alter: AlterModel,
     ) -> QueryResult<()> {
-        let (space_name, model_name) = alter.model.into_full_result()?;
+        let (space_name, model_name) = (alter.model.space(), alter.model.entity());
         global
             .namespace()
             .with_model_space_mut_for_ddl(alter.model, |space, model| {

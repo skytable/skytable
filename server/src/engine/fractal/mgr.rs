@@ -28,9 +28,11 @@ use {
     super::ModelUniqueID,
     crate::{
         engine::{
-            core::model::{delta::DataDelta, Model},
+            core::{
+                model::{delta::DataDelta, Model},
+                EntityIDRef,
+            },
             data::uuid::Uuid,
-            ql::ast::Entity,
             storage::v1::LocalFS,
         },
         util::os,
@@ -290,7 +292,7 @@ impl FractalMgr {
                     return;
                 };
                 let res = global._namespace().with_model(
-                    Entity::Full(model_id.space().into(), model_id.model().into()),
+                    EntityIDRef::new(model_id.space().into(), model_id.model().into()),
                     |model| {
                         if model.get_uuid() != model_id.uuid() {
                             // once again, throughput maximization will lead to, in extremely rare cases, this
@@ -382,7 +384,7 @@ impl FractalMgr {
         for (model_id, driver) in mdl_drivers.iter() {
             let mut observed_len = 0;
             let res = global._namespace().with_model(
-                Entity::Full(model_id.space().into(), model_id.model().into()),
+                EntityIDRef::new(model_id.space().into(), model_id.model().into()),
                 |model| {
                     if model.get_uuid() != model_id.uuid() {
                         // once again, throughput maximization will lead to, in extremely rare cases, this

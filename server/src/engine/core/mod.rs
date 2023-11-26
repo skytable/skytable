@@ -41,7 +41,7 @@ pub use self::util::{EntityID, EntityIDRef};
 // imports
 use {
     self::{dml::QueryExecMeta, model::Model},
-    super::{fractal::GlobalInstanceLike, ql::ast::Entity},
+    super::fractal::GlobalInstanceLike,
     crate::engine::{
         core::space::Space,
         error::{QueryError, QueryResult},
@@ -87,26 +87,28 @@ impl GlobalNS {
         let mut space = space.write();
         f(&mut space)
     }
-    pub fn with_model_space_mut_for_ddl<'a, T, F>(&self, entity: Entity<'a>, f: F) -> QueryResult<T>
+    pub fn with_model_space_mut_for_ddl<'a, T, F>(
+        &self,
+        entity: EntityIDRef<'a>,
+        f: F,
+    ) -> QueryResult<T>
     where
         F: FnOnce(&Space, &mut Model) -> QueryResult<T>,
     {
-        let (space, model_name) = entity.into_full_result()?;
         let mut mdl_idx = self.idx_mdl.write();
-        let Some(model) = mdl_idx.get_mut(&EntityIDRef::new(&space, &model_name)) else {
+        let Some(model) = mdl_idx.get_mut(&entity) else {
             return Err(QueryError::QExecObjectNotFound);
         };
         let space_read = self.idx.read();
-        let space = space_read.get(space.as_str()).unwrap().read();
+        let space = space_read.get(entity.space()).unwrap().read();
         f(&space, model)
     }
-    pub fn with_model<'a, T, F>(&self, entity: Entity<'a>, f: F) -> QueryResult<T>
+    pub fn with_model<'a, T, F>(&self, entity: EntityIDRef<'a>, f: F) -> QueryResult<T>
     where
         F: FnOnce(&Model) -> QueryResult<T>,
     {
-        let (space, model_name) = entity.into_full_result()?;
         let mdl_idx = self.idx_mdl.read();
-        let Some(model) = mdl_idx.get(&EntityIDRef::new(&space, &model_name)) else {
+        let Some(model) = mdl_idx.get(&entity) else {
             return Err(QueryError::QExecObjectNotFound);
         };
         f(model)
@@ -124,22 +126,24 @@ impl GlobalNS {
             .write()
             .insert(space_name.into(), Space::new_auto_all().into());
     }
+    pub fn contains_space(&self, name: &str) -> bool {
+        self.idx.read().contains_key(name)
+    }
 }
 
 pub(self) fn with_model_for_data_update<'a, F>(
     global: &impl GlobalInstanceLike,
-    entity: Entity<'a>,
+    entity: EntityIDRef<'a>,
     f: F,
 ) -> QueryResult<()>
 where
     F: FnOnce(&Model) -> QueryResult<QueryExecMeta>,
 {
-    let (space, model_name) = entity.into_full_result()?;
     let mdl_idx = global.namespace().idx_mdl.read();
-    let Some(model) = mdl_idx.get(&EntityIDRef::new(&space, &model_name)) else {
+    let Some(model) = mdl_idx.get(&entity) else {
         return Err(QueryError::QExecObjectNotFound);
     };
     let r = f(model)?;
-    model::DeltaState::guard_delta_overflow(global, &space, &model_name, model, r);
+    model::DeltaState::guard_delta_overflow(global, entity.space(), entity.entity(), model, r);
     Ok(())
 }

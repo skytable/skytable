@@ -28,15 +28,15 @@ use {
     super::{u, WhereClause},
     crate::{
         engine::{
-            core::query_meta::AssignmentOperator,
+            core::{query_meta::AssignmentOperator, EntityIDRef},
             data::lit::Lit,
             error::{QueryError, QueryResult},
             ql::{
-                ast::{Entity, QueryData, State},
+                ast::{QueryData, State},
                 lex::Ident,
             },
         },
-        util::{compiler, MaybeInit},
+        util::compiler,
     },
 };
 
@@ -124,13 +124,13 @@ impl<'a> AssignmentExpression<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct UpdateStatement<'a> {
-    pub(super) entity: Entity<'a>,
+    pub(super) entity: EntityIDRef<'a>,
     pub(super) expressions: Vec<AssignmentExpression<'a>>,
     pub(super) wc: WhereClause<'a>,
 }
 
 impl<'a> UpdateStatement<'a> {
-    pub fn entity(&self) -> Entity<'a> {
+    pub fn entity(&self) -> EntityIDRef<'a> {
         self.entity
     }
     pub fn expressions(&self) -> &[AssignmentExpression<'a>] {
@@ -148,7 +148,7 @@ impl<'a> UpdateStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
     pub fn new(
-        entity: Entity<'a>,
+        entity: EntityIDRef<'a>,
         expressions: Vec<AssignmentExpression<'a>>,
         wc: WhereClause<'a>,
     ) -> Self {
@@ -170,8 +170,7 @@ impl<'a> UpdateStatement<'a> {
             return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
         // parse entity
-        let mut entity = MaybeInit::uninit();
-        Entity::parse_from_state_len_unchecked(state, &mut entity);
+        let entity = state.try_entity_buffered_into_state_uninit();
         if !(state.has_remaining(6)) {
             unsafe {
                 // UNSAFE(@ohsayan): Obvious from above, max 3 fw

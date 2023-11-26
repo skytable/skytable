@@ -66,6 +66,7 @@ pub struct Model {
     data: PrimaryIndex,
     delta: DeltaState,
     private: ModelPrivate,
+    decl: String,
 }
 
 #[cfg(test)]
@@ -113,6 +114,49 @@ impl Model {
     pub fn model_mutator<'a>(&'a mut self) -> ModelMutator<'a> {
         ModelMutator { model: self }
     }
+    fn sync_decl(&mut self) {
+        self.decl = self.redescribe();
+    }
+    pub fn describe(&self) -> &str {
+        &self.decl
+    }
+    fn redescribe(&self) -> String {
+        let mut ret = format!("{{ ");
+        let mut it = self.fields().stseq_ord_kv().peekable();
+        while let Some((field_name, field_decl)) = it.next() {
+            // legend: * -> primary, ! -> not null, ? -> null
+            if self.is_pk(&field_name) {
+                ret.push('*');
+            } else if field_decl.is_nullable() {
+                ret.push('?');
+            } else {
+                ret.push('!');
+            }
+            ret.push_str(&field_name);
+            ret.push(':');
+            ret.push(' ');
+            // TODO(@ohsayan): it's all lists right now, so this is okay but fix it later
+            if field_decl.layers().len() == 1 {
+                ret.push_str(field_decl.layers()[0].tag().tag_selector().name_str());
+            } else {
+                ret.push_str(&"[".repeat(field_decl.layers().len() - 1));
+                ret.push_str(
+                    field_decl.layers()[field_decl.layers().len() - 1]
+                        .tag()
+                        .tag_selector()
+                        .name_str(),
+                );
+                ret.push_str(&"]".repeat(field_decl.layers().len() - 1))
+            }
+            if it.peek().is_some() {
+                ret.push(',');
+                ret.push(' ');
+            }
+        }
+        ret.push(' ');
+        ret.push('}');
+        ret
+    }
 }
 
 impl Model {
@@ -123,7 +167,7 @@ impl Model {
         fields: Fields,
         private: ModelPrivate,
     ) -> Self {
-        Self {
+        let mut slf = Self {
             uuid,
             p_key,
             p_tag,
@@ -131,7 +175,10 @@ impl Model {
             data: PrimaryIndex::new_empty(),
             delta: DeltaState::new_resolved(),
             private,
-        }
+            decl: String::new(),
+        };
+        slf.sync_decl();
+        slf
     }
     pub fn new_restore(
         uuid: Uuid,
@@ -223,11 +270,11 @@ impl Model {
         global: &G,
         stmt: CreateModel,
     ) -> QueryResult<()> {
-        let (space_name, model_name) = stmt.model_name.into_full_result()?;
+        let (space_name, model_name) = (stmt.model_name.space(), stmt.model_name.entity());
         let model = Self::process_create(stmt)?;
         global.namespace().ddl_with_space_mut(&space_name, |space| {
             // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
-            if space.models().contains(model_name.as_str()) {
+            if space.models().contains(model_name) {
                 return Err(QueryError::QExecDdlObjectAlreadyExists);
             }
             // since we've locked this down, no one else can parallely create another model in the same space (or remove)
@@ -264,7 +311,7 @@ impl Model {
                 }
             }
             // update global state
-            let _ = space.models_mut().insert(model_name.as_str().into());
+            let _ = space.models_mut().insert(model_name.into());
             let _ = global
                 .namespace()
                 .idx_models()
@@ -277,9 +324,9 @@ impl Model {
         global: &G,
         stmt: DropModel,
     ) -> QueryResult<()> {
-        let (space_name, model_name) = stmt.entity.into_full_result()?;
+        let (space_name, model_name) = (stmt.entity.space(), stmt.entity.entity());
         global.namespace().ddl_with_space_mut(&space_name, |space| {
-            if !space.models().contains(model_name.as_str()) {
+            if !space.models().contains(model_name) {
                 // the model isn't even present
                 return Err(QueryError::QExecObjectNotFound);
             }
@@ -306,15 +353,15 @@ impl Model {
                 global.namespace_txn_driver().lock().try_commit(txn)?;
                 // request cleanup
                 global.purge_model_driver(
-                    space_name.as_str(),
+                    space_name,
                     space.get_uuid(),
-                    model_name.as_str(),
+                    model_name,
                     model.get_uuid(),
                 );
             }
             // update global state
             let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
-            let _ = space.models_mut().remove(model_name.as_str());
+            let _ = space.models_mut().remove(model_name);
             Ok(())
         })
     }
@@ -403,6 +450,12 @@ impl<'a> ModelMutator<'a> {
     }
     pub fn update_field(&mut self, name: &str, field: Field) -> bool {
         self.model.fields.st_update(name, field)
+    }
+}
+
+impl<'a> Drop for ModelMutator<'a> {
+    fn drop(&mut self) {
+        self.model.sync_decl();
     }
 }
 

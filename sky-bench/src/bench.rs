@@ -36,6 +36,9 @@ use {
     std::{fmt, time::Instant},
 };
 
+pub const BENCHMARK_SPACE_ID: &'static str = "bench";
+pub const BENCHMARK_MODEL_ID: &'static str = "bench";
+
 /*
     task impl
 */
@@ -90,7 +93,7 @@ impl BombardTaskSpec {
         }
     }
     pub fn generate(&self, current: u64) -> (Query, Response) {
-        let mut q = query!(&self.base_query);
+        let mut q = query!(self.base_query.as_str());
         let resp = match self.kind {
             BombardTaskKind::Insert(second_column) => {
                 self.push_pk(&mut q, current);
@@ -146,7 +149,9 @@ impl rookie::ThreadedBombardTask for BombardTask {
     type WorkerInitError = Error;
     type WorkerTaskError = BombardTaskError;
     fn worker_init(&self) -> Result<Self::Worker, Self::WorkerInitError> {
-        self.config.connect()
+        let mut db = self.config.connect()?;
+        db.query_parse::<()>(&skytable::query!(format!("use {BENCHMARK_SPACE_ID}")))
+            .map(|_| db)
     }
     fn generate_task(spec: &Self::WorkerTaskSpec, current: u64) -> Self::WorkerTask {
         spec.generate(current)
@@ -180,7 +185,9 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
     info!("running preliminary checks and creating model `bench.bench` with definition: `{{un: string, pw: uint8}}`");
     let mut main_thread_db = bench_config.config.connect()?;
     main_thread_db.query_parse::<()>(&query!("create space bench"))?;
-    main_thread_db.query_parse::<()>(&query!("create model bench.bench(un: string, pw: uint8)"))?;
+    main_thread_db.query_parse::<()>(&query!(format!(
+        "create model {BENCHMARK_SPACE_ID}.{BENCHMARK_MODEL_ID}(un: string, pw: uint8)"
+    )))?;
     let stats = match bench.engine {
         BenchEngine::Rookie => bench_rookie(bench_config, bench),
         BenchEngine::Fury => bench_fury(bench),
@@ -278,23 +285,20 @@ fn prepare_bench_spec(bench: &BenchConfig) -> Vec<BenchItem> {
     vec![
         BenchItem::new(
             "INSERT",
-            BombardTaskSpec::insert("insert into bench.bench(?, ?)".into(), bench.key_size, 0),
+            BombardTaskSpec::insert("insert into bench(?, ?)".into(), bench.key_size, 0),
             bench.query_count,
         ),
         BenchItem::new(
             "UPDATE",
             BombardTaskSpec::update(
-                "update bench.bench set pw += ? where un = ?".into(),
+                "update bench set pw += ? where un = ?".into(),
                 bench.key_size,
             ),
             bench.query_count,
         ),
         BenchItem::new(
             "DELETE",
-            BombardTaskSpec::delete(
-                "delete from bench.bench where un = ?".into(),
-                bench.key_size,
-            ),
+            BombardTaskSpec::delete("delete from bench where un = ?".into(), bench.key_size),
             bench.query_count,
         ),
     ]

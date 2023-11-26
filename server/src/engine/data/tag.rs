@@ -24,6 +24,15 @@
  *
 */
 
+macro_rules! strid {
+    ($(#[$attr:meta])*$vis:vis enum $enum:ident {$($(#[$var_attr:meta])* $variant:ident $(= $dscr:expr)?),* $(,)?}) => {
+        $(#[$attr])* $vis enum $enum { $($(#[$var_attr])* $variant $(= $dscr)?),*}
+        impl $enum {
+            pub const fn name_str(&self) -> &'static str { match self { $(Self::$variant => stringify!($variant),)* } }
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum TagClass {
@@ -36,23 +45,25 @@ pub enum TagClass {
     List = 6,
 }
 
-#[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
-pub enum TagSelector {
-    Bool = 0,
-    UInt8 = 1,
-    UInt16 = 2,
-    UInt32 = 3,
-    UInt64 = 4,
-    SInt8 = 5,
-    SInt16 = 6,
-    SInt32 = 7,
-    SInt64 = 8,
-    Float32 = 9,
-    Float64 = 10,
-    Bin = 11,
-    Str = 12,
-    List = 13,
+strid! {
+    #[repr(u8)]
+    #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
+    pub enum TagSelector {
+        Bool = 0,
+        UInt8 = 1,
+        UInt16 = 2,
+        UInt32 = 3,
+        UInt64 = 4,
+        SInt8 = 5,
+        SInt16 = 6,
+        SInt32 = 7,
+        SInt64 = 8,
+        Float32 = 9,
+        Float64 = 10,
+        Binary = 11,
+        String = 12,
+        List = 13,
+    }
 }
 
 impl TagSelector {
@@ -175,8 +186,8 @@ impl DataTag for FullTag {
     const UINT: Self = fulltag!(UnsignedInt, UInt64, UnsignedInt);
     const SINT: Self = fulltag!(SignedInt, SInt64, SignedInt);
     const FLOAT: Self = fulltag!(Float, Float64);
-    const BIN: Self = fulltag!(Bin, Bin, Bin);
-    const STR: Self = fulltag!(Str, Str, Str);
+    const BIN: Self = fulltag!(Bin, Binary, Bin);
+    const STR: Self = fulltag!(Str, String, Str);
     const LIST: Self = fulltag!(List, List);
     fn tag_class(&self) -> TagClass {
         self.class

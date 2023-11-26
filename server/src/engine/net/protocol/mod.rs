@@ -51,16 +51,42 @@ use {
     tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter},
 };
 
+#[repr(u8)]
+#[derive(sky_macros::EnumMethods, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(unused)]
+pub enum ResponseType {
+    Null = 0x00,
+    Bool = 0x01,
+    UInt8 = 0x02,
+    UInt16 = 0x03,
+    UInt32 = 0x04,
+    UInt64 = 0x05,
+    SInt8 = 0x06,
+    SInt16 = 0x07,
+    SInt32 = 0x08,
+    SInt64 = 0x09,
+    Float32 = 0x0A,
+    Float64 = 0x0B,
+    Binary = 0x0C,
+    String = 0x0D,
+    List = 0x0E,
+    Dict = 0x0F,
+    Error = 0x10,
+    Row = 0x11,
+    Empty = 0x12,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ClientLocalState {
     username: Box<str>,
     root: bool,
     hs: handshake::CHandshakeStatic,
+    cs: Option<Box<str>>,
 }
 
 impl ClientLocalState {
     pub fn new(username: Box<str>, root: bool, hs: handshake::CHandshakeStatic) -> Self {
-        Self { username, root, hs }
+        Self { username, root, hs, cs: None }
     }
     pub fn is_root(&self) -> bool {
         self.root
@@ -68,12 +94,25 @@ impl ClientLocalState {
     pub fn username(&self) -> &str {
         &self.username
     }
+    pub fn set_cs(&mut self, new: Box<str>) {
+        self.cs = Some(new);
+    }
+    pub fn unset_cs(&mut self) {
+        self.cs = None;
+    }
+    pub fn get_cs(&self) -> Option<&str> {
+        self.cs.as_deref()
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Response {
     Empty,
-    Row { size: usize, data: Vec<u8> },
+    Serialized {
+        ty: ResponseType,
+        size: usize,
+        data: Vec<u8>,
+    },
 }
 
 pub(super) async fn query_loop<S: Socket>(
@@ -82,7 +121,7 @@ pub(super) async fn query_loop<S: Socket>(
     global: &Global,
 ) -> IoResult<QueryLoopResult> {
     // handshake
-    let client_state = match do_handshake(con, buf, global).await? {
+    let mut client_state = match do_handshake(con, buf, global).await? {
         PostHandshake::Okay(hs) => hs,
         PostHandshake::ConnectionClosedFin => return Ok(QueryLoopResult::Fin),
         PostHandshake::ConnectionClosedRst => return Ok(QueryLoopResult::Rst),
@@ -127,7 +166,8 @@ pub(super) async fn query_loop<S: Socket>(
             QueryTimeExchangeResult::Error => {
                 let [a, b] =
                     (QueryError::NetworkSubsystemCorruptedPacket.value_u8() as u16).to_le_bytes();
-                con.write_all(&[0x10, a, b]).await?;
+                con.write_all(&[ResponseType::Error.value_u8(), a, b])
+                    .await?;
                 con.flush().await?;
                 buf.clear();
                 exchg_state = QueryTimeExchangeState::default();
@@ -135,12 +175,12 @@ pub(super) async fn query_loop<S: Socket>(
             }
         };
         // now execute query
-        match engine::core::exec::dispatch_to_executor(global, &client_state, sq).await {
+        match engine::core::exec::dispatch_to_executor(global, &mut client_state, sq).await {
             Ok(Response::Empty) => {
-                con.write_all(&[0x12]).await?;
+                con.write_all(&[ResponseType::Empty.value_u8()]).await?;
             }
-            Ok(Response::Row { size, data }) => {
-                con.write_u8(0x11).await?;
+            Ok(Response::Serialized { ty, size, data }) => {
+                con.write_u8(ty.value_u8()).await?;
                 let mut irep = IntegerRepr::new();
                 con.write_all(irep.as_bytes(size as u64)).await?;
                 con.write_u8(b'\n').await?;
@@ -148,7 +188,8 @@ pub(super) async fn query_loop<S: Socket>(
             }
             Err(e) => {
                 let [a, b] = (e.value_u8() as u16).to_le_bytes();
-                con.write_all(&[0x10, a, b]).await?;
+                con.write_all(&[ResponseType::Error.value_u8(), a, b])
+                    .await?;
             }
         }
         con.flush().await?;

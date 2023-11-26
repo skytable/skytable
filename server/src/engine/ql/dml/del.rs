@@ -30,10 +30,11 @@ use {
     super::WhereClause,
     crate::{
         engine::{
+            core::EntityIDRef,
             error::{QueryError, QueryResult},
-            ql::ast::{Entity, QueryData, State},
+            ql::ast::{QueryData, State},
         },
-        util::{compiler, MaybeInit},
+        util::compiler,
     },
 };
 
@@ -46,12 +47,12 @@ use {
 
 #[derive(Debug, PartialEq)]
 pub struct DeleteStatement<'a> {
-    pub(super) entity: Entity<'a>,
+    pub(super) entity: EntityIDRef<'a>,
     pub(super) wc: WhereClause<'a>,
 }
 
 impl<'a> DeleteStatement<'a> {
-    pub const fn entity(&self) -> Entity<'a> {
+    pub const fn entity(&self) -> EntityIDRef<'a> {
         self.entity
     }
     pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
@@ -62,12 +63,12 @@ impl<'a> DeleteStatement<'a> {
 impl<'a> DeleteStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
-    pub(super) fn new(entity: Entity<'a>, wc: WhereClause<'a>) -> Self {
+    pub(super) fn new(entity: EntityIDRef<'a>, wc: WhereClause<'a>) -> Self {
         Self { entity, wc }
     }
     #[inline(always)]
     #[cfg(test)]
-    pub fn new_test(entity: Entity<'a>, wc: WhereClauseCollection<'a>) -> Self {
+    pub fn new_test(entity: EntityIDRef<'a>, wc: WhereClauseCollection<'a>) -> Self {
         Self::new(entity, WhereClause::new(wc))
     }
     #[inline(always)]
@@ -84,8 +85,7 @@ impl<'a> DeleteStatement<'a> {
         // from + entity
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors (if any)
-        let mut entity = MaybeInit::uninit();
-        Entity::parse_from_state_len_unchecked(state, &mut entity);
+        let entity = state.try_entity_buffered_into_state_uninit();
         // where + clauses
         state.poison_if_not(state.cursor_eq(Token![where]));
         state.cursor_ahead(); // ignore errors

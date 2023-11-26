@@ -41,7 +41,7 @@ pub use {
     astr::AStr,
     ll::CachePadded,
     numbuf::IntegerRepr,
-    rawslice::{RawSlice, RawStr},
+    rawslice::RawStr,
     scanner::BufferedScanner,
     uarray::UArray,
     vinline::VInline,

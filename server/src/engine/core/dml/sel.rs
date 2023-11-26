@@ -34,7 +34,7 @@ use crate::engine::{
     fractal::GlobalInstanceLike,
     idx::{STIndex, STIndexSeq},
     mem::IntegerRepr,
-    net::protocol::Response,
+    net::protocol::{Response, ResponseType},
     ql::dml::sel::SelectStatement,
     sync,
 };
@@ -49,7 +49,11 @@ pub fn select_resp(
         encode_cell(&mut data, item);
         i += 1;
     })?;
-    Ok(Response::Row { size: i, data })
+    Ok(Response::Serialized {
+        ty: ResponseType::Row,
+        size: i,
+        data,
+    })
 }
 
 fn encode_cell(resp: &mut Vec<u8>, item: &Datacell) {

@@ -32,7 +32,7 @@ use crate::engine::ql::{
 
 #[test]
 fn report_status_simple() {
-    let query = lex_insecure(b"sysctl status").unwrap();
+    let query = lex_insecure(b"sysctl report status").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
     assert_eq!(q, SysctlCommand::ReportStatus)
 }

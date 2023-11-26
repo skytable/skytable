@@ -26,7 +26,7 @@
 
 use {
     super::{RuntimeStats, WorkerLocalStats, WorkerTask},
-    crate::bench::BombardTaskSpec,
+    crate::bench::{BombardTaskSpec, BENCHMARK_SPACE_ID},
     skytable::Config,
     std::{
         fmt,
@@ -232,9 +232,9 @@ async fn worker_svc(
             return;
         }
     };
-    // warm up connection
+    // set DB in connections
     match db
-        .query_parse::<()>(&skytable::query!("sysctl report status"))
+        .query_parse::<()>(&skytable::query!(format!("use {BENCHMARK_SPACE_ID}")))
         .await
     {
         Ok(()) => {}

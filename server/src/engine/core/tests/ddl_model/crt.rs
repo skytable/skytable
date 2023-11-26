@@ -37,7 +37,8 @@ mod validation {
 
     #[test]
     fn simple() {
-        let model = create("create model mymodel(username: string, password: binary)").unwrap();
+        let model =
+            create("create model myspace.mymodel(username: string, password: binary)").unwrap();
         assert_eq!(model.p_key(), "username");
         assert_eq!(model.p_tag(), FullTag::STR);
         assert_eq!(
@@ -60,7 +61,8 @@ mod validation {
     #[test]
     fn idiotic_order() {
         let model =
-            create("create model mymodel(password: binary, primary username: string)").unwrap();
+            create("create model myspace.mymodel(password: binary, primary username: string)")
+                .unwrap();
         assert_eq!(model.p_key(), "username");
         assert_eq!(model.p_tag(), FullTag::STR);
         assert_eq!(
@@ -84,7 +86,7 @@ mod validation {
     fn duplicate_primary_key() {
         assert_eq!(
             create(
-                "create model mymodel(primary username: string, primary contract_location: binary)"
+                "create model myspace.mymodel(primary username: string, primary contract_location: binary)"
             )
             .unwrap_err(),
             QueryError::QExecDdlModelBadDefinition
@@ -94,7 +96,8 @@ mod validation {
     #[test]
     fn duplicate_fields() {
         assert_eq!(
-            create("create model mymodel(primary username: string, username: binary)").unwrap_err(),
+            create("create model myspace.mymodel(primary username: string, username: binary)")
+                .unwrap_err(),
             QueryError::QExecDdlModelBadDefinition
         );
     }
@@ -102,7 +105,7 @@ mod validation {
     #[test]
     fn illegal_props() {
         assert_eq!(
-        create("create model mymodel(primary username: string, password: binary) with { lol_prop: false }").unwrap_err(),
+        create("create model myspace.mymodel(primary username: string, password: binary) with { lol_prop: false }").unwrap_err(),
         QueryError::QExecDdlModelBadDefinition
     );
     }
@@ -111,13 +114,13 @@ mod validation {
     fn illegal_pk() {
         assert_eq!(
         create(
-            "create model mymodel(primary username_bytes: list { type: uint8 }, password: binary)"
+            "create model myspace.mymodel(primary username_bytes: list { type: uint8 }, password: binary)"
         )
         .unwrap_err(),
         QueryError::QExecDdlModelBadDefinition
     );
         assert_eq!(
-            create("create model mymodel(primary username: float32, password: binary)")
+            create("create model myspace.mymodel(primary username: float32, password: binary)")
                 .unwrap_err(),
             QueryError::QExecDdlModelBadDefinition
         );

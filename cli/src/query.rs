@@ -57,13 +57,13 @@ enum Item {
 }
 
 impl SQParam for Item {
-    fn push(self, buf: &mut Vec<u8>) {
+    fn append_param(self, buf: &mut Vec<u8>) {
         match self {
-            Item::UInt(u) => u.push(buf),
-            Item::SInt(s) => s.push(buf),
-            Item::Float(f) => f.push(buf),
-            Item::String(s) => s.push(buf),
-            Item::Bin(b) => SQParam::push(&*b, buf),
+            Item::UInt(u) => u.append_param(buf),
+            Item::SInt(s) => s.append_param(buf),
+            Item::Float(f) => f.append_param(buf),
+            Item::String(s) => s.append_param(buf),
+            Item::Bin(b) => SQParam::append_param(&*b, buf),
         }
     }
 }
@@ -100,7 +100,7 @@ impl Parameterizer {
                 }
                 sym => {
                     self.i += 1;
-                    self.query.push(sym);
+                    Vec::push(&mut self.query, sym);
                     Ok(())
                 }
             }?

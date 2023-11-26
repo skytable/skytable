@@ -29,4 +29,37 @@ pub(in crate::engine) mod syn;
 pub(in crate::engine) mod alt;
 pub(in crate::engine) mod crt;
 pub(in crate::engine) mod drop;
-pub(in crate::engine) mod ins;
+
+use {
+    super::{
+        ast::traits::ASTNode,
+        lex::{Ident, Token},
+    },
+    crate::engine::error::QueryError,
+};
+
+#[derive(Debug, PartialEq)]
+pub enum Use<'a> {
+    Space(Ident<'a>),
+    Null,
+}
+
+impl<'a> ASTNode<'a> for Use<'a> {
+    const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+    const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = true;
+    fn __base_impl_parse_from_state<Qd: super::ast::QueryData<'a>>(
+        state: &mut super::ast::State<'a, Qd>,
+    ) -> crate::engine::error::QueryResult<Self> {
+        /*
+            should have either an ident or null
+        */
+        if state.remaining() != 1 {
+            return Err(QueryError::QLInvalidSyntax);
+        }
+        Ok(match state.fw_read() {
+            Token![null] => Self::Null,
+            Token::Ident(id) => Self::Space(id.clone()),
+            _ => return Err(QueryError::QLInvalidSyntax),
+        })
+    }
+}

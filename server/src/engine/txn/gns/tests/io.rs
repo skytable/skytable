@@ -107,7 +107,7 @@ mod model_tests {
         let model = Model::new_restore(
             Uuid::new(),
             "username".into(),
-            TagSelector::Str.into_full(),
+            TagSelector::String.into_full(),
             into_dict!(
                 "password" => Field::new([Layer::bin()].into(), false),
                 "profile_pic" => Field::new([Layer::bin()].into(), true),

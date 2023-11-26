@@ -32,11 +32,7 @@ use crate::engine::{
     core::{model::Model, EntityIDRef},
     error::QueryResult,
     fractal::GlobalInstanceLike,
-    ql::{
-        ast::{parse_ast_node_full, Entity},
-        ddl::crt::CreateModel,
-        tests::lex_insecure,
-    },
+    ql::{ast::parse_ast_node_full, ddl::crt::CreateModel, tests::lex_insecure},
 };
 
 fn create(s: &str) -> QueryResult<Model> {
@@ -52,13 +48,11 @@ pub fn exec_create(
 ) -> QueryResult<String> {
     let tok = lex_insecure(create_stmt.as_bytes()).unwrap();
     let create_model = parse_ast_node_full::<CreateModel>(&tok[2..]).unwrap();
-    let name = match create_model.model_name {
-        Entity::Single(tbl) | Entity::Full(_, tbl) => tbl.to_string(),
-    };
+    let name = create_model.model_name.entity().to_owned();
     if create_new_space {
         global
             .namespace()
-            .create_empty_test_space(&create_model.model_name.into_full().unwrap().0)
+            .create_empty_test_space(create_model.model_name.space())
     }
     Model::transactional_exec_create(global, create_model).map(|_| name)
 }
