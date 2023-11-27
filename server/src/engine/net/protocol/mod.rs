@@ -86,7 +86,12 @@ pub struct ClientLocalState {
 
 impl ClientLocalState {
     pub fn new(username: Box<str>, root: bool, hs: handshake::CHandshakeStatic) -> Self {
-        Self { username, root, hs, cs: None }
+        Self {
+            username,
+            root,
+            hs,
+            cs: None,
+        }
     }
     pub fn is_root(&self) -> bool {
         self.root

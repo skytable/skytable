@@ -24,6 +24,8 @@
  *
 */
 
+use skytable::response::Value;
+
 use crate::args::BenchEngine;
 
 use {
@@ -56,70 +58,6 @@ impl BombardTask {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum BombardTaskKind {
-    Insert(u8),
-    Update,
-    Delete,
-}
-
-#[derive(Debug, Clone)]
-pub struct BombardTaskSpec {
-    kind: BombardTaskKind,
-    base_query: String,
-    pk_len: usize,
-}
-
-impl BombardTaskSpec {
-    pub fn insert(base_query: String, pk_len: usize, second_column: u8) -> Self {
-        Self {
-            kind: BombardTaskKind::Insert(second_column),
-            base_query,
-            pk_len,
-        }
-    }
-    pub fn update(base_query: String, pk_len: usize) -> Self {
-        Self {
-            kind: BombardTaskKind::Update,
-            base_query,
-            pk_len,
-        }
-    }
-    pub fn delete(base_query: String, pk_len: usize) -> Self {
-        Self {
-            kind: BombardTaskKind::Delete,
-            base_query,
-            pk_len,
-        }
-    }
-    pub fn generate(&self, current: u64) -> (Query, Response) {
-        let mut q = query!(self.base_query.as_str());
-        let resp = match self.kind {
-            BombardTaskKind::Insert(second_column) => {
-                self.push_pk(&mut q, current);
-                q.push_param(second_column);
-                Response::Empty
-            }
-            BombardTaskKind::Update => {
-                q.push_param(1u64);
-                self.push_pk(&mut q, current);
-                Response::Empty
-            }
-            BombardTaskKind::Delete => {
-                self.push_pk(&mut q, current);
-                Response::Empty
-            }
-        };
-        (q, resp)
-    }
-    fn push_pk(&self, q: &mut Query, current: u64) {
-        q.push_param(self.get_primary_key(current));
-    }
-    fn get_primary_key(&self, current: u64) -> String {
-        format!("{:0>width$}", current, width = self.pk_len)
-    }
-}
-
 /// Errors while running a bombard
 #[derive(Debug)]
 pub enum BombardTaskError {
@@ -144,8 +82,8 @@ impl From<Error> for BombardTaskError {
 
 impl rookie::ThreadedBombardTask for BombardTask {
     type Worker = Connection;
-    type WorkerTask = (Query, Response);
-    type WorkerTaskSpec = BombardTaskSpec;
+    type WorkerTask = (Query, (BenchmarkTask, u64));
+    type WorkerTaskSpec = BenchmarkTask;
     type WorkerInitError = Error;
     type WorkerTaskError = BombardTaskError;
     fn worker_init(&self) -> Result<Self::Worker, Self::WorkerInitError> {
@@ -154,16 +92,16 @@ impl rookie::ThreadedBombardTask for BombardTask {
             .map(|_| db)
     }
     fn generate_task(spec: &Self::WorkerTaskSpec, current: u64) -> Self::WorkerTask {
-        spec.generate(current)
+        (spec.generate_query(current), (*spec, current))
     }
     fn worker_drive_timed(
         worker: &mut Self::Worker,
-        (query, response): Self::WorkerTask,
+        (query, (spec, current)): Self::WorkerTask,
     ) -> Result<u128, Self::WorkerTaskError> {
         let start = Instant::now();
         let ret = worker.query(&query)?;
         let stop = Instant::now();
-        if ret == response {
+        if spec.verify_response(current, ret) {
             Ok(stop.duration_since(start).as_nanos())
         } else {
             Err(BombardTaskError::Mismatch)
@@ -182,11 +120,11 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
         "root",
         &bench.root_pass,
     ));
-    info!("running preliminary checks and creating model `bench.bench` with definition: `{{un: string, pw: uint8}}`");
+    info!("running preliminary checks and creating model `bench.bench` with definition: `{{un: binary, pw: uint8}}`");
     let mut main_thread_db = bench_config.config.connect()?;
     main_thread_db.query_parse::<()>(&query!("create space bench"))?;
     main_thread_db.query_parse::<()>(&query!(format!(
-        "create model {BENCHMARK_SPACE_ID}.{BENCHMARK_MODEL_ID}(un: string, pw: uint8)"
+        "create model {BENCHMARK_SPACE_ID}.{BENCHMARK_MODEL_ID}(un: binary, pw: uint8)"
     )))?;
     let stats = match bench.engine {
         BenchEngine::Rookie => bench_rookie(bench_config, bench),
@@ -252,21 +190,51 @@ fn print_table(data: Vec<(&'static str, RuntimeStats)>) {
     bench runner
 */
 
+#[derive(Clone, Copy, Debug)]
+pub struct BenchmarkTask {
+    gen_query: fn(&Self, u64) -> Query,
+    check_resp: fn(&Self, u64, Response) -> bool,
+    pk_len: usize,
+}
+
+impl BenchmarkTask {
+    fn new(
+        pk_len: usize,
+        gen_query: fn(&Self, u64) -> Query,
+        check_resp: fn(&Self, u64, Response) -> bool,
+    ) -> Self {
+        Self {
+            gen_query,
+            check_resp,
+            pk_len,
+        }
+    }
+    fn fmt_pk(&self, current: u64) -> Vec<u8> {
+        format!("{:0>width$}", current, width = self.pk_len).into_bytes()
+    }
+    pub fn generate_query(&self, current: u64) -> Query {
+        (self.gen_query)(self, current)
+    }
+    pub fn verify_response(&self, current: u64, resp: Response) -> bool {
+        (self.check_resp)(self, current, resp)
+    }
+}
+
 struct BenchItem {
     name: &'static str,
-    spec: BombardTaskSpec,
+    spec: BenchmarkTask,
     count: usize,
 }
 
 impl BenchItem {
-    fn new(name: &'static str, spec: BombardTaskSpec, count: usize) -> Self {
+    fn new(name: &'static str, spec: BenchmarkTask, count: usize) -> Self {
         Self { name, spec, count }
     }
     fn print_log_start(&self) {
         info!(
             "benchmarking `{}`. average payload size = {} bytes. queries = {}",
             self.name,
-            self.spec.generate(0).0.debug_encode_packet().len(),
+            self.spec.generate_query(0).debug_encode_packet().len(),
             self.count
         )
     }
@@ -285,20 +253,49 @@ fn prepare_bench_spec(bench: &BenchConfig) -> Vec<BenchItem> {
     vec![
         BenchItem::new(
             "INSERT",
-            BombardTaskSpec::insert("insert into bench(?, ?)".into(), bench.key_size, 0),
+            BenchmarkTask::new(
+                bench.key_size,
+                |me, current| query!("insert into bench(?, ?)", me.fmt_pk(current), 0u64),
+                |_, _, actual_resp| actual_resp == Response::Empty,
+            ),
+            bench.query_count,
+        ),
+        BenchItem::new(
+            "SELECT",
+            BenchmarkTask::new(
+                bench.key_size,
+                |me, current| query!("select * from bench where un = ?", me.fmt_pk(current)),
+                |me, current, resp| match resp {
+                    Response::Row(r) => {
+                        r.into_values() == vec![Value::Binary(me.fmt_pk(current)), Value::UInt8(0)]
+                    }
+                    _ => false,
+                },
+            ),
             bench.query_count,
         ),
         BenchItem::new(
             "UPDATE",
-            BombardTaskSpec::update(
-                "update bench set pw += ? where un = ?".into(),
+            BenchmarkTask::new(
                 bench.key_size,
+                |me, current| {
+                    query!(
+                        "update bench set pw += ? where un = ?",
+                        1u64,
+                        me.fmt_pk(current)
+                    )
+                },
+                |_, _, resp| resp == Response::Empty,
             ),
             bench.query_count,
         ),
         BenchItem::new(
             "DELETE",
-            BombardTaskSpec::delete("delete from bench where un = ?".into(), bench.key_size),
+            BenchmarkTask::new(
+                bench.key_size,
+                |me, current| query!("delete from bench where un = ?", me.fmt_pk(current)),
+                |_, _, resp| resp == Response::Empty,
+            ),
             bench.query_count,
         ),
     ]

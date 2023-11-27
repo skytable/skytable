@@ -1109,8 +1109,8 @@ mod ddl_other_query_tests {
     use {
         super::*,
         crate::engine::ql::{
-            ast::{parse_ast_node_full, parse_ast_node_full_with_space, Statement},
-            ddl::drop::{DropModel, DropSpace, DropStatementAST},
+            ast::{parse_ast_node_full, parse_ast_node_full_with_space},
+            ddl::drop::{DropModel, DropSpace},
             lex::Ident,
         },
     };
@@ -1118,32 +1118,32 @@ mod ddl_other_query_tests {
     fn drop_space() {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
-            Statement::DropSpace(DropSpace::new(Ident::from("myspace"), false))
+            parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
+            DropSpace::new(Ident::from("myspace"), false)
         );
     }
     #[test]
     fn drop_space_force() {
         let src = lex_insecure(br"drop space myspace force").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
-            Statement::DropSpace(DropSpace::new(Ident::from("myspace"), true))
+            parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
+            DropSpace::new(Ident::from("myspace"), true)
         );
     }
     #[test]
     fn drop_model() {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
-            parse_ast_node_full_with_space::<DropStatementAST>(&src[1..], "apps").unwrap(),
-            Statement::DropModel(DropModel::new(("apps", "mymodel").into(), false))
+            parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
+            DropModel::new(("apps", "mymodel").into(), false)
         );
     }
     #[test]
     fn drop_model_force() {
         let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
-            parse_ast_node_full_with_space::<DropStatementAST>(&src[1..], "apps").unwrap(),
-            Statement::DropModel(DropModel::new(("apps", "mymodel").into(), true))
+            parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
+            DropModel::new(("apps", "mymodel").into(), true)
         );
     }
 }

@@ -60,7 +60,7 @@ fn entity_full() {
 #[test]
 fn use_new() {
     let t = lex_insecure(b"use myspace").unwrap();
-    let mut state = State::new_inplace(&t);
+    let mut state = State::new_inplace(&t[1..]);
     assert_eq!(
         Use::test_parse_from_state(&mut state).unwrap(),
         Use::Space("myspace".into())
@@ -70,6 +70,6 @@ fn use_new() {
 #[test]
 fn use_null() {
     let t = lex_insecure(b"use null").unwrap();
-    let mut state = State::new_inplace(&t);
+    let mut state = State::new_inplace(&t[1..]);
     assert_eq!(Use::test_parse_from_state(&mut state).unwrap(), Use::Null);
 }

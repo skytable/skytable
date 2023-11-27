@@ -107,8 +107,8 @@ async fn run_blocking_stmt(
         &ClientLocalState,
         &mut State<'static, InplaceData>,
     ) -> QueryResult<()>; 8] = [
-        |_, _, _| Err(QueryError::QLUnknownStatement), // unknown
-        blocking_exec_sysctl,                          // sysctl
+        |_, _, _| Err(QueryError::QLUnknownStatement),
+        blocking_exec_sysctl,
         |g, _, t| _call(&g, t, Space::transactional_exec_create),
         |g, _, t| _call(&g, t, Model::transactional_exec_create),
         |g, _, t| _call(&g, t, Space::transactional_exec_alter),

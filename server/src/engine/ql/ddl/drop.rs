@@ -28,7 +28,7 @@ use crate::engine::{
     core::EntityIDRef,
     error::{QueryError, QueryResult},
     ql::{
-        ast::{QueryData, State, Statement},
+        ast::{QueryData, State},
         lex::{Ident, Token},
     },
 };
@@ -84,26 +84,12 @@ impl<'a> DropModel<'a> {
     }
 }
 
-// drop (<space> | <model>) <ident> [<force>]
-/// ## Panic
-///
-/// If token stream length is < 2
-pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Statement<'a>> {
-    match state.fw_read() {
-        Token![model] => DropModel::parse(state).map(Statement::DropModel),
-        Token![space] => return DropSpace::parse(state).map(Statement::DropSpace),
-        _ => Err(QueryError::QLUnknownStatement),
-    }
-}
-
-#[cfg(test)]
-pub use impls::DropStatementAST;
 mod impls {
     use {
         super::{DropModel, DropSpace},
         crate::engine::{
             error::QueryResult,
-            ql::ast::{traits::ASTNode, QueryData, State, Statement},
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for DropModel<'a> {
@@ -122,17 +108,6 @@ mod impls {
             state: &mut State<'a, Qd>,
         ) -> QueryResult<Self> {
             Self::parse(state)
-        }
-    }
-    #[derive(sky_macros::Wrapper, Debug)]
-    pub struct DropStatementAST<'a>(Statement<'a>);
-    impl<'a> ASTNode<'a> for DropStatementAST<'a> {
-        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
-        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
-        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
-            state: &mut State<'a, Qd>,
-        ) -> QueryResult<Self> {
-            super::parse_drop(state).map(Self)
         }
     }
 }

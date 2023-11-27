@@ -32,10 +32,7 @@ pub use traits::{
 };
 
 use {
-    super::{
-        ddl, dml,
-        lex::{Ident, Keyword, KeywordStmt, Token},
-    },
+    super::lex::{Keyword, KeywordStmt, Token},
     crate::{
         engine::{
             core::EntityIDRef,
@@ -372,75 +369,5 @@ impl<'a> QueryData<'a> for InplaceData {
     #[inline(always)]
     fn nonzero(&self) -> bool {
         true
-    }
-}
-
-#[derive(Debug, PartialEq)]
-#[allow(dead_code)] // TODO(@ohsayan): get rid of this
-/// A [`Statement`] is a fully BlueQL statement that can be executed by the query engine
-// TODO(@ohsayan): Determine whether we actually need this
-pub enum Statement<'a> {
-    /// DDL query to create a model
-    CreateModel(ddl::crt::CreateModel<'a>),
-    /// DDL query to create a space
-    CreateSpace(ddl::crt::CreateSpace<'a>),
-    /// DDL query to alter a space (properties)
-    AlterSpace(ddl::alt::AlterSpace<'a>),
-    /// DDL query to alter a model (properties, field types, etc)
-    AlterModel(ddl::alt::AlterModel<'a>),
-    /// DDL query to drop a model
-    ///
-    /// Conditions:
-    /// - Model view is empty
-    /// - Model is not in active use
-    DropModel(ddl::drop::DropModel<'a>),
-    /// DDL query to drop a space
-    ///
-    /// Conditions:
-    /// - Space doesn't have any other structures
-    /// - Space is not in active use
-    DropSpace(ddl::drop::DropSpace<'a>),
-    /// DDL query to inspect a space (returns a list of models in the space)
-    InspectSpace(Ident<'a>),
-    /// DDL query to inspect all spaces (returns a list of spaces in the database)
-    InspectSpaces,
-    /// DML insert
-    Insert(dml::ins::InsertStatement<'a>),
-    /// DML select
-    Select(dml::sel::SelectStatement<'a>),
-    /// DML update
-    Update(dml::upd::UpdateStatement<'a>),
-    /// DML delete
-    Delete(dml::del::DeleteStatement<'a>),
-}
-
-#[inline(always)]
-#[cfg(test)]
-#[allow(dead_code)] // TODO(@ohsayan): get rid of this
-pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResult<Statement<'a>> {
-    use {self::traits::ASTNode, crate::util::compiler};
-    if compiler::unlikely(tok.len() < 2) {
-        return Err(QueryError::QLUnexpectedEndOfStatement);
-    }
-    let mut state = State::new(tok, d);
-    match state.fw_read() {
-        // DDL
-        Token![create] => match state.fw_read() {
-            Token![model] => ASTNode::test_parse_from_state(&mut state).map(Statement::CreateModel),
-            Token![space] => ASTNode::test_parse_from_state(&mut state).map(Statement::CreateSpace),
-            _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
-        },
-        Token![alter] => match state.fw_read() {
-            Token![model] => ASTNode::test_parse_from_state(&mut state).map(Statement::AlterModel),
-            Token![space] => ASTNode::test_parse_from_state(&mut state).map(Statement::AlterSpace),
-            _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
-        },
-        Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
-        // DML
-        Token![insert] => ASTNode::test_parse_from_state(&mut state).map(Statement::Insert),
-        Token![select] => ASTNode::test_parse_from_state(&mut state).map(Statement::Select),
-        Token![update] => ASTNode::test_parse_from_state(&mut state).map(Statement::Update),
-        Token![delete] => ASTNode::test_parse_from_state(&mut state).map(Statement::Delete),
-        _ => compiler::cold_rerr(QueryError::QLUnknownStatement),
     }
 }

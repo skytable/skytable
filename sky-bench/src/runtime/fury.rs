@@ -26,7 +26,7 @@
 
 use {
     super::{RuntimeStats, WorkerLocalStats, WorkerTask},
-    crate::bench::{BombardTaskSpec, BENCHMARK_SPACE_ID},
+    crate::bench::{BenchmarkTask, BENCHMARK_SPACE_ID},
     skytable::Config,
     std::{
         fmt,
@@ -121,7 +121,7 @@ impl fmt::Display for FuryWorkerError {
 
 #[derive(Debug)]
 pub struct Fury {
-    tx_task: broadcast::Sender<WorkerTask<BombardTaskSpec>>,
+    tx_task: broadcast::Sender<WorkerTask<BenchmarkTask>>,
     rx_task_result: mpsc::Receiver<FuryResult<WorkerLocalStats>>,
     client_count: usize,
 }
@@ -131,12 +131,14 @@ impl Fury {
         let (tx_task, rx_task) = broadcast::channel(1);
         let (tx_task_result, rx_task_result) = mpsc::channel(client_count);
         let (tx_ack, mut rx_ack) = mpsc::channel(1);
-        for _ in 0..client_count {
+        for id in 0..client_count {
             let rx_task = tx_task.subscribe();
             let tx_task_result = tx_task_result.clone();
             let tx_ack = tx_ack.clone();
             let config = config.clone();
-            tokio::spawn(async move { worker_svc(rx_task, tx_task_result, tx_ack, config).await });
+            tokio::spawn(
+                async move { worker_svc(id, rx_task, tx_task_result, tx_ack, config).await },
+            );
         }
         drop((tx_ack, rx_task));
         match rx_ack.recv().await {
@@ -150,16 +152,14 @@ impl Fury {
             client_count,
         })
     }
-    pub async fn bombard(
-        &mut self,
-        count: usize,
-        task: BombardTaskSpec,
-    ) -> FuryResult<RuntimeStats> {
+    pub async fn bombard(&mut self, count: usize, task: BenchmarkTask) -> FuryResult<RuntimeStats> {
         // pause workers and set target
         let start_guard = GLOBAL_START.write().await;
         gset_target(count);
         // send tasks
-        self.tx_task.send(WorkerTask::Task(task)).unwrap();
+        if self.tx_task.send(WorkerTask::Task(task)).is_err() {
+            return Err(FuryError::Dead);
+        }
         // begin work
         drop(start_guard);
         // init stats
@@ -220,7 +220,8 @@ impl Fury {
 }
 
 async fn worker_svc(
-    mut rx_task: broadcast::Receiver<WorkerTask<BombardTaskSpec>>,
+    id: usize,
+    mut rx_task: broadcast::Receiver<WorkerTask<BenchmarkTask>>,
     tx_task_result: mpsc::Sender<FuryResult<WorkerLocalStats>>,
     tx_ack: mpsc::Sender<skytable::error::Error>,
     connection_cfg: Config,
@@ -228,7 +229,9 @@ async fn worker_svc(
     let mut db = match connection_cfg.connect_async().await {
         Ok(c) => c,
         Err(e) => {
-            tx_ack.send(e).await.unwrap();
+            if tx_ack.send(e).await.is_err() {
+                error!("worker-{id} failed to ack because main thread exited");
+            }
             return;
         }
     };
@@ -239,16 +242,22 @@ async fn worker_svc(
     {
         Ok(()) => {}
         Err(e) => {
-            tx_ack.send(e).await.unwrap();
+            if tx_ack.send(e).await.is_err() {
+                error!("worker-{id} failed to report error because main thread exited");
+            }
             return;
         }
     }
     // we're connected and ready to server
     drop(tx_ack);
     'wait: loop {
-        let task = match rx_task.recv().await.unwrap() {
-            WorkerTask::Exit => return,
-            WorkerTask::Task(t) => t,
+        let task = match rx_task.recv().await {
+            Err(_) => {
+                error!("worked-{id} is exiting because main thread exited");
+                return;
+            }
+            Ok(WorkerTask::Exit) => return,
+            Ok(WorkerTask::Task(t)) => t,
         };
         // received a task; ready to roll; wait for begin signal
         let permit = GLOBAL_START.read().await;
@@ -262,7 +271,7 @@ async fn worker_svc(
         let mut local_tail = 0u128;
         while (current != 0) && !exit_now {
             // prepare query
-            let (query, response) = task.generate(current as u64);
+            let query = task.generate_query(current as _);
             // execute timed
             let start = Instant::now();
             let ret = db.query(&query).await;
@@ -271,20 +280,32 @@ async fn worker_svc(
             let resp = match ret {
                 Ok(resp) => resp,
                 Err(e) => {
-                    tx_task_result
+                    gset_exit();
+                    if tx_task_result
                         .send(Err(FuryError::Worker(FuryWorkerError::DbError(e))))
                         .await
-                        .unwrap();
-                    gset_exit();
+                        .is_err()
+                    {
+                        error!(
+                            "worker-{id} failed to report worker error because main thread exited"
+                        );
+                        return;
+                    }
                     continue 'wait;
                 }
             };
-            if resp != response {
-                tx_task_result
+            if !task.verify_response(current as _, resp.clone()) {
+                gset_exit();
+                if tx_task_result
                     .send(Err(FuryError::Worker(FuryWorkerError::Mismatch)))
                     .await
-                    .unwrap();
-                gset_exit();
+                    .is_err()
+                {
+                    error!(
+                        "worker-{id} failed to report mismatch error because main thread exited"
+                    );
+                    return;
+                }
                 continue 'wait;
             }
             // update stats
@@ -306,7 +327,7 @@ async fn worker_svc(
             continue 'wait;
         }
         // good! send these results
-        tx_task_result
+        if tx_task_result
             .send(Ok(WorkerLocalStats::new(
                 local_start.unwrap(),
                 local_elapsed,
@@ -314,13 +335,17 @@ async fn worker_svc(
                 local_tail,
             )))
             .await
-            .unwrap();
+            .is_err()
+        {
+            error!("worker-{id} failed to send results because main thread exited");
+            return;
+        }
         drop(permit);
     }
 }
 
 impl Drop for Fury {
     fn drop(&mut self) {
-        self.tx_task.send(WorkerTask::Exit).unwrap();
+        let _ = self.tx_task.send(WorkerTask::Exit);
     }
 }
