@@ -43,10 +43,6 @@ jobs:
           brew install gnu-tar
           echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
         if: runner.os == 'macOS'
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
       - name: Setup environment
         run: |
           chmod +x ci/setvars.sh
@@ -93,10 +89,6 @@ jobs:
         run: |
           chmod +x ci/setvars.sh
           ci/setvars.sh
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
 
       - name: Restore cache
         uses: actions/cache@v3
@@ -133,10 +125,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
 
       - name: Setup environment
         run: |

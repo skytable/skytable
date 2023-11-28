@@ -34,7 +34,7 @@ pub use exchange::SQuery;
 
 use {
     self::{
-        exchange::{QueryTimeExchangeResult, QueryTimeExchangeState},
+        exchange::{QExchangeResult, QExchangeState},
         handshake::{
             AuthMode, CHandshake, DataExchangeMode, HandshakeResult, HandshakeState,
             HandshakeVersion, ProtocolError, ProtocolVersion, QueryMode,
@@ -140,42 +140,41 @@ pub(super) async fn query_loop<S: Socket>(
     // done handshaking
     con.write_all(b"H\x00\x00\x00").await?;
     con.flush().await?;
-    let mut exchg_state = QueryTimeExchangeState::default();
-    let mut expect_more = exchange::EXCHANGE_MIN_SIZE;
+    let mut state = QExchangeState::default();
     let mut cursor = 0;
     loop {
-        let read_many = con.read_buf(buf).await?;
-        if read_many == 0 {
+        if con.read_buf(buf).await? == 0 {
             if buf.is_empty() {
                 return Ok(QueryLoopResult::Fin);
             } else {
                 return Ok(QueryLoopResult::Rst);
             }
         }
-        if read_many < expect_more {
+        if !state.has_reached_target(buf) {
             // we haven't buffered sufficient bytes; keep working
             continue;
         }
-        let mut buffer = unsafe { BufferedScanner::new_with_cursor(&buf, cursor) };
-        let sq = match exchange::resume(&mut buffer, exchg_state) {
-            QueryTimeExchangeResult::ChangeState {
-                new_state,
-                expect_more: _more,
-            } => {
-                exchg_state = new_state;
-                expect_more = _more;
-                cursor = buffer.cursor();
+        let sq = match unsafe {
+            // UNSAFE(@ohsayan): we store the cursor from the last run
+            exchange::resume(buf, cursor, state)
+        } {
+            (_, QExchangeResult::SQCompleted(sq)) => sq,
+            (new_cursor, QExchangeResult::ChangeState(new_state)) => {
+                cursor = new_cursor;
+                state = new_state;
                 continue;
             }
-            QueryTimeExchangeResult::SQCompleted(sq) => sq,
-            QueryTimeExchangeResult::Error => {
+            (_, QExchangeResult::Error) => {
+                // respond with error
                 let [a, b] =
                     (QueryError::NetworkSubsystemCorruptedPacket.value_u8() as u16).to_le_bytes();
                 con.write_all(&[ResponseType::Error.value_u8(), a, b])
                     .await?;
                 con.flush().await?;
+                // reset buffer, cursor and state
                 buf.clear();
-                exchg_state = QueryTimeExchangeState::default();
+                cursor = 0;
+                state = QExchangeState::default();
                 continue;
             }
         };
@@ -198,8 +197,10 @@ pub(super) async fn query_loop<S: Socket>(
             }
         }
         con.flush().await?;
+        // reset buffer, cursor and state
         buf.clear();
-        exchg_state = QueryTimeExchangeState::default();
+        cursor = 0;
+        state = QExchangeState::default();
     }
 }
 

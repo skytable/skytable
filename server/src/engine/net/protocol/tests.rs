@@ -24,16 +24,45 @@
  *
 */
 
-use crate::engine::{
-    mem::BufferedScanner,
-    net::protocol::{
-        exchange::{self, create_simple_query, QueryTimeExchangeResult, QueryTimeExchangeState},
-        handshake::{
-            AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode,
-            HandshakeResult, HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
-        },
+use {
+    super::{
+        exchange::{self, scanint, LFTIntParseResult, QExchangeResult, QExchangeState},
+        SQuery,
     },
+    crate::{
+        engine::{
+            mem::BufferedScanner,
+            net::protocol::handshake::{
+                AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode,
+                HandshakeResult, HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
+            },
+        },
+        util::test_utils,
+    },
+    rand::Rng,
 };
+
+pub(super) fn create_simple_query<const N: usize>(query: &str, params: [&str; N]) -> Vec<u8> {
+    let mut buf = vec![];
+    let query_size_as_string = query.len().to_string();
+    let total_packet_size = query.len()
+        + params.iter().map(|l| l.len()).sum::<usize>()
+        + query_size_as_string.len()
+        + 1;
+    // segment 1
+    buf.push(b'S');
+    buf.extend(total_packet_size.to_string().as_bytes());
+    buf.push(b'\n');
+    // segment
+    buf.extend(query_size_as_string.as_bytes());
+    buf.push(b'\n');
+    // dataframe
+    buf.extend(query.as_bytes());
+    params
+        .into_iter()
+        .for_each(|param| buf.extend(param.as_bytes()));
+    buf
+}
 
 /*
     client handshake
@@ -155,110 +184,155 @@ fn parse_auth_with_state_updates() {
 
 const SQ: &str = "select * from myspace.mymodel where username = ?";
 
-#[test]
-fn qtdex_simple_query() {
-    let query = create_simple_query(SQ, ["sayan"]);
-    let mut fin = 52;
-    for i in 0..query.len() {
-        let mut scanner = BufferedScanner::new(&query[..i + 1]);
-        let result = exchange::resume(&mut scanner, Default::default());
-        match scanner.buffer_len() {
-            1..=3 => assert_eq!(result, exchange::STATE_READ_INITIAL),
-            4 => assert_eq!(
-                result,
-                QueryTimeExchangeResult::ChangeState {
-                    new_state: QueryTimeExchangeState::SQ2Meta2Partial {
-                        size_of_static_frame: 4,
-                        packet_size: 56,
-                        q_window_part: 0,
-                    },
-                    expect_more: 56,
-                }
-            ),
-            5 => assert_eq!(
-                result,
-                QueryTimeExchangeResult::ChangeState {
-                    new_state: QueryTimeExchangeState::SQ2Meta2Partial {
-                        size_of_static_frame: 4,
-                        packet_size: 56,
-                        q_window_part: 4,
-                    },
-                    expect_more: 55,
-                }
-            ),
-            6 => assert_eq!(
-                result,
-                QueryTimeExchangeResult::ChangeState {
-                    new_state: QueryTimeExchangeState::SQ2Meta2Partial {
-                        size_of_static_frame: 4,
-                        packet_size: 56,
-                        q_window_part: 48,
-                    },
-                    expect_more: 54,
-                }
-            ),
-            7 => assert_eq!(
-                result,
-                QueryTimeExchangeResult::ChangeState {
-                    new_state: QueryTimeExchangeState::SQ3FinalizeWaitingForBlock {
-                        dataframe_size: 53,
-                        q_window: 48,
-                    },
-                    expect_more: 53,
-                }
-            ),
-            8..=59 => {
-                assert_eq!(
-                    result,
-                    QueryTimeExchangeResult::ChangeState {
-                        new_state: QueryTimeExchangeState::SQ3FinalizeWaitingForBlock {
-                            dataframe_size: 53,
-                            q_window: 48
-                        },
-                        expect_more: fin,
+fn parse_staged<const N: usize>(
+    query: &str,
+    params: [&str; N],
+    eq: impl Fn(SQuery),
+    rng: &mut impl Rng,
+) {
+    let __query_buffer = create_simple_query(query, params);
+    for _ in 0..__query_buffer.len() {
+        let mut __read_total = 0;
+        let mut cursor = 0;
+        let mut state = QExchangeState::default();
+        loop {
+            let remaining = __query_buffer.len() - __read_total;
+            let read_this_time = {
+                let mut cnt = 0;
+                if remaining == 1 {
+                    1
+                } else {
+                    let mut last = test_utils::random_number(1, remaining, rng);
+                    loop {
+                        if cnt >= 10 {
+                            break last;
+                        }
+                        // if we're reading exact, try to keep it low
+                        if last == remaining {
+                            cnt += 1;
+                            last = test_utils::random_number(1, remaining, rng);
+                        } else {
+                            break last;
+                        }
                     }
-                );
-                fin -= 1;
-            }
-            60 => match result {
-                QueryTimeExchangeResult::SQCompleted(sq) => {
-                    assert_eq!(sq.query_str().unwrap(), SQ);
-                    assert_eq!(sq.params_str().unwrap(), "sayan");
                 }
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
+            };
+            __read_total += read_this_time;
+            let buffered = &__query_buffer[..__read_total];
+            if !state.has_reached_target(buffered) {
+                continue;
+            }
+            match unsafe { exchange::resume(buffered, cursor, state) } {
+                (new_cursor, QExchangeResult::ChangeState(new_state)) => {
+                    cursor = new_cursor;
+                    state = new_state;
+                    continue;
+                }
+                (_, QExchangeResult::SQCompleted(q)) => {
+                    eq(q);
+                    break;
+                }
+                _ => panic!(),
+            }
         }
     }
 }
 
 #[test]
-fn qtdex_simple_query_update_state() {
-    let query = create_simple_query(SQ, ["sayan"]);
-    let mut state = QueryTimeExchangeState::default();
-    let mut cursor = 0;
-    let mut expected = 0;
-    let mut rounds = 0;
-    loop {
-        rounds += 1;
-        let buf = &query[..expected + cursor];
-        let mut scanner = unsafe { BufferedScanner::new_with_cursor(buf, cursor) };
-        match exchange::resume(&mut scanner, state) {
-            QueryTimeExchangeResult::SQCompleted(sq) => {
-                assert_eq!(sq.query_str().unwrap(), SQ);
-                assert_eq!(sq.params_str().unwrap(), "sayan");
-                break;
-            }
-            QueryTimeExchangeResult::ChangeState {
-                new_state,
-                expect_more,
-            } => {
-                expected = expect_more;
-                state = new_state;
-            }
-            QueryTimeExchangeResult::Error => panic!("hit error!"),
-        }
-        cursor = scanner.cursor();
+fn staged_randomized() {
+    let mut rng = test_utils::rng();
+    parse_staged(
+        SQ,
+        ["sayan"],
+        |q| {
+            assert_eq!(q.query_str(), SQ);
+            assert_eq!(q.params_str(), "sayan");
+        },
+        &mut rng,
+    );
+}
+
+#[test]
+fn stages_manual() {
+    let query = create_simple_query("select * from mymodel where username = ?", ["sayan"]);
+    assert_eq!(
+        unsafe { exchange::resume(&query[..QExchangeState::MIN_READ], 0, Default::default()) },
+        (
+            5,
+            QExchangeResult::ChangeState(QExchangeState::new_test(
+                exchange::QExchangeStateInternal::PendingMeta2,
+                52,
+                48,
+                4
+            ))
+        )
+    );
+    assert_eq!(
+        unsafe {
+            exchange::resume(
+                &query[..QExchangeState::MIN_READ + 1],
+                0,
+                Default::default(),
+            )
+        },
+        (
+            6,
+            QExchangeResult::ChangeState(QExchangeState::new_test(
+                exchange::QExchangeStateInternal::PendingMeta2,
+                52,
+                48,
+                40
+            ))
+        )
+    );
+    assert_eq!(
+        unsafe {
+            exchange::resume(
+                &query[..QExchangeState::MIN_READ + 2],
+                0,
+                Default::default(),
+            )
+        },
+        (
+            7,
+            QExchangeResult::ChangeState(QExchangeState::new_test(
+                exchange::QExchangeStateInternal::PendingData,
+                52,
+                48,
+                40
+            ))
+        )
+    );
+    // the cursor should never change
+    for upper_bound in QExchangeState::MIN_READ + 2..query.len() {
+        assert_eq!(
+            unsafe { exchange::resume(&query[..upper_bound], 0, Default::default()) },
+            (
+                7,
+                QExchangeResult::ChangeState(QExchangeState::new_test(
+                    exchange::QExchangeStateInternal::PendingData,
+                    52,
+                    48,
+                    40
+                ))
+            )
+        );
     }
-    assert_eq!(rounds, 3);
+    match unsafe { exchange::resume(&query, 0, Default::default()) } {
+        (l, QExchangeResult::SQCompleted(q)) if l == query.len() => {
+            assert_eq!(q.query_str(), "select * from mymodel where username = ?");
+            assert_eq!(q.params_str(), "sayan");
+        }
+        e => panic!("expected end, got {e:?}"),
+    }
+}
+
+#[test]
+fn scanint_impl() {
+    let mut s = BufferedScanner::new(b"\n");
+    assert_eq!(scanint(&mut s, true, 0), LFTIntParseResult::Error);
+    let mut s = BufferedScanner::new(b"12");
+    assert_eq!(scanint(&mut s, true, 0), LFTIntParseResult::Partial(12));
+    let mut s = BufferedScanner::new(b"12\n");
+    assert_eq!(scanint(&mut s, true, 0), LFTIntParseResult::Value(12));
 }

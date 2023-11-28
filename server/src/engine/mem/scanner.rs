@@ -173,6 +173,7 @@ impl<'a, T> Scanner<'a, T> {
 }
 
 impl<'a> Scanner<'a, u8> {
+    #[cfg(test)]
     /// Attempt to parse the next byte
     pub fn try_next_byte(&mut self) -> Option<u8> {
         if self.eof() {

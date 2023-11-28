@@ -39,10 +39,6 @@ jobs:
           rustup update
           rustup default ${{ matrix.rust }}
         if: env.BUILD == 'true'
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
       - name: Run Tests
         run: make test
         env:

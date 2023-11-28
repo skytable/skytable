@@ -38,6 +38,10 @@ use {
     },
 };
 
+pub fn rng() -> ThreadRng {
+    rand::thread_rng()
+}
+
 pub fn shuffle_slice<T>(slice: &mut [T], rng: &mut impl Rng) {
     slice.shuffle(rng)
 }
@@ -73,8 +77,8 @@ pub fn random_bool(rng: &mut impl Rng) -> bool {
     rng.gen_bool(0.5)
 }
 /// Generate a random number within the given range
-pub fn random_number<T: SampleUniform + PartialOrd>(max: T, min: T, rng: &mut impl Rng) -> T {
-    rng.gen_range(max..min)
+pub fn random_number<T: SampleUniform + PartialOrd>(min: T, max: T, rng: &mut impl Rng) -> T {
+    rng.gen_range(min..max)
 }
 
 pub fn random_string(rng: &mut impl Rng, l: usize) -> String {
