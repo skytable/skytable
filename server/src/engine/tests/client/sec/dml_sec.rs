@@ -24,42 +24,66 @@
  *
 */
 
-use skytable::error::Error;
-use {crate::engine::error::QueryError, sky_macros::dbtest, skytable::query};
-
-const INVALID_SYNTAX_ERR: u16 = QueryError::QLInvalidSyntax.value_u8() as u16;
+use {
+    super::INVALID_SYNTAX_ERR,
+    sky_macros::dbtest,
+    skytable::{error::Error, query},
+};
 
 #[dbtest]
-fn ensure_create_space_end_of_tokens() {
-    let mut con = db!();
+fn insert_ensure_end_of_tokens() {
+    let mut db = db!();
     assert_err_eq!(
-        con.query_parse::<()>(&query!("create space myspace with {} this_should_fail")),
+        db.query_parse::<()>(&query!(
+            "insert into myspace.mymodel(?, ?) blah",
+            "username",
+            "password"
+        )),
         Error::ServerError(INVALID_SYNTAX_ERR)
     );
     assert_err_eq!(
-        con.query_parse::<()>(&query!("create space myspace this_should_fail")),
+        db.query_parse::<()>(&query!(
+            "insert into myspace.mymodel { username: ?, password: ? } blah",
+            "username",
+            "password"
+        )),
         Error::ServerError(INVALID_SYNTAX_ERR)
     );
 }
 
 #[dbtest]
-fn ensure_alter_space_end_of_tokens() {
-    let mut con = db!();
+fn select_ensure_end_of_tokens() {
+    let mut db = db!();
     assert_err_eq!(
-        con.query_parse::<()>(&query!("alter space myspace with {} this_should_fail")),
+        db.query_parse::<()>(&query!(
+            "select * from myspace.mymodel where username = ? blah",
+            "username",
+        )),
         Error::ServerError(INVALID_SYNTAX_ERR)
-    );
+    )
 }
 
 #[dbtest]
-fn ensure_drop_space_end_of_tokens() {
-    let mut con = db!();
+fn update_ensure_end_of_tokens() {
+    let mut db = db!();
     assert_err_eq!(
-        con.query_parse::<()>(&query!("drop space myspace this_should_fail")),
+        db.query_parse::<()>(&query!(
+            "update myspace.mymodel set counter += ? where username = ? blah",
+            1u64,
+            "username",
+        )),
         Error::ServerError(INVALID_SYNTAX_ERR)
-    );
+    )
+}
+
+#[dbtest]
+fn delete_ensure_end_of_tokens() {
+    let mut db = db!();
     assert_err_eq!(
-        con.query_parse::<()>(&query!("drop space myspace force this_should_fail")),
+        db.query_parse::<()>(&query!(
+            "delete from myspace.mymodel where username = ? blah",
+            "username",
+        )),
         Error::ServerError(INVALID_SYNTAX_ERR)
-    );
+    )
 }

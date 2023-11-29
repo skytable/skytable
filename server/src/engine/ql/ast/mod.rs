@@ -39,7 +39,7 @@ use {
             data::{cell::Datacell, lit::Lit},
             error::{QueryError, QueryResult},
         },
-        util::MaybeInit,
+        util::{compiler, MaybeInit},
     },
 };
 
@@ -317,13 +317,17 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         self.round_cursor_up(0)
     }
     pub fn try_statement(&mut self) -> QueryResult<KeywordStmt> {
-        match self.fw_read() {
-            Token::Keyword(Keyword::Statement(stmt)) => Ok(*stmt),
-            _ => Err(QueryError::QLExpectedStatement),
+        if compiler::unlikely(self.exhausted()) {
+            compiler::cold_call(|| Err(QueryError::QLExpectedStatement))
+        } else {
+            match self.fw_read() {
+                Token::Keyword(Keyword::Statement(stmt)) => Ok(*stmt),
+                _ => Err(QueryError::QLExpectedStatement),
+            }
         }
     }
     pub fn ensure_minimum_for_blocking_stmt(&self) -> QueryResult<()> {
-        if self.exhausted() {
+        if self.remaining() < 2 {
             return Err(QueryError::QLExpectedStatement);
         } else {
             Ok(())

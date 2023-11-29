@@ -24,30 +24,31 @@
  *
 */
 
-macro_rules! assert_err_eq {
-    ($me:expr, $target:pat) => {
-        match ::core::result::Result::unwrap_err($me) {
-            $target => {}
-            other => panic!(
-                "expected error `{}` but got {:?} at {}:{}",
-                stringify!($target),
-                other,
-                file!(),
-                line!()
-            ),
-        }
-    };
-    ($me:expr, $target:pat, $($arg:tt)+) => {
-        match ::core::result::Result::expect_err($me, &format!($($arg)*)) {
-            $target => {}
-            other => panic!(
-                "expected error `{}` but got {:?} at {}:{}; {}",
-                stringify!($target),
-                other,
-                file!(),
-                line!(),
-                $($arg)*
-            ),
-        }
+mod dcl_sec;
+mod ddl_sec;
+mod dml_sec;
+
+use {
+    crate::engine::error::QueryError,
+    sky_macros::dbtest,
+    skytable::{error::Error, query},
+};
+
+const INVALID_SYNTAX_ERR: u16 = QueryError::QLInvalidSyntax.value_u8() as u16;
+const EXPECTED_STATEMENT_ERR: u16 = QueryError::QLExpectedStatement.value_u8() as u16;
+const UNKNOWN_STMT_ERR: u16 = QueryError::QLUnknownStatement.value_u8() as u16;
+
+#[dbtest]
+fn deny_unknown_tokens() {
+    let mut db = db!();
+    for token in [
+        "model", "space", "where", "force", "into", "from", "with", "set", "add", "remove", "*",
+        ",", "",
+    ] {
+        assert_err_eq!(
+            db.query_parse::<()>(&query!(token)),
+            Error::ServerError(EXPECTED_STATEMENT_ERR),
+            "{token}",
+        );
     }
 }
