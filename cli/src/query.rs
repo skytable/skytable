@@ -75,6 +75,13 @@ pub struct Parameterizer {
     query: Vec<u8>,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ExecKind {
+    Standard(Query),
+    UseSpace(Query, String),
+    UseNull(Query),
+}
+
 impl Parameterizer {
     pub fn new(q: String) -> Self {
         Self {
@@ -84,7 +91,7 @@ impl Parameterizer {
             query: vec![],
         }
     }
-    pub fn parameterize(mut self) -> CliResult<Query> {
+    pub fn parameterize(mut self) -> CliResult<ExecKind> {
         while self.not_eof() {
             match self.buf[self.i] {
                 b if b.is_ascii_alphabetic() || b == b'_' => self.read_ident(),
@@ -111,7 +118,22 @@ impl Parameterizer {
                 self.params.into_iter().for_each(|p| {
                     q.push_param(p);
                 });
-                Ok(q)
+                Ok(if qstr.eq_ignore_ascii_case("use null") {
+                    ExecKind::UseNull(q)
+                } else {
+                    let mut splits = qstr.split_ascii_whitespace();
+                    let tok_use = splits.next();
+                    let tok_name = splits.next();
+                    match (tok_use, tok_name) {
+                        (Some(tok_use), Some(tok_name))
+                            if tok_use.eq_ignore_ascii_case("use")
+                                && !tok_name.eq_ignore_ascii_case("$current") =>
+                        {
+                            ExecKind::UseSpace(q, tok_name.into())
+                        }
+                        _ => ExecKind::Standard(q),
+                    }
+                })
             }
             Err(_) => Err(CliError::QueryError("query is not valid UTF-8".into())),
         }

@@ -24,6 +24,8 @@
  *
 */
 
+use crate::query::ExecKind;
+
 use {
     crate::{
         args::{ClientConfig, ClientConfigKind},
@@ -91,8 +93,9 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
         Ok(e) => e,
         Err(e) => fatal!("error: failed to init REPL. {e}"),
     };
+    let mut prompt = "> ".to_owned();
     loop {
-        match editor.readline("> ") {
+        match editor.readline(&prompt) {
             Ok(line) => match line.as_str() {
                 "!help" => println!("{TXT_WELCOME}"),
                 "exit" => break,
@@ -102,7 +105,25 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
                         continue;
                     }
                     match query::Parameterizer::new(line).parameterize() {
-                        Ok(q) => resp::format_response(con.execute_query(q)?)?,
+                        Ok(q) => {
+                            let mut new_prompt = None;
+                            let q = match q {
+                                ExecKind::Standard(q) => q,
+                                ExecKind::UseNull(q) => {
+                                    new_prompt = Some("> ".into());
+                                    q
+                                }
+                                ExecKind::UseSpace(q, space) => {
+                                    new_prompt = Some(format!("{space}> "));
+                                    q
+                                }
+                            };
+                            if resp::format_response(con.execute_query(q)?)? {
+                                if let Some(pr) = new_prompt {
+                                    prompt = pr;
+                                }
+                            }
+                        }
                         Err(e) => match e {
                             CliError::QueryError(e) => {
                                 eprintln!("[skysh error]: bad query. {e}");

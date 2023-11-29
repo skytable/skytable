@@ -34,10 +34,13 @@ use {
     std::io::{self, Write},
 };
 
-pub fn format_response(resp: Response) -> CliResult<()> {
+pub fn format_response(resp: Response) -> CliResult<bool> {
     match resp {
         Response::Empty => print_cyan("(Okay)\n")?,
-        Response::Error(e) => print_red(&format!("(server error code: {e})\n"))?,
+        Response::Error(e) => {
+            print_red(&format!("(server error code: {e})\n"))?;
+            return Ok(false);
+        }
         Response::Value(v) => {
             print_value(v)?;
             println!();
@@ -47,7 +50,7 @@ pub fn format_response(resp: Response) -> CliResult<()> {
             println!();
         }
     };
-    Ok(())
+    Ok(true)
 }
 
 fn print_row(r: Row) -> CliResult<()> {

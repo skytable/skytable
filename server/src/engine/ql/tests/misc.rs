@@ -73,3 +73,13 @@ fn use_null() {
     let mut state = State::new_inplace(&t[1..]);
     assert_eq!(Use::test_parse_from_state(&mut state).unwrap(), Use::Null);
 }
+
+#[test]
+fn use_current() {
+    let t = lex_insecure(b"use $current").unwrap();
+    let mut state = State::new_inplace(&t[1..]);
+    assert_eq!(
+        Use::test_parse_from_state(&mut state).unwrap(),
+        Use::RefreshCurrent
+    );
+}

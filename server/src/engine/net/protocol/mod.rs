@@ -113,6 +113,7 @@ impl ClientLocalState {
 #[derive(Debug, PartialEq)]
 pub enum Response {
     Empty,
+    Null,
     Serialized {
         ty: ResponseType,
         size: usize,
@@ -190,6 +191,7 @@ pub(super) async fn query_loop<S: Socket>(
                 con.write_u8(b'\n').await?;
                 con.write_all(&data).await?;
             }
+            Ok(Response::Null) => con.write_u8(ResponseType::Null.value_u8()).await?,
             Err(e) => {
                 let [a, b] = (e.value_u8() as u16).to_le_bytes();
                 con.write_all(&[ResponseType::Error.value_u8(), a, b])

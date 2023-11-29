@@ -28,7 +28,7 @@ use crate::engine::{
     core::{dml, model::Model, space::Space},
     error::{QueryError, QueryResult},
     fractal::{Global, GlobalInstanceLike},
-    net::protocol::{ClientLocalState, Response, SQuery},
+    net::protocol::{ClientLocalState, Response, ResponseType, SQuery},
     ql::{
         ast::{traits::ASTNode, InplaceData, State},
         ddl::Use,
@@ -162,6 +162,20 @@ fn cstate_use(
             }
             cstate.set_cs(new_space.boxed_str());
         }
+        Use::RefreshCurrent => match cstate.get_cs() {
+            None => return Ok(Response::Null),
+            Some(space) => {
+                if !global.namespace().contains_space(space) {
+                    cstate.unset_cs();
+                    return Err(QueryError::QExecObjectNotFound);
+                }
+                return Ok(Response::Serialized {
+                    ty: ResponseType::String,
+                    size: space.len(),
+                    data: space.to_owned().into_bytes(),
+                });
+            }
+        },
     }
     Ok(Response::Empty)
 }

@@ -41,24 +41,34 @@ use {
 #[derive(Debug, PartialEq)]
 pub enum Use<'a> {
     Space(Ident<'a>),
+    RefreshCurrent,
     Null,
 }
 
 impl<'a> ASTNode<'a> for Use<'a> {
     const MUST_USE_FULL_TOKEN_RANGE: bool = true;
-    const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = true;
+    const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
     fn __base_impl_parse_from_state<Qd: super::ast::QueryData<'a>>(
         state: &mut super::ast::State<'a, Qd>,
     ) -> crate::engine::error::QueryResult<Self> {
         /*
             should have either an ident or null
         */
-        if state.remaining() != 1 {
+        if state.exhausted() | (state.remaining() > 2) {
             return Err(QueryError::QLInvalidSyntax);
         }
         Ok(match state.fw_read() {
+            Token::Ident(new_space) => Self::Space(*new_space),
             Token![null] => Self::Null,
-            Token::Ident(id) => Self::Space(id.clone()),
+            Token![$] => {
+                if state.exhausted() {
+                    return Err(QueryError::QLInvalidSyntax);
+                }
+                match state.fw_read() {
+                    Token::Ident(id) if id.eq_ignore_ascii_case("current") => Self::RefreshCurrent,
+                    _ => return Err(QueryError::QLInvalidSyntax),
+                }
+            }
             _ => return Err(QueryError::QLInvalidSyntax),
         })
     }
