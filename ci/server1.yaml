@@ -3,7 +3,7 @@ system:
 
 auth:
   plugin: pwd
-  root_pass: password12345678
+  root_pass: mypassword12345678
 
 endpoints:
   insecure:

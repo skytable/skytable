@@ -31,12 +31,17 @@
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
-/// The size of the read buffer in bytes
-pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 /// The current version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The URL
 pub const URL: &str = "https://github.com/skytable/skytable";
+
+pub mod test_utils {
+    pub const DEFAULT_USER_NAME: &str = "root";
+    pub const DEFAULT_USER_PASS: &str = "mypassword12345678";
+    pub const DEFAULT_HOST: &str = "127.0.0.1";
+    pub const DEFAULT_PORT: u16 = 2003;
+}
 
 use std::{
     collections::{hash_map::Entry, HashMap},

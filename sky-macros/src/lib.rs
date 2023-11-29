@@ -47,87 +47,15 @@ use {
     proc_macro::TokenStream,
     proc_macro2::TokenStream as TokenStream2,
     quote::quote,
-    syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Lit, Meta, NestedMeta},
+    syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Meta, NestedMeta},
 };
 
+mod dbtest;
 mod util;
 
-#[proc_macro]
-/// Get a compile time respcode/respstring array. For example, if you pass: "Unknown action",
-/// it will return: `!14\nUnknown Action\n`
-pub fn compiled_eresp_array(tokens: TokenStream) -> TokenStream {
-    _get_eresp_array(tokens, false)
-}
-
-#[proc_macro]
-/// Get a compile time respcode/respstring array. For example, if you pass: "Unknown action",
-/// it will return: `!14\n14\nUnknown Action\n`
-pub fn compiled_eresp_array_v1(tokens: TokenStream) -> TokenStream {
-    _get_eresp_array(tokens, true)
-}
-
-fn _get_eresp_array(tokens: TokenStream, sizeline: bool) -> TokenStream {
-    let payload_str = match syn::parse_macro_input!(tokens as Lit) {
-        Lit::Str(st) => st.value(),
-        _ => panic!("Expected a string literal"),
-    };
-    let mut processed = quote! {
-        b'!',
-    };
-    if sizeline {
-        let payload_len = payload_str.as_bytes().len();
-        let payload_len_str = payload_len.to_string();
-        let payload_len_bytes = payload_len_str.as_bytes();
-        for byte in payload_len_bytes {
-            processed = quote! {
-                #processed
-                #byte,
-            };
-        }
-        processed = quote! {
-            #processed
-            b'\n',
-        };
-    }
-    let payload_bytes = payload_str.as_bytes();
-    for byte in payload_bytes {
-        processed = quote! {
-            #processed
-            #byte,
-        }
-    }
-    processed = quote! {
-        #processed
-        b'\n',
-    };
-    processed = quote! {
-        [#processed]
-    };
-    processed.into()
-}
-
-#[proc_macro]
-/// Get a compile time respcode/respstring slice. For example, if you pass: "Unknown action",
-/// it will return: `!14\nUnknown Action\n`
-pub fn compiled_eresp_bytes(tokens: TokenStream) -> TokenStream {
-    let ret = compiled_eresp_array(tokens);
-    let ret = syn::parse_macro_input!(ret as syn::Expr);
-    quote! {
-        &#ret
-    }
-    .into()
-}
-
-#[proc_macro]
-/// Get a compile time respcode/respstring slice. For example, if you pass: "Unknown action",
-/// it will return: `!14\nUnknown Action\n`
-pub fn compiled_eresp_bytes_v1(tokens: TokenStream) -> TokenStream {
-    let ret = compiled_eresp_array_v1(tokens);
-    let ret = syn::parse_macro_input!(ret as syn::Expr);
-    quote! {
-        &#ret
-    }
-    .into()
+#[proc_macro_attribute]
+pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    dbtest::dbtest(attrs, item)
 }
 
 #[proc_macro_derive(Wrapper)]

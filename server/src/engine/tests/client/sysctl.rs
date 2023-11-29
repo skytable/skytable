@@ -1,5 +1,5 @@
 /*
- * Created on Sat Sep 23 2023
+ * Created on Wed Nov 29 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,5 +24,18 @@
  *
 */
 
-mod cfg;
-mod client;
+mod status {
+    use {sky_macros::dbtest, skytable::query};
+    #[dbtest]
+    fn check_status_root() {
+        let mut db = db!();
+        db.query_parse::<()>(&query!("sysctl report status"))
+            .unwrap();
+    }
+    #[dbtest(switch_user(username = "user1"))]
+    fn check_status_standard_user() {
+        let mut db = db!();
+        db.query_parse::<()>(&query!("sysctl report status"))
+            .unwrap();
+    }
+}

@@ -876,18 +876,18 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.66"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18fb31db3f9bddb2ea821cde30a9f70117e3f119938b5ee630b7403aa6e2ead9"
+checksum = "39278fbbf5fb4f646ce651690877f89d1c5811a3d4acb27700c1cb3cdb78fd3b"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "quote"
-version = "1.0.32"
+version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f3b39ccfb720540debaa0164757101c08ecb8d326b15358ce76a62c7e85965"
+checksum = "5267fca4496028628a95160fc423a33e8b2e6af8a5302579e322e4b520293cae"
 dependencies = [
  "proc-macro2",
 ]
@@ -1189,9 +1189,9 @@ dependencies = [
 name = "sky_macros"
 version = "0.8.0"
 dependencies = [
+ "libsky",
  "proc-macro2",
  "quote",
- "rand",
  "syn 1.0.109",
 ]
 
@@ -1214,6 +1214,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sky_macros",
+ "skytable",
  "tokio",
  "tokio-openssl",
  "uuid",
