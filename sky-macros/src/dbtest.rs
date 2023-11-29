@@ -87,6 +87,7 @@ enum TestStrategy {
     Standard,
     Relogin { username: String, password: String },
 }
+
 impl TestStrategy {
     fn is_relogin(&self) -> bool {
         matches!(self, TestStrategy::Relogin { .. })

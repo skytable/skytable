@@ -24,5 +24,7 @@
  *
 */
 
+#[macro_use]
+mod macros;
 mod cfg;
 mod client;

@@ -106,11 +106,11 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     }
     pub fn try_entity_ref(&mut self) -> Option<EntityIDRef<'a>> {
         let self_has_full = Self::_entity_signature_match_self_full(
-            &self.t[self.round_cursor()],
-            &self.t[self.round_cursor_up(1)],
-            &self.t[self.round_cursor_up(2)],
+            self.offset_current_r(0),
+            self.offset_current_r(1),
+            self.offset_current_r(2),
         );
-        let self_has_pre_full = self._entity_signature_match_cs(&self.t[self.round_cursor()]);
+        let self_has_pre_full = self._entity_signature_match_cs(self.offset_current_r(0));
         if self_has_full {
             unsafe {
                 // UNSAFE(@ohsayan): +branch condition
@@ -190,6 +190,10 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         &self.t[self.i..]
     }
     #[inline(always)]
+    pub fn offset_current_r(&self, offset: usize) -> &Token<'a> {
+        &self.t[self.round_cursor_up(offset)]
+    }
+    #[inline(always)]
     /// Returns a count of the number of consumable tokens remaining
     pub fn remaining(&self) -> usize {
         self.t.len() - self.i
@@ -267,16 +271,16 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     }
     #[inline(always)]
     pub(crate) fn cursor_has_ident_rounded(&self) -> bool {
-        self.t[self.round_cursor()].is_ident() && self.not_exhausted()
+        self.offset_current_r(0).is_ident() && self.not_exhausted()
     }
     #[inline(always)]
     /// Check if the current token stream matches the signature of an arity(0) fn; rounded
     ///
     /// NOTE: Consider using a direct comparison without rounding
     pub(crate) fn cursor_signature_match_fn_arity0_rounded(&self) -> bool {
-        (self.t[self.round_cursor()].is_ident())
-            & (self.t[self.round_cursor_up(1)] == Token![() open])
-            & (self.t[self.round_cursor_up(2)] == Token![() close])
+        (self.offset_current_r(0).is_ident())
+            & (Token![() open].eq(self.offset_current_r(1)))
+            & (Token![() close].eq(self.offset_current_r(2)))
             & self.has_remaining(3)
     }
     #[inline(always)]
@@ -319,7 +323,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         }
     }
     pub fn ensure_minimum_for_blocking_stmt(&self) -> QueryResult<()> {
-        if self.remaining() < 2 {
+        if self.exhausted() {
             return Err(QueryError::QLExpectedStatement);
         } else {
             Ok(())

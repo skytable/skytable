@@ -39,13 +39,19 @@ use {
 
 /// A lazily intialized, or _call by need_ value
 #[derive(Debug)]
-pub struct Lazy<T, F> {
+pub struct Lazy<T, F = fn() -> T> {
     /// the value (null at first)
     value: AtomicPtr<T>,
     /// the function that will init the value
     init_func: F,
     /// is some thread trying to initialize the value
     init_state: AtomicBool,
+}
+
+impl<T: Default> Default for Lazy<T> {
+    fn default() -> Self {
+        Self::new(T::default)
+    }
 }
 
 impl<T, F> Lazy<T, F> {

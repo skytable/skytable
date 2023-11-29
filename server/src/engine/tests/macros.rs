@@ -24,5 +24,17 @@
  *
 */
 
-mod ddl;
-mod sysctl;
+macro_rules! assert_err_eq {
+    ($me:expr, $target:pat) => {
+        match ::core::result::Result::unwrap_err($me) {
+            $target => {}
+            other => panic!(
+                "expected error `{}` but got {:?} at {}:{}",
+                stringify!($target),
+                other,
+                file!(),
+                line!()
+            ),
+        }
+    };
+}
