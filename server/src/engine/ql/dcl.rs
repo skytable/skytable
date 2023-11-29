@@ -46,6 +46,12 @@ pub enum SysctlCommand<'a> {
     ReportStatus,
 }
 
+impl<'a> SysctlCommand<'a> {
+    pub fn needs_root(&self) -> bool {
+        !matches!(self, Self::ReportStatus)
+    }
+}
+
 impl<'a> traits::ASTNode<'a> for SysctlCommand<'a> {
     const MUST_USE_FULL_TOKEN_RANGE: bool = true;
     const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;

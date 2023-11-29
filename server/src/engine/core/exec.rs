@@ -78,8 +78,8 @@ async fn run_blocking_stmt(
     mut state: State<'_, InplaceData>,
     stmt: KeywordStmt,
 ) -> Result<Response, QueryError> {
-    if !cstate.is_root() {
-        // all the actions here need root permission
+    if !(cstate.is_root() | (stmt == KeywordStmt::Sysctl)) {
+        // all the actions here need root permission (but we do an exception for sysctl which allows status to be called by anyone)
         return Err(QueryError::SysPermissionDenied);
     }
     state.ensure_minimum_for_blocking_stmt()?;

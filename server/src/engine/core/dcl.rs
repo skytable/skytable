@@ -39,6 +39,9 @@ pub fn exec<G: GlobalInstanceLike>(
     current_user: &ClientLocalState,
     cmd: SysctlCommand,
 ) -> QueryResult<()> {
+    if cmd.needs_root() & !current_user.is_root() {
+        return Err(QueryError::SysPermissionDenied);
+    }
     match cmd {
         SysctlCommand::CreateUser(new) => create_user(&g, new),
         SysctlCommand::DropUser(drop) => drop_user(&g, current_user, drop),
