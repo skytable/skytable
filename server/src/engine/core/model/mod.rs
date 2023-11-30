@@ -335,7 +335,7 @@ impl Model {
                 .get(&EntityIDRef::new(&space_name, &model_name))
                 .unwrap();
             // the model must be empty for us to clean it up! (NB: consistent view + EX)
-            if model.primary_index().count() != 0 {
+            if (model.primary_index().count() != 0) & !(stmt.force) {
                 // nope, we can't drop this
                 return Err(QueryError::QExecDdlNotEmpty);
             }

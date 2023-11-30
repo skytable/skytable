@@ -33,7 +33,7 @@ fn inspect_global_as_root_returns_user_info() {
     assert!(inspect.contains("\"users\":"));
 }
 
-#[dbtest]
+#[dbtest(switch_user(username = "sneaking_user_info"))]
 fn inspect_global_as_std_user_does_not_return_user_info() {
     let mut db = db!();
     let inspect: String = db.query_parse(&query!("inspect global")).unwrap();

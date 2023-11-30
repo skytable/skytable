@@ -28,7 +28,7 @@ use {
     super::GNSEvent,
     crate::{
         engine::{
-            core::{space::Space, GlobalNS},
+            core::{space::Space, EntityIDRef, GlobalNS},
             data::DictGeneric,
             error::{RuntimeResult, TransactionError},
             idx::STIndex,
@@ -278,10 +278,17 @@ impl<'a> GNSEvent for DropSpaceTxn<'a> {
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
         let mut wgns = gns.idx().write();
+        let mut wmodel = gns.idx_models().write();
         match wgns.entry(name) {
             std::collections::hash_map::Entry::Occupied(oe) => {
                 if oe.get().get_uuid() == uuid {
-                    // NB(@ohsayan): we do not need to remove models here since they must have been already removed for this query to have actually executed
+                    for model in oe.get().models() {
+                        let id: EntityIDRef<'static> = unsafe {
+                            // UNSAFE(@ohsayan): I really need a pack of what the borrow checker has been reveling on
+                            core::mem::transmute(EntityIDRef::new(oe.key(), &model))
+                        };
+                        let _ = wmodel.st_delete(&id);
+                    }
                     oe.remove_entry();
                     Ok(())
                 } else {

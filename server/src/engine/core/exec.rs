@@ -105,12 +105,13 @@ async fn run_blocking_stmt(
     let alter = stmt == KeywordStmt::Alter;
     let drop = stmt == KeywordStmt::Drop;
     let last_id = b.is_ident();
+    let last_allow = Token![allow].eq(b);
     let c_s = (create & Token![space].eq(a) & last_id) as u8 * 2;
     let c_m = (create & Token![model].eq(a) & last_id) as u8 * 3;
     let a_s = (alter & Token![space].eq(a) & last_id) as u8 * 4;
     let a_m = (alter & Token![model].eq(a) & last_id) as u8 * 5;
-    let d_s = (drop & Token![space].eq(a) & last_id) as u8 * 6;
-    let d_m = (drop & Token![model].eq(a) & last_id) as u8 * 7;
+    let d_s = (drop & Token![space].eq(a) & (last_id | last_allow)) as u8 * 6;
+    let d_m = (drop & Token![model].eq(a) & (last_id | last_allow)) as u8 * 7;
     let fc = sysctl as u8 | c_s | c_m | a_s | a_m | d_s | d_m;
     state.cursor_ahead_if(!sysctl);
     static BLK_EXEC: [fn(

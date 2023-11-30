@@ -150,8 +150,8 @@ impl<'a> Borrow<EntityIDRef<'a>> for EntityID {
     }
 }
 
-impl From<(&'static str, &'static str)> for EntityIDRef<'static> {
-    fn from((s, e): (&'static str, &'static str)) -> Self {
+impl<'a> From<(&'a str, &'a str)> for EntityIDRef<'a> {
+    fn from((s, e): (&'a str, &'a str)) -> Self {
         Self::new(s, e)
     }
 }

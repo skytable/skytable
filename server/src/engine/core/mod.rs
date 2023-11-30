@@ -69,6 +69,14 @@ impl GlobalNS {
             idx: RWLIdx::default(),
         }
     }
+    pub fn ddl_with_all_mut<T>(
+        &self,
+        f: impl FnOnce(&mut HashMap<Box<str>, Space>, &mut HashMap<EntityID, Model>) -> T,
+    ) -> T {
+        let mut spaces = self.idx.write();
+        let mut models = self.idx_mdl.write();
+        f(&mut spaces, &mut models)
+    }
     pub fn ddl_with_spaces_write<T>(
         &self,
         f: impl FnOnce(&mut HashMap<Box<str>, Space>) -> T,

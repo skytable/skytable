@@ -29,7 +29,7 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     ql::{
         ast::{QueryData, State},
-        lex::{Ident, Token},
+        lex::Ident,
     },
 };
 
@@ -47,22 +47,40 @@ impl<'a> DropSpace<'a> {
         Self { space, force }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<DropSpace<'a>> {
+        /*
+            either drop space <myspace> OR drop space allow not empty <myspace>
+        */
         if state.cursor_is_ident() {
             let ident = state.fw_read();
-            // should we force drop?
-            let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
-            state.cursor_ahead_if(force);
             // either `force` or nothing
             return Ok(DropSpace::new(
                 unsafe {
                     // UNSAFE(@ohsayan): Safe because the if predicate ensures that tok[0] (relative) is indeed an ident
                     ident.uck_read_ident()
                 },
-                force,
+                false,
             ));
+        } else {
+            if ddl_allow_non_empty(state) {
+                state.cursor_ahead_by(3);
+                let space_name = unsafe {
+                    // UNSAFE(@ohsayan): verified in branch
+                    state.fw_read().uck_read_ident()
+                };
+                return Ok(DropSpace::new(space_name, true));
+            }
         }
         Err(QueryError::QLInvalidSyntax)
     }
+}
+
+#[inline(always)]
+fn ddl_allow_non_empty<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> bool {
+    let tok_allow = Token![allow].eq(state.offset_current_r(0));
+    let tok_not = Token![not].eq(state.offset_current_r(1));
+    let tok_empty = state.offset_current_r(2).ident_eq("empty");
+    let name = state.offset_current_r(3).is_ident();
+    (tok_allow & tok_not & tok_empty & name) & (state.remaining() >= 4)
 }
 
 #[derive(Debug, PartialEq)]
@@ -77,10 +95,17 @@ impl<'a> DropModel<'a> {
         Self { entity, force }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-        let e = state.try_entity_ref_result()?;
-        let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
-        state.cursor_ahead_if(force);
-        Ok(DropModel::new(e, force))
+        if state.cursor_is_ident() {
+            let e = state.try_entity_ref_result()?;
+            return Ok(DropModel::new(e, false));
+        } else {
+            if ddl_allow_non_empty(state) {
+                state.cursor_ahead_by(3); // allow not empty
+                let e = state.try_entity_ref_result()?;
+                return Ok(DropModel::new(e, true));
+            }
+        }
+        Err(QueryError::QLInvalidSyntax)
     }
 }
 

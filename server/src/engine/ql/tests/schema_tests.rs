@@ -1124,7 +1124,7 @@ mod ddl_other_query_tests {
     }
     #[test]
     fn drop_space_force() {
-        let src = lex_insecure(br"drop space myspace force").unwrap();
+        let src = lex_insecure(br"drop space allow not empty myspace").unwrap();
         assert_eq!(
             parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
             DropSpace::new(Ident::from("myspace"), true)
@@ -1140,7 +1140,7 @@ mod ddl_other_query_tests {
     }
     #[test]
     fn drop_model_force() {
-        let src = lex_insecure(br"drop model mymodel force").unwrap();
+        let src = lex_insecure(br"drop model allow not empty mymodel").unwrap();
         assert_eq!(
             parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
             DropModel::new(("apps", "mymodel").into(), true)

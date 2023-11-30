@@ -317,6 +317,15 @@ macro_rules! Token {
     (null) => {
         __kw_misc!(Null)
     };
+    (not) => {
+        __kw_misc!(Not)
+    };
+    (return) => {
+        __kw_misc!(Return)
+    };
+    (allow) => {
+        __kw_misc!(Allow)
+    };
 }
 
 macro_rules! union {

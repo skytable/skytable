@@ -24,6 +24,8 @@
  *
 */
 
+use super::EntityIDRef;
+
 use {
     crate::engine::{
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
@@ -218,33 +220,60 @@ impl Space {
         global: &G,
         DropSpace {
             space: space_name,
-            force: _,
+            force,
         }: DropSpace,
     ) -> QueryResult<()> {
-        // TODO(@ohsayan): force remove option
-        // TODO(@ohsayan): should a drop space block the entire global table?
-        global.namespace().ddl_with_spaces_write(|spaces| {
-            let Some(space) = spaces.get(space_name.as_str()) else {
-                return Err(QueryError::QExecObjectNotFound);
-            };
-            if !space.models.is_empty() {
-                // nonempty, we can't do anything
-                return Err(QueryError::QExecDdlNotEmpty);
-            }
-            // okay, it's empty; good riddance
-            if G::FS_IS_NON_NULL {
-                // prepare txn
-                let txn = gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
-                // commit txn
-                global.namespace_txn_driver().lock().try_commit(txn)?;
-                // request cleanup
-                global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
-                    &space_name,
-                    space.get_uuid(),
-                )));
-            }
-            let _ = spaces.st_delete(space_name.as_str());
-            Ok(())
-        })
+        if force {
+            global.namespace().ddl_with_all_mut(|spaces, models| {
+                let Some(space) = spaces.remove(space_name.as_str()) else {
+                    return Err(QueryError::QExecObjectNotFound);
+                };
+                // commit drop
+                if G::FS_IS_NON_NULL {
+                    // prepare txn
+                    let txn =
+                        gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
+                    // commit txn
+                    global.namespace_txn_driver().lock().try_commit(txn)?;
+                    // request cleanup
+                    global.taskmgr_post_standard_priority(Task::new(
+                        GenericTask::delete_space_dir(&space_name, space.get_uuid()),
+                    ));
+                }
+                for model in space.models.into_iter() {
+                    let e: EntityIDRef<'static> = unsafe {
+                        // UNSAFE(@ohsayan): I want to try what the borrow checker has been trying
+                        core::mem::transmute(EntityIDRef::new(space_name.as_str(), &model))
+                    };
+                    let _ = models.st_delete(&e);
+                }
+                let _ = spaces.st_delete(space_name.as_str());
+                Ok(())
+            })
+        } else {
+            global.namespace().ddl_with_spaces_write(|spaces| {
+                let Some(space) = spaces.get(space_name.as_str()) else {
+                    return Err(QueryError::QExecObjectNotFound);
+                };
+                if !space.models.is_empty() {
+                    // nonempty, we can't do anything
+                    return Err(QueryError::QExecDdlNotEmpty);
+                }
+                // okay, it's empty; good riddance
+                if G::FS_IS_NON_NULL {
+                    // prepare txn
+                    let txn =
+                        gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
+                    // commit txn
+                    global.namespace_txn_driver().lock().try_commit(txn)?;
+                    // request cleanup
+                    global.taskmgr_post_standard_priority(Task::new(
+                        GenericTask::delete_space_dir(&space_name, space.get_uuid()),
+                    ));
+                }
+                let _ = spaces.st_delete(space_name.as_str());
+                Ok(())
+            })
+        }
     }
 }

@@ -160,8 +160,7 @@ pub fn run(bench: BenchConfig) -> error::BenchResult<()> {
 
 fn cleanup(mut main_thread_db: Connection) -> Result<(), error::BenchError> {
     trace!("dropping space and table");
-    main_thread_db.query_parse::<()>(&query!("drop model bench.bench"))?;
-    main_thread_db.query_parse::<()>(&query!("drop space bench"))?;
+    main_thread_db.query_parse::<()>(&query!("drop space allow not empty bench"))?;
     Ok(())
 }
 

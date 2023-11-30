@@ -370,6 +370,7 @@ flattened_lut! {
                 Remove,
                 Transform,
                 Set,
+                Return,
                 // sort related
                 Order,
                 Sort,
@@ -397,6 +398,7 @@ flattened_lut! {
                 Else,
                 Where,
                 When,
+                Allow,
                 // value
                 Auto,
                 Default,
@@ -421,6 +423,7 @@ flattened_lut! {
 }
 
 impl Keyword {
+    #[inline(always)]
     pub fn get(k: &[u8]) -> Option<Self> {
         if (k.len() > Self::SIZE_MAX) | (k.len() < Self::SIZE_MIN) {
             None
@@ -429,13 +432,13 @@ impl Keyword {
         }
     }
     fn compute(key: &[u8]) -> Option<Self> {
-        static G: [u8; 64] = [
-            0, 27, 13, 56, 18, 0, 26, 30, 33, 56, 20, 41, 56, 39, 23, 34, 36, 23, 17, 40, 38, 45,
-            8, 25, 26, 24, 53, 59, 30, 14, 9, 60, 12, 29, 6, 47, 3, 38, 19, 5, 13, 51, 41, 34, 0,
-            22, 43, 13, 46, 33, 11, 12, 36, 58, 40, 0, 36, 2, 19, 49, 53, 23, 55, 0,
+        static G: [u8; 69] = [
+            0, 0, 9, 64, 16, 43, 7, 49, 24, 8, 41, 37, 19, 66, 18, 0, 17, 0, 12, 63, 34, 56, 3, 24,
+            55, 14, 0, 67, 7, 0, 39, 60, 56, 0, 51, 23, 31, 19, 30, 12, 10, 58, 20, 39, 32, 0, 6,
+            30, 26, 58, 52, 62, 39, 27, 24, 9, 4, 21, 24, 68, 10, 38, 40, 21, 62, 27, 53, 27, 44,
         ];
-        static M1: [u8; 11] = *b"RtEMxHylmiZ";
-        static M2: [u8; 11] = *b"F1buDOZ2nzz";
+        static M1: [u8; 11] = *b"D8N5FwqrxdA";
+        static M2: [u8; 11] = *b"FsIPJv9hsXx";
         let h1 = Self::_sum(key, M1) % G.len();
         let h2 = Self::_sum(key, M2) % G.len();
         let h = (G[h1] + G[h2]) as usize % G.len();
