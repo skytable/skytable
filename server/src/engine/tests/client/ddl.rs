@@ -1,5 +1,5 @@
 /*
- * Created on Wed Nov 29 2023
+ * Created on Thu Nov 30 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,6 +24,18 @@
  *
 */
 
-mod ddl;
-mod sec;
-mod sysctl;
+use {sky_macros::dbtest, skytable::query};
+
+#[dbtest]
+fn inspect_global_as_root_returns_user_info() {
+    let mut db = db!();
+    let inspect: String = db.query_parse(&query!("inspect global")).unwrap();
+    assert!(inspect.contains("\"users\":"));
+}
+
+#[dbtest]
+fn inspect_global_as_std_user_does_not_return_user_info() {
+    let mut db = db!();
+    let inspect: String = db.query_parse(&query!("inspect global")).unwrap();
+    assert!(!inspect.contains("\"users\":"));
+}

@@ -107,6 +107,7 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
                     match query::Parameterizer::new(line).parameterize() {
                         Ok(q) => {
                             let mut new_prompt = None;
+                            let mut special = false;
                             let q = match q {
                                 ExecKind::Standard(q) => q,
                                 ExecKind::UseNull(q) => {
@@ -117,8 +118,12 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
                                     new_prompt = Some(format!("{space}> "));
                                     q
                                 }
+                                ExecKind::PrintSpecial(q) => {
+                                    special = true;
+                                    q
+                                }
                             };
-                            if resp::format_response(con.execute_query(q)?)? {
+                            if resp::format_response(con.execute_query(q)?, special) {
                                 if let Some(pr) = new_prompt {
                                     prompt = pr;
                                 }

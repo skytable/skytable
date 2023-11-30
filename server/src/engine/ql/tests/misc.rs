@@ -27,7 +27,7 @@
 use super::*;
 use crate::engine::ql::{
     ast::{traits::ASTNode, State},
-    ddl::Use,
+    ddl::{Inspect, Use},
 };
 
 /*
@@ -81,5 +81,35 @@ fn use_current() {
     assert_eq!(
         Use::test_parse_from_state(&mut state).unwrap(),
         Use::RefreshCurrent
+    );
+}
+
+#[test]
+fn inspect_global() {
+    let t = lex_insecure(b"inspect global").unwrap();
+    let mut state = State::new_inplace(&t[1..]);
+    assert_eq!(
+        Inspect::test_parse_from_state(&mut state).unwrap(),
+        Inspect::Global
+    );
+}
+
+#[test]
+fn inspect_space() {
+    let t = lex_insecure(b"inspect space myspace").unwrap();
+    let mut state = State::new_inplace(&t[1..]);
+    assert_eq!(
+        Inspect::test_parse_from_state(&mut state).unwrap(),
+        Inspect::Space("myspace".into())
+    );
+}
+
+#[test]
+fn inspect_model() {
+    let t = lex_insecure(b"inspect model myspace.mymodel").unwrap();
+    let mut state = State::new_inplace(&t[1..]);
+    assert_eq!(
+        Inspect::test_parse_from_state(&mut state).unwrap(),
+        Inspect::Model(("myspace", "mymodel").into())
     );
 }

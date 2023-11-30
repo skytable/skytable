@@ -34,7 +34,6 @@ use {
         storage::v1::{loader::SEInitState, RawFSInterface},
         txn::gns as gnstxn,
     },
-    parking_lot::RwLock,
     std::collections::HashSet,
 };
 
@@ -174,7 +173,7 @@ impl Space {
                 }
             }
             // update global state
-            let _ = spaces.st_insert(space_name, RwLock::new(space));
+            let _ = spaces.st_insert(space_name, space);
             Ok(())
         })
     }
@@ -228,7 +227,6 @@ impl Space {
             let Some(space) = spaces.get(space_name.as_str()) else {
                 return Err(QueryError::QExecObjectNotFound);
             };
-            let space = space.read();
             if !space.models.is_empty() {
                 // nonempty, we can't do anything
                 return Err(QueryError::QExecDdlNotEmpty);
@@ -245,8 +243,6 @@ impl Space {
                     space.get_uuid(),
                 )));
             }
-            // good, we can get rid of this thing
-            drop(space);
             let _ = spaces.st_delete(space_name.as_str());
             Ok(())
         })

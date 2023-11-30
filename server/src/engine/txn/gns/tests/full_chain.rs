@@ -62,7 +62,6 @@ fn init_space(global: &impl GlobalInstanceLike, space_name: &str, env: &str) -> 
         .read()
         .get(name.as_str())
         .unwrap()
-        .read()
         .get_uuid()
 }
 
@@ -78,7 +77,7 @@ fn create_space() {
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             let spaces = global.namespace().idx().read();
-            let space = spaces.get("myspace").unwrap().read();
+            let space = spaces.get("myspace").unwrap();
             assert_eq!(
                 &*space,
                 &Space::new_restore_empty(
@@ -108,7 +107,7 @@ fn alter_space() {
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             let spaces = global.namespace().idx().read();
-            let space = spaces.get("myspace").unwrap().read();
+            let space = spaces.get("myspace").unwrap();
             assert_eq!(
                 &*space,
                 &Space::new_restore_empty(

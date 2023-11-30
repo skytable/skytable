@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::{dml, model::Model, space::Space},
+    core::{ddl_misc, dml, model::Model, space::Space},
     error::{QueryError, QueryResult},
     fractal::{Global, GlobalInstanceLike},
     net::protocol::{ClientLocalState, Response, ResponseType, SQuery},
@@ -63,13 +63,24 @@ pub async fn dispatch_to_executor<'a>(
 }
 
 #[inline(always)]
-fn _call<A: ASTNode<'static> + core::fmt::Debug, T>(
+fn _callgs<A: ASTNode<'static> + core::fmt::Debug, T>(
     g: &Global,
     state: &mut State<'static, InplaceData>,
     f: impl FnOnce(&Global, A) -> Result<T, QueryError>,
 ) -> QueryResult<T> {
     let cs = ASTNode::parse_from_state_hardened(state)?;
     f(&g, cs)
+}
+
+#[inline(always)]
+fn _callgcs<A: ASTNode<'static> + core::fmt::Debug, T>(
+    g: &Global,
+    cstate: &ClientLocalState,
+    state: &mut State<'static, InplaceData>,
+    f: impl FnOnce(&Global, &ClientLocalState, A) -> Result<T, QueryError>,
+) -> QueryResult<T> {
+    let a = ASTNode::parse_from_state_hardened(state)?;
+    f(&g, cstate, a)
 }
 
 async fn run_blocking_stmt(
@@ -109,12 +120,12 @@ async fn run_blocking_stmt(
     ) -> QueryResult<()>; 8] = [
         |_, _, _| Err(QueryError::QLUnknownStatement),
         blocking_exec_sysctl,
-        |g, _, t| _call(&g, t, Space::transactional_exec_create),
-        |g, _, t| _call(&g, t, Model::transactional_exec_create),
-        |g, _, t| _call(&g, t, Space::transactional_exec_alter),
-        |g, _, t| _call(&g, t, Model::transactional_exec_alter),
-        |g, _, t| _call(&g, t, Space::transactional_exec_drop),
-        |g, _, t| _call(&g, t, Model::transactional_exec_drop),
+        |g, _, t| _callgs(&g, t, Space::transactional_exec_create),
+        |g, _, t| _callgs(&g, t, Model::transactional_exec_create),
+        |g, _, t| _callgs(&g, t, Space::transactional_exec_alter),
+        |g, _, t| _callgs(&g, t, Model::transactional_exec_alter),
+        |g, _, t| _callgs(&g, t, Space::transactional_exec_drop),
+        |g, _, t| _callgs(&g, t, Model::transactional_exec_drop),
     ];
     let r = unsafe {
         // UNSAFE(@ohsayan): the only await is within this block
@@ -192,13 +203,13 @@ fn run_nb(
         &mut ClientLocalState,
         &mut State<'static, InplaceData>,
     ) -> QueryResult<Response>; 8] = [
-        cstate_use,                                    // use
-        |_, _, _| Err(QueryError::QLUnknownStatement), // inspect
+        cstate_use, // use
+        |g, c, s| _callgcs(g, c, s, ddl_misc::inspect),
         |_, _, _| Err(QueryError::QLUnknownStatement), // describe
-        |g, _, s| _call(g, s, dml::insert_resp),
-        |g, _, s| _call(g, s, dml::select_resp),
-        |g, _, s| _call(g, s, dml::update_resp),
-        |g, _, s| _call(g, s, dml::delete_resp),
+        |g, _, s| _callgs(g, s, dml::insert_resp),
+        |g, _, s| _callgs(g, s, dml::select_resp),
+        |g, _, s| _callgs(g, s, dml::update_resp),
+        |g, _, s| _callgs(g, s, dml::delete_resp),
         |_, _, _| Err(QueryError::QLUnknownStatement), // exists
     ];
     {

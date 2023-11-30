@@ -164,7 +164,6 @@ fn with_space<T>(
     let Some(space) = spaces.st_get(&space_id.name) else {
         return Err(TransactionError::OnRestoreDataMissing.into());
     };
-    let space = space.read();
     if space.get_uuid() != space_id.uuid {
         return Err(TransactionError::OnRestoreDataConflictMismatch.into());
     }
@@ -176,15 +175,14 @@ fn with_space_mut<T>(
     space_id: &super::SpaceIDRes,
     mut f: impl FnMut(&mut Space) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
-    let spaces = gns.idx().read();
-    let Some(space) = spaces.st_get(&space_id.name) else {
+    let mut spaces = gns.idx().write();
+    let Some(space) = spaces.st_get_mut(&space_id.name) else {
         return Err(TransactionError::OnRestoreDataMissing.into());
     };
-    let mut space = space.write();
     if space.get_uuid() != space_id.uuid {
         return Err(TransactionError::OnRestoreDataConflictMismatch.into());
     }
-    f(&mut space)
+    f(space)
 }
 
 fn with_model_mut<T>(
@@ -318,12 +316,11 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
             (or well magnetic stuff arounding spinning disks). But we just want to be extra sure. Don't let the aliens (or
             rather, radiation) from the cosmos deter us!
         */
-        let spaces = gns.idx().write();
+        let mut spaces = gns.idx().write();
         let mut models = gns.idx_models().write();
-        let Some(space) = spaces.get(&space_id.name) else {
+        let Some(space) = spaces.get_mut(&space_id.name) else {
             return Err(TransactionError::OnRestoreDataMissing.into());
         };
-        let mut space = space.write();
         if space.models().contains(&model_name) {
             return Err(TransactionError::OnRestoreDataConflictAlreadyExists.into());
         }

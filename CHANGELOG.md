@@ -26,6 +26,10 @@ All changes in this project will be noted in this file.
     - `USE <space>`:
       - works just like SQL
       - **does not work with DDL queries**: the reason it works in this way is to prevent accidental deletes
+    - `INSPECT ...`:
+      - `INSPECT global`: can be used to inspect the global state, seeing all spaces currently present on the system, users and other information. Some information is limited to the root account only (as JSON)
+      - `INSPECT space <space>`: can be used to inspect a single space, returning a list of models and relevant information (as JSON)
+      - `INSPECT model <model>`: can be used to inspect a single model, returning declaration and relevant information (as JSON)
 - DML:
   - **All actions removed**: All the prior `SET`, `GET` and other actions have been removed in favor of the new query language
   - The following queries were added:

@@ -215,10 +215,9 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
         }: Self::RestoreType,
         gns: &crate::engine::core::GlobalNS,
     ) -> RuntimeResult<()> {
-        let gns = gns.idx().read();
-        match gns.st_get(&space_id.name) {
+        let mut gns = gns.idx().write();
+        match gns.st_get_mut(&space_id.name) {
             Some(space) => {
-                let mut space = space.write();
                 if !crate::engine::data::dict::rmerge_metadata(space.props_mut(), space_meta) {
                     return Err(TransactionError::OnRestoreDataConflictMismatch.into());
                 }
@@ -281,10 +280,8 @@ impl<'a> GNSEvent for DropSpaceTxn<'a> {
         let mut wgns = gns.idx().write();
         match wgns.entry(name) {
             std::collections::hash_map::Entry::Occupied(oe) => {
-                let space = oe.get().read();
-                if space.get_uuid() == uuid {
+                if oe.get().get_uuid() == uuid {
                     // NB(@ohsayan): we do not need to remove models here since they must have been already removed for this query to have actually executed
-                    drop(space);
                     oe.remove_entry();
                     Ok(())
                 } else {

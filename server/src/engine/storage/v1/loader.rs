@@ -79,7 +79,6 @@ impl SEInitState {
                 let mut models = gns.idx_models().write();
                 // this is an existing instance, so read in all data
                 for (space_name, space) in gns.idx().read().iter() {
-                    let space = space.read();
                     let space_uuid = space.get_uuid();
                     for model_name in space.models().iter() {
                         let model = models

@@ -32,10 +32,13 @@ pub(in crate::engine) mod drop;
 
 use {
     super::{
-        ast::traits::ASTNode,
+        ast::{traits::ASTNode, QueryData, State},
         lex::{Ident, Token},
     },
-    crate::engine::error::QueryError,
+    crate::engine::{
+        core::EntityIDRef,
+        error::{QueryError, QueryResult},
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -48,9 +51,9 @@ pub enum Use<'a> {
 impl<'a> ASTNode<'a> for Use<'a> {
     const MUST_USE_FULL_TOKEN_RANGE: bool = true;
     const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
-    fn __base_impl_parse_from_state<Qd: super::ast::QueryData<'a>>(
-        state: &mut super::ast::State<'a, Qd>,
-    ) -> crate::engine::error::QueryResult<Self> {
+    fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> QueryResult<Self> {
         /*
             should have either an ident or null
         */
@@ -71,5 +74,42 @@ impl<'a> ASTNode<'a> for Use<'a> {
             }
             _ => return Err(QueryError::QLInvalidSyntax),
         })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Inspect<'a> {
+    Global,
+    Space(Ident<'a>),
+    Model(EntityIDRef<'a>),
+}
+
+impl<'a> ASTNode<'a> for Inspect<'a> {
+    const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+    const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+    fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> QueryResult<Self> {
+        if state.exhausted() {
+            return Err(QueryError::QLUnexpectedEndOfStatement);
+        }
+        let me = match state.fw_read() {
+            Token::Ident(id) if id.eq_ignore_ascii_case("global") => Self::Global,
+            Token![space] => {
+                if state.exhausted() {
+                    return Err(QueryError::QLUnexpectedEndOfStatement);
+                }
+                match state.fw_read() {
+                    Token::Ident(space) => Self::Space(*space),
+                    _ => return Err(QueryError::QLInvalidSyntax),
+                }
+            }
+            Token![model] => {
+                let entity = state.try_entity_ref_result()?;
+                Self::Model(entity)
+            }
+            _ => return Err(QueryError::QLInvalidSyntax),
+        };
+        Ok(me)
     }
 }

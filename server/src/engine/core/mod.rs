@@ -25,6 +25,7 @@
 */
 
 pub(in crate::engine) mod dcl;
+pub(super) mod ddl_misc;
 pub(in crate::engine) mod dml;
 pub(in crate::engine) mod exec;
 pub(in crate::engine) mod index;
@@ -58,7 +59,7 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 #[cfg_attr(test, derive(Debug))]
 pub struct GlobalNS {
     idx_mdl: RWLIdx<EntityID, Model>,
-    idx: RWLIdx<Box<str>, RwLock<Space>>,
+    idx: RWLIdx<Box<str>, Space>,
 }
 
 impl GlobalNS {
@@ -70,7 +71,7 @@ impl GlobalNS {
     }
     pub fn ddl_with_spaces_write<T>(
         &self,
-        f: impl FnOnce(&mut HashMap<Box<str>, RwLock<Space>>) -> T,
+        f: impl FnOnce(&mut HashMap<Box<str>, Space>) -> T,
     ) -> T {
         let mut spaces = self.idx.write();
         f(&mut spaces)
@@ -80,12 +81,11 @@ impl GlobalNS {
         space: &str,
         f: impl FnOnce(&mut Space) -> QueryResult<T>,
     ) -> QueryResult<T> {
-        let spaces = self.idx.read();
-        let Some(space) = spaces.get(space) else {
+        let mut spaces = self.idx.write();
+        let Some(space) = spaces.get_mut(space) else {
             return Err(QueryError::QExecObjectNotFound);
         };
-        let mut space = space.write();
-        f(&mut space)
+        f(space)
     }
     pub fn with_model_space_mut_for_ddl<'a, T, F>(
         &self,
@@ -100,8 +100,8 @@ impl GlobalNS {
             return Err(QueryError::QExecObjectNotFound);
         };
         let space_read = self.idx.read();
-        let space = space_read.get(entity.space()).unwrap().read();
-        f(&space, model)
+        let space = space_read.get(entity.space()).unwrap();
+        f(space, model)
     }
     pub fn with_model<'a, T, F>(&self, entity: EntityIDRef<'a>, f: F) -> QueryResult<T>
     where
@@ -116,7 +116,7 @@ impl GlobalNS {
     pub fn idx_models(&self) -> &RWLIdx<EntityID, Model> {
         &self.idx_mdl
     }
-    pub fn idx(&self) -> &RWLIdx<Box<str>, RwLock<Space>> {
+    pub fn idx(&self) -> &RWLIdx<Box<str>, Space> {
         &self.idx
     }
     #[cfg(test)]

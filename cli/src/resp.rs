@@ -25,51 +25,45 @@
 */
 
 use {
-    crate::error::CliResult,
-    crossterm::{
-        style::{Color, ResetColor, SetForegroundColor},
-        ExecutableCommand,
-    },
+    crossterm::style::Stylize,
     skytable::response::{Response, Row, Value},
-    std::io::{self, Write},
 };
 
-pub fn format_response(resp: Response) -> CliResult<bool> {
+pub fn format_response(resp: Response, print_special: bool) -> bool {
     match resp {
-        Response::Empty => print_cyan("(Okay)\n")?,
+        Response::Empty => println!("{}", "(Okay)".cyan()),
         Response::Error(e) => {
-            print_red(&format!("(server error code: {e})\n"))?;
-            return Ok(false);
+            println!("{}", format!("(server error code: {e})").red());
+            return false;
         }
         Response::Value(v) => {
-            print_value(v)?;
+            print_value(v, print_special);
             println!();
         }
         Response::Row(r) => {
-            print_row(r)?;
+            print_row(r);
             println!();
         }
     };
-    Ok(true)
+    true
 }
 
-fn print_row(r: Row) -> CliResult<()> {
+fn print_row(r: Row) {
     print!("(");
     let mut columns = r.into_values().into_iter().peekable();
     while let Some(cell) = columns.next() {
-        print_value(cell)?;
+        print_value(cell, false);
         if columns.peek().is_some() {
             print!(", ");
         }
     }
     print!(")");
-    Ok(())
 }
 
-fn print_value(v: Value) -> CliResult<()> {
+fn print_value(v: Value, print_special: bool) {
     match v {
-        Value::Null => print_gray("null")?,
-        Value::String(s) => print_string(&s),
+        Value::Null => print!("{}", "null".grey().italic()),
+        Value::String(s) => print_string(&s, print_special),
         Value::Binary(b) => print_binary(&b),
         Value::Bool(b) => print!("{b}"),
         Value::UInt8(i) => print!("{i}"),
@@ -86,7 +80,7 @@ fn print_value(v: Value) -> CliResult<()> {
             print!("[");
             let mut items = items.into_iter().peekable();
             while let Some(item) = items.next() {
-                print_value(item)?;
+                print_value(item, print_special);
                 if items.peek().is_some() {
                     print!(", ");
                 }
@@ -94,7 +88,6 @@ fn print_value(v: Value) -> CliResult<()> {
             print!("]");
         }
     }
-    Ok(())
 }
 
 fn print_binary(b: &[u8]) {
@@ -109,39 +102,22 @@ fn print_binary(b: &[u8]) {
     print!("]");
 }
 
-fn print_string(s: &str) {
-    print!("\"");
-    for ch in s.chars() {
-        if ch == '"' || ch == '\'' {
-            print!("\\{ch}");
-        } else if ch == '\t' {
-            print!("\\t");
-        } else if ch == '\n' {
-            print!("\\n");
-        } else {
-            print!("{ch}");
+fn print_string(s: &str, print_special: bool) {
+    if print_special {
+        print!("{}", s.italic().grey());
+    } else {
+        print!("\"");
+        for ch in s.chars() {
+            if ch == '"' {
+                print!("\\{ch}");
+            } else if ch == '\t' {
+                print!("\\t");
+            } else if ch == '\n' {
+                print!("\\n");
+            } else {
+                print!("{ch}");
+            }
         }
+        print!("\"");
     }
-    print!("\"");
-}
-
-fn print_gray(s: &str) -> std::io::Result<()> {
-    print_colored_text(s, Color::White)
-}
-
-fn print_red(s: &str) -> std::io::Result<()> {
-    print_colored_text(s, Color::Red)
-}
-
-fn print_cyan(s: &str) -> std::io::Result<()> {
-    print_colored_text(s, Color::Cyan)
-}
-
-fn print_colored_text(text: &str, color: Color) -> std::io::Result<()> {
-    let mut stdout = io::stdout();
-    stdout.execute(SetForegroundColor(color))?;
-    print!("{text}");
-    stdout.flush()?;
-    stdout.execute(ResetColor)?;
-    Ok(())
 }

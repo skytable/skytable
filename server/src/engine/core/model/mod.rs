@@ -121,7 +121,7 @@ impl Model {
         &self.decl
     }
     fn redescribe(&self) -> String {
-        let mut ret = format!("{{ ");
+        let mut ret = format!("{{");
         let mut it = self.fields().stseq_ord_kv().peekable();
         while let Some((field_name, field_decl)) = it.next() {
             // legend: * -> primary, ! -> not null, ? -> null
@@ -153,7 +153,6 @@ impl Model {
                 ret.push(' ');
             }
         }
-        ret.push(' ');
         ret.push('}');
         ret
     }

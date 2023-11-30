@@ -80,6 +80,7 @@ pub enum ExecKind {
     Standard(Query),
     UseSpace(Query, String),
     UseNull(Query),
+    PrintSpecial(Query),
 }
 
 impl Parameterizer {
@@ -121,6 +122,12 @@ impl Parameterizer {
                 Ok(if qstr.eq_ignore_ascii_case("use null") {
                     ExecKind::UseNull(q)
                 } else {
+                    if qstr.len() > 8 {
+                        let qstr = &qstr[..8];
+                        if qstr.eq_ignore_ascii_case("inspect ") {
+                            return Ok(ExecKind::PrintSpecial(q));
+                        }
+                    }
                     let mut splits = qstr.split_ascii_whitespace();
                     let tok_use = splits.next();
                     let tok_name = splits.next();
