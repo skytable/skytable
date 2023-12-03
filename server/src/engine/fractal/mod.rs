@@ -126,6 +126,7 @@ pub trait GlobalInstanceLike {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
+        skip_delete: bool,
     );
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
@@ -187,6 +188,7 @@ impl GlobalInstanceLike for Global {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
+        skip_delete: bool,
     ) {
         let id = ModelUniqueID::new(space_name, model_name, model_uuid);
         self.get_state()
@@ -194,9 +196,11 @@ impl GlobalInstanceLike for Global {
             .write()
             .remove(&id)
             .expect("tried to remove non existent driver");
-        self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
-            space_name, space_uuid, model_name, model_uuid,
-        )));
+        if !skip_delete {
+            self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+                space_name, space_uuid, model_name, model_uuid,
+            )));
+        }
     }
     fn initialize_model_driver(
         &self,

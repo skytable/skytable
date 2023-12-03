@@ -44,6 +44,17 @@ pub fn format_response(resp: Response, print_special: bool) -> bool {
             print_row(r);
             println!();
         }
+        Response::Rows(rows) => {
+            if rows.is_empty() {
+                println!("{}", "[0 rows returned]".grey().italic());
+            } else {
+                for (i, row) in rows.into_iter().enumerate().map(|(i, r)| (i + 1, r)) {
+                    print!("{} ", format!("({i})").grey().bold());
+                    print_row(row);
+                    println!();
+                }
+            }
+        }
     };
     true
 }

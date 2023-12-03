@@ -43,10 +43,15 @@ use crate::{
 pub use {
     del::delete,
     ins::insert,
-    sel::select_custom,
+    sel::{select_custom, select_all},
     upd::{collect_trace_path as update_flow_trace, update},
 };
-pub use {del::delete_resp, ins::insert_resp, sel::select_resp, upd::update_resp};
+pub use {
+    del::delete_resp,
+    ins::insert_resp,
+    sel::{select_all_resp, select_resp},
+    upd::update_resp,
+};
 
 impl Model {
     pub(self) fn resolve_where<'a>(

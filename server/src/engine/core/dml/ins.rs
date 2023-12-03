@@ -49,6 +49,7 @@ pub fn insert_resp(
 pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, insert.entity(), |mdl| {
         let (pk, data) = prepare_insert(mdl, insert.data())?;
+        let _idx_latch = mdl.primary_index().acquire_cd();
         let g = cpin();
         let ds = mdl.delta_state();
         // create new version

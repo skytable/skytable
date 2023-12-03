@@ -80,6 +80,9 @@ impl PrimaryIndexKey {
 }
 
 impl PrimaryIndexKey {
+    pub unsafe fn data(&self) -> SpecialPaddedWord {
+        core::mem::transmute_copy(&self.data)
+    }
     pub unsafe fn read_uint(&self) -> u64 {
         self.data.load()
     }

@@ -74,6 +74,44 @@ where
     }
 }
 
+pub struct IterEntry<'t, 'g, 'v, T, C>
+where
+    't: 'v,
+    'g: 'v + 't,
+    C: Config,
+    T: TreeElement,
+{
+    i: RawIter<'t, 'g, 'v, T, C, CfgIterEntry>,
+}
+
+
+impl<'t, 'g, 'v, T, C> IterEntry<'t, 'g, 'v, T, C>
+where
+    't: 'v,
+    'g: 'v + 't,
+    C: Config,
+    T: TreeElement,
+{
+    pub fn new(t: &'t RawTree<T, C>, g: &'g Guard) -> Self {
+        Self {
+            i: RawIter::new(t, g),
+        }
+    }
+}
+
+impl<'t, 'g, 'v, T, C> Iterator for IterEntry<'t, 'g, 'v, T, C>
+where
+    't: 'v,
+    'g: 'v + 't,
+    C: Config,
+    T: TreeElement,
+{
+    type Item = &'v T;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.i.next()
+    }
+}
+
 pub struct IterKey<'t, 'g, 'v, T, C>
 where
     't: 'v,
@@ -155,6 +193,14 @@ trait IterConfig<T> {
     where
         T: 'a;
     fn some<'a>(v: &'a T) -> Option<Self::Ret<'a>>;
+}
+
+struct CfgIterEntry;
+impl<T: TreeElement> IterConfig<T> for CfgIterEntry {
+    type Ret<'a> = &'a T where T: 'a;
+    fn some<'a>(v: &'a T) -> Option<Self::Ret<'a>> {
+        Some(v)
+    }
 }
 
 struct CfgIterKV;

@@ -24,7 +24,10 @@
  *
 */
 
-use crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal};
+use {
+    crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal},
+    std::collections::HashMap,
+};
 
 #[test]
 fn simple_select_wildcard() {
@@ -99,4 +102,62 @@ fn select_nonexisting() {
         .unwrap_err(),
         QueryError::QExecDmlRowNotFound
     );
+}
+
+/*
+    select all
+*/
+
+#[test]
+fn select_all_wildcard() {
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let ret = super::exec_select_all(
+        &global,
+        "create model myspace.mymodel(username: string, password: string)",
+        &[
+            "insert into myspace.mymodel('sayan', 'password123')",
+            "insert into myspace.mymodel('robot', 'robot123')",
+            "insert into myspace.mymodel('douglas', 'galaxy123')",
+            "insert into myspace.mymodel('hgwells', 'timemachine')",
+            "insert into myspace.mymodel('orwell', '1984')",
+        ],
+        "select all * from myspace.mymodel LIMIT 100",
+    )
+    .unwrap();
+    let ret: HashMap<String, Vec<Datacell>> = ret
+        .into_iter()
+        .map(|mut d| (d.swap_remove(0).into_str().unwrap(), d))
+        .collect();
+    assert_eq!(ret.get("sayan").unwrap(), &intovec!["password123"]);
+    assert_eq!(ret.get("robot").unwrap(), &intovec!["robot123"]);
+    assert_eq!(ret.get("douglas").unwrap(), &intovec!["galaxy123"]);
+    assert_eq!(ret.get("hgwells").unwrap(), &intovec!["timemachine"]);
+    assert_eq!(ret.get("orwell").unwrap(), &intovec!["1984"]);
+}
+
+#[test]
+fn select_all_onefield() {
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let ret = super::exec_select_all(
+        &global,
+        "create model myspace.mymodel(username: string, password: string)",
+        &[
+            "insert into myspace.mymodel('sayan', 'password123')",
+            "insert into myspace.mymodel('robot', 'robot123')",
+            "insert into myspace.mymodel('douglas', 'galaxy123')",
+            "insert into myspace.mymodel('hgwells', 'timemachine')",
+            "insert into myspace.mymodel('orwell', '1984')",
+        ],
+        "select all username from myspace.mymodel LIMIT 100",
+    )
+    .unwrap();
+    let ret: HashMap<String, Vec<Datacell>> = ret
+        .into_iter()
+        .map(|mut d| (d.swap_remove(0).into_str().unwrap(), d))
+        .collect();
+    assert_eq!(ret.get("sayan").unwrap(), &intovec![]);
+    assert_eq!(ret.get("robot").unwrap(), &intovec![]);
+    assert_eq!(ret.get("douglas").unwrap(), &intovec![]);
+    assert_eq!(ret.get("hgwells").unwrap(), &intovec![]);
+    assert_eq!(ret.get("orwell").unwrap(), &intovec![]);
 }

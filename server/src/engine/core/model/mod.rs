@@ -356,6 +356,7 @@ impl Model {
                     space.get_uuid(),
                     model_name,
                     model.get_uuid(),
+                    false,
                 );
             }
             // update global state

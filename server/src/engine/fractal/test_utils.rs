@@ -126,15 +126,18 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
+        skip_delete: bool,
     ) {
         let id = ModelUniqueID::new(space_name, model_name, model_uuid);
         self.model_drivers
             .write()
             .remove(&id)
             .expect("tried to remove non-existent model");
-        self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
-            space_name, space_uuid, model_name, model_uuid,
-        )));
+        if !skip_delete {
+            self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+                space_name, space_uuid, model_name, model_uuid,
+            )));
+        }
     }
     fn initialize_model_driver(
         &self,

@@ -155,6 +155,32 @@ pub(self) fn exec_select(
     _exec_only_select(global, select)
 }
 
+pub(self) fn exec_select_all(
+    global: &impl GlobalInstanceLike,
+    model: &str,
+    inserts: &[&str],
+    select: &str,
+) -> QueryResult<Vec<Vec<Datacell>>> {
+    _exec_only_create_space_model(global, model)?;
+    for insert in inserts {
+        _exec_only_insert(global, insert, |_| {})?;
+    }
+    let lex_sel = lex_insecure(select.as_bytes()).unwrap();
+    let select = parse_ast_node_full(&lex_sel[2..]).unwrap();
+    let mut r: Vec<Vec<Datacell>> = Vec::new();
+    dml::select_all(
+        global,
+        select,
+        &mut r,
+        |_, _| {},
+        |rows, dc, col_cnt| match rows.last_mut() {
+            Some(row) if row.len() != col_cnt => row.push(dc.clone()),
+            _ => rows.push(vec![dc.clone()]),
+        },
+    )?;
+    Ok(r)
+}
+
 pub(self) fn exec_select_only(
     global: &impl GlobalInstanceLike,
     select: &str,

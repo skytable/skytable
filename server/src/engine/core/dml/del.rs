@@ -45,6 +45,7 @@ pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> 
     core::with_model_for_data_update(global, delete.entity(), |model| {
         let g = sync::atm::cpin();
         let delta_state = model.delta_state();
+        let _idx_latch = model.primary_index().acquire_cd();
         // create new version
         let new_version = delta_state.create_new_data_delta_version();
         match model

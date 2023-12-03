@@ -326,6 +326,9 @@ macro_rules! Token {
     (allow) => {
         __kw_misc!(Allow)
     };
+    (all) => {
+        __kw_misc!(All)
+    }
 }
 
 macro_rules! union {

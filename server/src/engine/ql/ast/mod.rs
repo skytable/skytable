@@ -224,7 +224,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     /// Check if the current cursor can read a lit (with context from the data source); rounded
     pub fn can_read_lit_rounded(&self) -> bool {
         let mx = self.round_cursor();
-        Qd::can_read_lit_from(&self.d, &self.t[mx]) && mx == self.i
+        Qd::can_read_lit_from(&self.d, &self.t[mx]) & (mx == self.i)
     }
     #[inline(always)]
     /// Check if a lit can be read using the given token with context from the data source
@@ -252,7 +252,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     /// Check if the cursor equals the given token; rounded
     pub fn cursor_rounded_eq(&self, tok: Token<'a>) -> bool {
         let mx = self.round_cursor();
-        self.t[mx] == tok && mx == self.i
+        (self.t[mx] == tok) & (mx == self.i)
     }
     #[inline(always)]
     /// Check if the cursor equals the given token
@@ -271,7 +271,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     }
     #[inline(always)]
     pub(crate) fn cursor_has_ident_rounded(&self) -> bool {
-        self.offset_current_r(0).is_ident() && self.not_exhausted()
+        self.offset_current_r(0).is_ident() & self.not_exhausted()
     }
     #[inline(always)]
     /// Check if the current token stream matches the signature of an arity(0) fn; rounded
@@ -296,7 +296,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     #[inline(always)]
     /// Loop condition for tt and non-poisoned state only
     pub fn loop_tt(&self) -> bool {
-        self.not_exhausted() && self.okay()
+        self.not_exhausted() & self.okay()
     }
     #[inline(always)]
     /// Returns the position of the cursor

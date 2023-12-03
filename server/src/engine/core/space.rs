@@ -240,12 +240,20 @@ impl Space {
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
                     ));
                 }
+                let space_uuid = space.get_uuid();
                 for model in space.models.into_iter() {
                     let e: EntityIDRef<'static> = unsafe {
                         // UNSAFE(@ohsayan): I want to try what the borrow checker has been trying
                         core::mem::transmute(EntityIDRef::new(space_name.as_str(), &model))
                     };
-                    let _ = models.st_delete(&e);
+                    let mdl = models.st_delete_return(&e).unwrap();
+                    global.purge_model_driver(
+                        &space_name,
+                        space_uuid,
+                        &model,
+                        mdl.get_uuid(),
+                        true,
+                    );
                 }
                 let _ = spaces.st_delete(space_name.as_str());
                 Ok(())

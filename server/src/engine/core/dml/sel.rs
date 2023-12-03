@@ -25,17 +25,22 @@
 */
 
 use crate::engine::{
-    core::index::DcFieldIndex,
+    core::{
+        index::{
+            DcFieldIndex, IndexLatchHandleExclusive, PrimaryIndexKey, Row, RowData, RowDataLck,
+        },
+        model::Model,
+    },
     data::{
         cell::{Datacell, VirtualDatacell},
         tag::{DataTag, TagClass},
     },
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
-    idx::{STIndex, STIndexSeq},
+    idx::{IndexMTRaw, MTIndexExt, STIndex, STIndexSeq},
     mem::IntegerRepr,
     net::protocol::{Response, ResponseType},
-    ql::dml::sel::SelectStatement,
+    ql::dml::sel::{SelectAllStatement, SelectStatement},
     sync,
 };
 
@@ -53,6 +58,83 @@ pub fn select_resp(
         ty: ResponseType::Row,
         size: i,
         data,
+    })
+}
+
+pub fn select_all_resp(
+    global: &impl GlobalInstanceLike,
+    select: SelectAllStatement,
+) -> QueryResult<Response> {
+    let mut ret_buf = Vec::new();
+    let i = self::select_all(
+        global,
+        select,
+        &mut ret_buf,
+        |buf, mdl| {
+            IntegerRepr::scoped(mdl.fields().len() as u64, |repr| buf.extend(repr));
+            buf.push(b'\n');
+        },
+        |buf, data, _| encode_cell(buf, data),
+    )?;
+    Ok(Response::Serialized {
+        ty: ResponseType::MultiRow,
+        size: i,
+        data: ret_buf,
+    })
+}
+
+pub fn select_all<Fm, F, T>(
+    global: &impl GlobalInstanceLike,
+    select: SelectAllStatement,
+    serialize_target: &mut T,
+    mut f_mdl: Fm,
+    mut f: F,
+) -> QueryResult<usize>
+where
+    Fm: FnMut(&mut T, &Model),
+    F: FnMut(&mut T, &Datacell, usize),
+{
+    global.namespace().with_model(select.entity, |mdl| {
+        let g = sync::atm::cpin();
+        let mut i = 0;
+        f_mdl(serialize_target, mdl);
+        if select.wildcard {
+            for (key, data) in RowIteratorAll::new(&g, mdl, select.limit as usize) {
+                let vdc = VirtualDatacell::new_pk(key, mdl.p_tag());
+                for key in mdl.fields().stseq_ord_key() {
+                    let r = if key.as_str() == mdl.p_key() {
+                        &*vdc
+                    } else {
+                        data.fields().get(key).unwrap()
+                    };
+                    f(serialize_target, r, mdl.fields().len());
+                }
+                i += 1;
+            }
+        } else {
+            // schema check
+            if select.fields.len() > mdl.fields().len()
+                || select
+                    .fields
+                    .iter()
+                    .any(|f| !mdl.fields().st_contains(f.as_str()))
+            {
+                return Err(QueryError::QExecUnknownField);
+            }
+            for (key, data) in RowIteratorAll::new(&g, mdl, select.limit as usize) {
+                let vdc = VirtualDatacell::new_pk(key, mdl.p_tag());
+                for key in select.fields.iter() {
+                    let r = if key.as_str() == mdl.p_key() {
+                        &*vdc
+                    } else {
+                        data.fields().st_get(key.as_str()).unwrap()
+                    };
+                    f(serialize_target, r, select.fields.len());
+                }
+                i += 1;
+            }
+        }
+        Ok(i)
     })
 }
 
@@ -100,7 +182,7 @@ where
 {
     global.namespace().with_model(select.entity(), |mdl| {
         let target_key = mdl.resolve_where(select.clauses_mut())?;
-        let pkdc = VirtualDatacell::new(target_key.clone());
+        let pkdc = VirtualDatacell::new(target_key.clone(), mdl.p_tag().tag_unique());
         let g = sync::atm::cpin();
         let mut read_field = |key, fields: &DcFieldIndex| {
             match fields.st_get(key) {
@@ -127,4 +209,53 @@ where
         }
         Ok(())
     })
+}
+
+struct RowIteratorAll<'g> {
+    _g: &'g sync::atm::Guard,
+    mdl: &'g Model,
+    iter: <IndexMTRaw<Row> as MTIndexExt<Row, PrimaryIndexKey, RowDataLck>>::IterEntry<'g, 'g, 'g>,
+    _latch: IndexLatchHandleExclusive<'g>,
+    limit: usize,
+}
+
+impl<'g> RowIteratorAll<'g> {
+    fn new(g: &'g sync::atm::Guard, mdl: &'g Model, limit: usize) -> Self {
+        let idx = mdl.primary_index();
+        let latch = idx.acquire_exclusive();
+        Self {
+            _g: g,
+            mdl,
+            iter: idx.__raw_index().mt_iter_entry(g),
+            _latch: latch,
+            limit,
+        }
+    }
+    fn _next(
+        &mut self,
+    ) -> Option<(
+        &'g PrimaryIndexKey,
+        parking_lot::RwLockReadGuard<'g, RowData>,
+    )> {
+        if self.limit == 0 {
+            return None;
+        }
+        self.limit -= 1;
+        self.iter.next().map(|row| {
+            (
+                row.d_key(),
+                row.resolve_schema_deltas_and_freeze(self.mdl.delta_state()),
+            )
+        })
+    }
+}
+
+impl<'g> Iterator for RowIteratorAll<'g> {
+    type Item = (
+        &'g PrimaryIndexKey,
+        parking_lot::RwLockReadGuard<'g, RowData>,
+    );
+    fn next(&mut self) -> Option<Self::Item> {
+        self._next()
+    }
 }

@@ -106,6 +106,9 @@ macro_rules! into_vec {
     ($ty:ty => ($($v:expr),* $(,)?)) => {{
         let v: Vec<$ty> = std::vec![$($v.into(),)*];
         v
+    }};
+    ($($v:expr),*) => {{
+        std::vec![$($v.into(),)*]
     }}
 }
 

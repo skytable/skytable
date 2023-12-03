@@ -150,6 +150,9 @@ pub trait MTIndex<E, K, V>: IndexBaseSpec {
         't: 'v,
         V: 'v,
         Self: 't;
+    fn mt_iter_kv<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterKV<'t, 'g, 'v>;
+    fn mt_iter_key<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterKey<'t, 'g, 'v>;
+    fn mt_iter_val<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterVal<'t, 'g, 'v>;
     /// Returns the length of the index
     fn mt_len(&self) -> usize;
     /// Attempts to compact the backing storage
@@ -215,6 +218,18 @@ pub trait MTIndex<E, K, V>: IndexBaseSpec {
         Q: ?Sized + Comparable<K>,
         't: 'v,
         'g: 't + 'v;
+}
+
+pub trait MTIndexExt<E, K, V>: MTIndex<E, K, V> {
+    type IterEntry<'t, 'g, 'v>: Iterator<Item = &'v E>
+    where
+        'g: 't + 'v,
+        't: 'v,
+        K: 'v,
+        V: 'v,
+        E: 'v,
+        Self: 't;
+    fn mt_iter_entry<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterEntry<'t, 'g, 'v>;
 }
 
 /// An unordered STIndex

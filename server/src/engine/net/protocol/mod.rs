@@ -74,6 +74,7 @@ pub enum ResponseType {
     Error = 0x10,
     Row = 0x11,
     Empty = 0x12,
+    MultiRow = 0x13,
 }
 
 #[derive(Debug, PartialEq)]

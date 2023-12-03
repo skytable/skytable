@@ -152,9 +152,87 @@ impl<'a> SelectStatement<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct SelectAllStatement<'a> {
+    pub entity: EntityIDRef<'a>,
+    pub fields: Vec<Ident<'a>>,
+    pub wildcard: bool,
+    pub limit: u64,
+}
+
+impl<'a> SelectAllStatement<'a> {
+    #[cfg(test)]
+    pub fn test_new(
+        entity: EntityIDRef<'a>,
+        fields: Vec<Ident<'a>>,
+        wildcard: bool,
+        limit: u64,
+    ) -> Self {
+        Self::new(entity, fields, wildcard, limit)
+    }
+    fn new(entity: EntityIDRef<'a>, fields: Vec<Ident<'a>>, wildcard: bool, limit: u64) -> Self {
+        Self {
+            entity,
+            fields,
+            wildcard,
+            limit,
+        }
+    }
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        /*
+            smallest query: select all * from mymodel limit 10
+        */
+        if state.remaining() < 5 {
+            return Err(QueryError::QLUnexpectedEndOfStatement);
+        }
+        let mut select_fields = Vec::new();
+        let is_wildcard = state.cursor_eq(Token![*]);
+        state.cursor_ahead_if(is_wildcard);
+        while state.not_exhausted() && state.okay() && !is_wildcard {
+            match state.read() {
+                Token::Ident(id) => select_fields.push(*id),
+                _ => break,
+            }
+            state.cursor_ahead();
+            let nx_comma = state.cursor_rounded_eq(Token![,]);
+            let nx_from = state.cursor_rounded_eq(Token![from]);
+            state.poison_if_not(nx_comma | nx_from);
+            state.cursor_ahead_if(nx_comma);
+        }
+        state.poison_if_not(is_wildcard | !select_fields.is_empty());
+        if state.remaining() < 4 {
+            return Err(QueryError::QLUnexpectedEndOfStatement);
+        }
+        state.poison_if_not(state.cursor_eq(Token![from]));
+        state.cursor_ahead(); // ignore error
+        let entity = state.try_entity_buffered_into_state_uninit();
+        state.poison_if_not(state.cursor_rounded_eq(Token![limit]));
+        state.cursor_ahead_if(state.okay()); // we did read limit
+        state.poison_if(state.exhausted()); // we MUST have the limit
+        if state.okay() {
+            let lit = unsafe { state.fw_read().uck_read_lit() };
+            match lit.try_uint() {
+                Some(limit) => {
+                    return unsafe {
+                        // UNSAFE(@ohsayan): state guarantees this works
+                        Ok(Self::new(
+                            entity.assume_init(),
+                            select_fields,
+                            is_wildcard,
+                            limit,
+                        ))
+                    };
+                }
+                _ => {}
+            }
+        }
+        Err(QueryError::QLInvalidSyntax)
+    }
+}
+
 mod impls {
     use {
-        super::SelectStatement,
+        super::{SelectAllStatement, SelectStatement},
         crate::engine::{
             error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
@@ -167,6 +245,15 @@ mod impls {
             state: &mut State<'a, Qd>,
         ) -> QueryResult<Self> {
             Self::parse_select(state)
+        }
+    }
+    impl<'a> ASTNode<'a> for SelectAllStatement<'a> {
+        const MUST_USE_FULL_TOKEN_RANGE: bool = true;
+        const VERIFIES_FULL_TOKEN_RANGE_USAGE: bool = false;
+        fn __base_impl_parse_from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> QueryResult<Self> {
+            Self::parse(state)
         }
     }
 }

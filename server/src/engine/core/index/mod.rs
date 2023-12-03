@@ -38,16 +38,26 @@ pub use {
     row::{DcFieldIndex, Row, RowData},
 };
 
+pub type RowDataLck = parking_lot::RwLock<RowData>;
+
 #[derive(Debug)]
 pub struct PrimaryIndex {
     data: IndexMTRaw<row::Row>,
+    latch: IndexLatch,
 }
 
 impl PrimaryIndex {
     pub fn new_empty() -> Self {
         Self {
             data: IndexMTRaw::idx_init(),
+            latch: IndexLatch::new(),
         }
+    }
+    pub fn acquire_cd(&self) -> IndexLatchHandleShared {
+        self.latch.gl_handle_shared()
+    }
+    pub fn acquire_exclusive(&self) -> IndexLatchHandleExclusive {
+        self.latch.gl_handle_exclusive()
     }
     pub fn select<'a, 'v, 't: 'v, 'g: 't>(&'t self, key: Lit<'a>, g: &'g Guard) -> Option<&'v Row> {
         self.data.mt_get_element(&key, g)
@@ -57,5 +67,29 @@ impl PrimaryIndex {
     }
     pub fn count(&self) -> usize {
         self.data.mt_len()
+    }
+}
+
+#[derive(Debug)]
+pub struct IndexLatchHandleShared<'t>(parking_lot::RwLockReadGuard<'t, ()>);
+#[derive(Debug)]
+pub struct IndexLatchHandleExclusive<'t>(parking_lot::RwLockWriteGuard<'t, ()>);
+
+#[derive(Debug)]
+struct IndexLatch {
+    glck: parking_lot::RwLock<()>,
+}
+
+impl IndexLatch {
+    fn new() -> Self {
+        Self {
+            glck: parking_lot::RwLock::new(()),
+        }
+    }
+    fn gl_handle_shared(&self) -> IndexLatchHandleShared {
+        IndexLatchHandleShared(self.glck.read())
+    }
+    fn gl_handle_exclusive(&self) -> IndexLatchHandleExclusive {
+        IndexLatchHandleExclusive(self.glck.write())
     }
 }

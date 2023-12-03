@@ -195,15 +195,15 @@ fn cstate_use(
 fn run_nb(
     global: &Global,
     cstate: &mut ClientLocalState,
-    state: State<'_, InplaceData>,
+    mut state: State<'_, InplaceData>,
     stmt: KeywordStmt,
 ) -> QueryResult<Response> {
-    let stmt = stmt.value_u8() - KeywordStmt::Use.value_u8();
+    let stmt_c = stmt.value_u8() - KeywordStmt::Use.value_u8();
     static F: [fn(
         &Global,
         &mut ClientLocalState,
         &mut State<'static, InplaceData>,
-    ) -> QueryResult<Response>; 8] = [
+    ) -> QueryResult<Response>; 9] = [
         cstate_use, // use
         |g, c, s| _callgcs(g, c, s, ddl_misc::inspect),
         |_, _, _| Err(QueryError::QLUnknownStatement), // describe
@@ -212,12 +212,16 @@ fn run_nb(
         |g, _, s| _callgs(g, s, dml::update_resp),
         |g, _, s| _callgs(g, s, dml::delete_resp),
         |_, _, _| Err(QueryError::QLUnknownStatement), // exists
+        |g, _, s| _callgs(g, s, dml::select_all_resp),
     ];
     {
+        let n_offset_adjust = (stmt == KeywordStmt::Select) & state.cursor_rounded_eq(Token![all]);
+        state.cursor_ahead_if(n_offset_adjust);
+        let corrected_offset = (n_offset_adjust as u8 * 8) | (stmt_c * (!n_offset_adjust as u8));
         let mut state = unsafe {
             // UNSAFE(@ohsayan): this is a lifetime issue with the token handle
             core::mem::transmute(state)
         };
-        F[stmt as usize](global, cstate, &mut state)
+        F[corrected_offset as usize](global, cstate, &mut state)
     }
 }

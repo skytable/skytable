@@ -957,3 +957,50 @@ mod where_clause {
         assert!(parse_ast_node_full::<WhereClause>(&tok).is_err());
     }
 }
+
+mod select_all {
+    use {
+        super::lex_insecure,
+        crate::engine::{
+            error::QueryError,
+            ql::{ast::parse_ast_node_full_with_space, dml::sel::SelectAllStatement},
+        },
+    };
+
+    #[test]
+    fn select_all_wildcard() {
+        let tok = lex_insecure(b"select all * from mymodel limit 100").unwrap();
+        assert_eq!(
+            parse_ast_node_full_with_space::<SelectAllStatement>(&tok[2..], "myspace").unwrap(),
+            SelectAllStatement::test_new(("myspace", "mymodel").into(), vec![], true, 100)
+        );
+    }
+
+    #[test]
+    fn select_all_multiple_fields() {
+        let tok = lex_insecure(b"select all username, password from mymodel limit 100").unwrap();
+        assert_eq!(
+            parse_ast_node_full_with_space::<SelectAllStatement>(&tok[2..], "myspace").unwrap(),
+            SelectAllStatement::test_new(
+                ("myspace", "mymodel").into(),
+                into_vec!["username", "password"],
+                false,
+                100
+            )
+        );
+    }
+
+    #[test]
+    fn select_all_missing_limit() {
+        let tok = lex_insecure(b"select all * from mymodel").unwrap();
+        assert_eq!(
+            parse_ast_node_full_with_space::<SelectAllStatement>(&tok[2..], "myspace").unwrap_err(),
+            QueryError::QLUnexpectedEndOfStatement
+        );
+        let tok = lex_insecure(b"select all username, password from mymodel").unwrap();
+        assert_eq!(
+            parse_ast_node_full_with_space::<SelectAllStatement>(&tok[2..], "myspace").unwrap_err(),
+            QueryError::QLUnexpectedEndOfStatement
+        );
+    }
+}

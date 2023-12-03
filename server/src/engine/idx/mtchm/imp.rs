@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::idx::MTIndexExt;
+
 #[cfg(debug_assertions)]
 use super::CHTRuntimeLog;
 use {
@@ -63,6 +65,20 @@ impl<E, C: Config> IndexBaseSpec for Raw<E, C> {
     }
 }
 
+impl<E: TreeElement, C: Config> MTIndexExt<E, E::Key, E::Value> for Raw<E, C> {
+    type IterEntry<'t, 'g, 'v> = super::iter::IterEntry<'t, 'g, 'v, E, C>
+    where
+        'g: 't + 'v,
+        't: 'v,
+        E::Key: 'v,
+        E::Value: 'v,
+        E: 'v,
+        Self: 't;
+    fn mt_iter_entry<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterEntry<'t, 'g, 'v> {
+        super::iter::IterEntry::new(self, g)
+    }
+}
+
 impl<E: TreeElement, C: Config> MTIndex<E, E::Key, E::Value> for Raw<E, C> {
     type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, E, C>
     where
@@ -85,6 +101,18 @@ impl<E: TreeElement, C: Config> MTIndex<E, E::Key, E::Value> for Raw<E, C> {
         't: 'v,
         E::Value: 'v,
         Self: 't;
+
+    fn mt_iter_kv<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterKV<'t, 'g, 'v> {
+        super::iter::IterKV::new(self, g)
+    }
+
+    fn mt_iter_key<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterKey<'t, 'g, 'v> {
+        super::iter::IterKey::new(self, g)
+    }
+
+    fn mt_iter_val<'t, 'g, 'v>(&'t self, g: &'g Guard) -> Self::IterVal<'t, 'g, 'v> {
+        super::iter::IterVal::new(self, g)
+    }
 
     fn mt_len(&self) -> usize {
         self.len()

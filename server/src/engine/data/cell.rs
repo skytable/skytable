@@ -24,6 +24,10 @@
  *
 */
 
+use crate::engine::core::index::PrimaryIndexKey;
+
+use super::tag::TagUnique;
+
 use {
     crate::engine::{
         self,
@@ -508,7 +512,8 @@ pub struct VirtualDatacell<'a> {
 }
 
 impl<'a> VirtualDatacell<'a> {
-    pub fn new(lit: Lit<'a>) -> Self {
+    pub fn new(lit: Lit<'a>, tag: TagUnique) -> Self {
+        debug_assert_eq!(lit.kind().tag_unique(), tag);
         Self {
             dc: ManuallyDrop::new(unsafe {
                 // UNSAFE(@ohsayan): this is a "reference" to a "virtual" aka fake DC. this just works because of memory layouts
@@ -517,11 +522,14 @@ impl<'a> VirtualDatacell<'a> {
             _lt: PhantomData,
         }
     }
-}
-
-impl<'a> From<Lit<'a>> for VirtualDatacell<'a> {
-    fn from(l: Lit<'a>) -> Self {
-        Self::new(l)
+    pub fn new_pk(pk: &'a PrimaryIndexKey, tag: FullTag) -> Self {
+        debug_assert_eq!(pk.tag(), tag.tag_unique());
+        Self {
+            dc: ManuallyDrop::new(unsafe {
+                Datacell::new(tag, DataRaw::word(pk.data().dwordqn_promote()))
+            }),
+            _lt: PhantomData,
+        }
     }
 }
 
@@ -547,5 +555,8 @@ impl<'a> Clone for VirtualDatacell<'a> {
 #[test]
 fn virtual_dc_damn() {
     let dc = Lit::new_str("hello, world");
-    assert_eq!(VirtualDatacell::from(dc), Datacell::from("hello, world"));
+    assert_eq!(
+        VirtualDatacell::new(dc, TagUnique::Str),
+        Datacell::from("hello, world")
+    );
 }
