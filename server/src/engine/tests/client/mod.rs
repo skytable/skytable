@@ -1,5 +1,5 @@
 /*
- * Created on Wed Nov 29 2023
+ * Created on Mon Dec 04 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,6 +24,3 @@
  *
 */
 
-mod ddl;
-mod sec;
-mod sysctl;

@@ -221,13 +221,13 @@ mod insecure_impl {
                 .token_buffer
                 .try_next_ascii_u64_lf_separated_or_restore_cursor()
             else {
-                self.l.set_error(QueryError::LexInvalidLiteral);
+                self.l.set_error(QueryError::LexInvalidInput);
                 return;
             };
             let len = len as usize;
             match self.l.token_buffer.try_next_variable_block(len) {
                 Some(block) => self.l.push_token(Lit::new_bin(block)),
-                None => self.l.set_error(QueryError::LexInvalidLiteral),
+                None => self.l.set_error(QueryError::LexInvalidInput),
             }
         }
         pub(crate) fn scan_quoted_string(&mut self, quote_style: u8) {
@@ -260,7 +260,7 @@ mod insecure_impl {
                                 // UNSAFE(@ohsayan): we move the cursor ahead, now we're moving it back
                                 self.l.token_buffer.decr_cursor()
                             }
-                            self.l.set_error(QueryError::LexInvalidLiteral);
+                            self.l.set_error(QueryError::LexInvalidInput);
                             return;
                         }
                     }
@@ -278,7 +278,7 @@ mod insecure_impl {
             }
             match String::from_utf8(buf) {
                 Ok(s) if ended_with_quote => self.l.push_token(Lit::new_string(s)),
-                Err(_) | Ok(_) => self.l.set_error(QueryError::LexInvalidLiteral),
+                Err(_) | Ok(_) => self.l.set_error(QueryError::LexInvalidInput),
             }
         }
         pub(crate) fn scan_unsigned_integer(&mut self) {
@@ -299,7 +299,7 @@ mod insecure_impl {
                         .token_buffer
                         .rounded_cursor_not_eof_matches(u8::is_ascii_alphanumeric),
             ) {
-                self.l.set_error(QueryError::LexInvalidLiteral);
+                self.l.set_error(QueryError::LexInvalidInput);
             } else {
                 self.l.push_token(Lit::new_uint(int))
             }
@@ -323,7 +323,7 @@ mod insecure_impl {
                 {
                     self.l.push_token(Lit::new_sint(int))
                 } else {
-                    self.l.set_error(QueryError::LexInvalidLiteral)
+                    self.l.set_error(QueryError::LexInvalidInput)
                 }
             } else {
                 self.l.push_token(Token![-]);
@@ -425,7 +425,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             let nb = slf.param_buffer.next_byte();
             slf.l.push_token(Token::Lit(Lit::new_bool(nb == 1)));
             if nb > 1 {
-                slf.l.set_error(QueryError::LexInvalidParameter);
+                slf.l.set_error(QueryError::LexInvalidInput);
             }
         },
         // uint
@@ -434,7 +434,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             .try_next_ascii_u64_lf_separated_or_restore_cursor()
         {
             Some(int) => slf.l.push_token(Lit::new_uint(int)),
-            None => slf.l.set_error(QueryError::LexInvalidParameter),
+            None => slf.l.set_error(QueryError::LexInvalidInput),
         },
         // sint
         |slf| {
@@ -442,7 +442,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             if okay {
                 slf.l.push_token(Lit::new_sint(int))
             } else {
-                slf.l.set_error(QueryError::LexInvalidParameter)
+                slf.l.set_error(QueryError::LexInvalidInput)
             }
         },
         // float
@@ -456,12 +456,12 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                         .map(core::str::FromStr::from_str)
                     {
                         Ok(Ok(f)) => slf.l.push_token(Lit::new_float(f)),
-                        _ => slf.l.set_error(QueryError::LexInvalidParameter),
+                        _ => slf.l.set_error(QueryError::LexInvalidInput),
                     }
                     return;
                 }
             }
-            slf.l.set_error(QueryError::LexInvalidParameter)
+            slf.l.set_error(QueryError::LexInvalidInput)
         },
         // binary
         |slf| {
@@ -469,7 +469,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .param_buffer
                 .try_next_ascii_u64_lf_separated_or_restore_cursor()
             else {
-                slf.l.set_error(QueryError::LexInvalidParameter);
+                slf.l.set_error(QueryError::LexInvalidInput);
                 return;
             };
             match slf
@@ -477,7 +477,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .try_next_variable_block(size_of_body as usize)
             {
                 Some(block) => slf.l.push_token(Lit::new_bin(block)),
-                None => slf.l.set_error(QueryError::LexInvalidParameter),
+                None => slf.l.set_error(QueryError::LexInvalidInput),
             }
         },
         // string
@@ -486,7 +486,7 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
                 .param_buffer
                 .try_next_ascii_u64_lf_separated_or_restore_cursor()
             else {
-                slf.l.set_error(QueryError::LexInvalidParameter);
+                slf.l.set_error(QueryError::LexInvalidInput);
                 return;
             };
             match slf
@@ -496,10 +496,10 @@ static SCAN_PARAM: [unsafe fn(&mut SecureLexer); 8] = unsafe {
             {
                 // TODO(@ohsayan): obliterate this alloc
                 Some(Ok(s)) => slf.l.push_token(Lit::new_string(s.to_owned())),
-                _ => slf.l.set_error(QueryError::LexInvalidParameter),
+                _ => slf.l.set_error(QueryError::LexInvalidInput),
             }
         },
         // ecc
-        |s| s.l.set_error(QueryError::LexInvalidParameter),
+        |s| s.l.set_error(QueryError::LexInvalidInput),
     ]
 };

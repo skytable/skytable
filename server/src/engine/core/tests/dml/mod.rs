@@ -172,7 +172,7 @@ pub(self) fn exec_select_all(
         global,
         select,
         &mut r,
-        |_, _| {},
+        |_, _, _| {},
         |rows, dc, col_cnt| match rows.last_mut() {
             Some(row) if row.len() != col_cnt => row.push(dc.clone()),
             _ => rows.push(vec![dc.clone()]),

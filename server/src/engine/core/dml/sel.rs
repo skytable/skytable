@@ -70,8 +70,8 @@ pub fn select_all_resp(
         global,
         select,
         &mut ret_buf,
-        |buf, mdl| {
-            IntegerRepr::scoped(mdl.fields().len() as u64, |repr| buf.extend(repr));
+        |buf, _, col_c| {
+            IntegerRepr::scoped(col_c as u64, |repr| buf.extend(repr));
             buf.push(b'\n');
         },
         |buf, data, _| encode_cell(buf, data),
@@ -91,14 +91,14 @@ pub fn select_all<Fm, F, T>(
     mut f: F,
 ) -> QueryResult<usize>
 where
-    Fm: FnMut(&mut T, &Model),
+    Fm: FnMut(&mut T, &Model, usize),
     F: FnMut(&mut T, &Datacell, usize),
 {
     global.namespace().with_model(select.entity, |mdl| {
         let g = sync::atm::cpin();
         let mut i = 0;
-        f_mdl(serialize_target, mdl);
         if select.wildcard {
+            f_mdl(serialize_target, mdl, mdl.fields().len());
             for (key, data) in RowIteratorAll::new(&g, mdl, select.limit as usize) {
                 let vdc = VirtualDatacell::new_pk(key, mdl.p_tag());
                 for key in mdl.fields().stseq_ord_key() {
@@ -121,6 +121,7 @@ where
             {
                 return Err(QueryError::QExecUnknownField);
             }
+            f_mdl(serialize_target, mdl, select.fields.len());
             for (key, data) in RowIteratorAll::new(&g, mdl, select.limit as usize) {
                 let vdc = VirtualDatacell::new_pk(key, mdl.p_tag());
                 for key in select.fields.iter() {
@@ -146,7 +147,7 @@ fn encode_cell(resp: &mut Vec<u8>, item: &Datacell) {
     unsafe {
         // UNSAFE(@ohsayan): +tagck
         match item.tag().tag_class() {
-            TagClass::Bool => resp.push(item.read_bool() as _),
+            TagClass::Bool => return resp.push(item.read_bool() as _),
             TagClass::UnsignedInt => IntegerRepr::scoped(item.read_uint(), |b| resp.extend(b)),
             TagClass::SignedInt => IntegerRepr::scoped(item.read_sint(), |b| resp.extend(b)),
             TagClass::Float => resp.extend(item.read_float().to_string().as_bytes()),

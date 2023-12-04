@@ -49,7 +49,7 @@ All changes in this project will be noted in this file.
           - `@uuidstr`: returns a string with a randomly generated v4 UUID
           - `@uuidbin`: same as `@uuidstr` but returns it as a blob
           - `@timesec`: returns a 64-bit integer with the current time in seconds
-    - `SELECT field1, field2, ... FROM <space>.<model> WHERE <primary_key_column> = <value>`
+    - `SELECT [ALL] field1, field2, ... FROM <space>.<model> WHERE <primary_key_column> = <value> [LIMIT n]`
     - New data manipulation via `UPDATE` allows arithmetic operations, string manipulation and more! Examples:
       - `UPDATE <space>.<model> SET col_num += 1 WHERE <primary_key_column> = <value>`
       - `UPDATE <space>.<model> SET mystring += " last part of string" WHERE ...`

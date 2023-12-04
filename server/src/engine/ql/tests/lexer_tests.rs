@@ -145,7 +145,7 @@ fn lex_string_bad_escape() {
     let wth = br#" '\a should be an alert on windows apparently' "#;
     assert_eq!(
         lex_insecure(wth).unwrap_err(),
-        QueryError::LexInvalidLiteral
+        QueryError::LexInvalidInput
     );
 }
 #[test]
@@ -153,12 +153,12 @@ fn lex_string_unclosed() {
     let wth = br#" 'omg where did the end go "#;
     assert_eq!(
         lex_insecure(wth).unwrap_err(),
-        QueryError::LexInvalidLiteral
+        QueryError::LexInvalidInput
     );
     let wth = br#" 'see, we escaped the end\' "#;
     assert_eq!(
         lex_insecure(wth).unwrap_err(),
-        QueryError::LexInvalidLiteral
+        QueryError::LexInvalidInput
     );
 }
 #[test]

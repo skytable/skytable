@@ -134,7 +134,6 @@ impl Model {
             }
             ret.push_str(&field_name);
             ret.push(':');
-            ret.push(' ');
             // TODO(@ohsayan): it's all lists right now, so this is okay but fix it later
             if field_decl.layers().len() == 1 {
                 ret.push_str(field_decl.layers()[0].tag().tag_selector().name_str());
@@ -150,7 +149,6 @@ impl Model {
             }
             if it.peek().is_some() {
                 ret.push(',');
-                ret.push(' ');
             }
         }
         ret.push('}');
@@ -651,7 +649,7 @@ impl Layer {
     pub fn new_empty_props(tag: FullTag) -> Self {
         Self::new(tag)
     }
-    const fn new(tag: FullTag) -> Self {
+    pub const fn new(tag: FullTag) -> Self {
         Self { tag }
     }
     const fn empty(tag: FullTag) -> Self {

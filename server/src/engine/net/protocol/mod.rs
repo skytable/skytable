@@ -169,7 +169,7 @@ pub(super) async fn query_loop<S: Socket>(
             (_, QExchangeResult::Error) => {
                 // respond with error
                 let [a, b] =
-                    (QueryError::NetworkSubsystemCorruptedPacket.value_u8() as u16).to_le_bytes();
+                    (QueryError::SysNetworkSystemIllegalClientPacket.value_u8() as u16).to_le_bytes();
                 con.write_all(&[ResponseType::Error.value_u8(), a, b])
                     .await?;
                 con.flush().await?;

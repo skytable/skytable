@@ -47,29 +47,26 @@ pub enum QueryError {
     SysTransactionalError = 4,
     /// insufficient permissions error
     SysPermissionDenied = 5,
-    // exchange
-    NetworkSubsystemCorruptedPacket = 24,
+    SysNetworkSystemIllegalClientPacket = 6,
     // QL
     /// something like an integer that randomly has a character to attached to it like `1234q`
-    LexInvalidLiteral = 25,
-    /// something like an invalid 'string" or a safe string with a bad length etc
-    LexInvalidParameter = 26,
+    LexInvalidInput = 25,
     /// unexpected byte
-    LexUnexpectedByte = 27,
+    LexUnexpectedByte = 26,
     /// expected a longer statement
-    QLUnexpectedEndOfStatement = 28,
+    QLUnexpectedEndOfStatement = 27,
     /// incorrect syntax for "something"
-    QLInvalidSyntax = 29,
+    QLInvalidSyntax = 28,
     /// invalid collection definition definition
-    QLInvalidCollectionSyntax = 30,
+    QLInvalidCollectionSyntax = 29,
     /// invalid type definition syntax
-    QLInvalidTypeDefinitionSyntax = 31,
+    QLInvalidTypeDefinitionSyntax = 30,
     /// expected a full entity definition
-    QLExpectedEntity = 32,
+    QLExpectedEntity = 31,
     /// expected a statement, found something else
-    QLExpectedStatement = 33,
+    QLExpectedStatement = 32,
     /// unknown statement
-    QLUnknownStatement = 34,
+    QLUnknownStatement = 33,
     // exec
     /// the object to be used as the "query container" is missing (for example, insert when the model was missing)
     QExecObjectNotFound = 100,
@@ -89,15 +86,15 @@ pub enum QueryError {
     QExecDdlModelAlterIllegal = 107,
     // exec DML
     /// violated the uniqueness property
-    QExecDmlDuplicate = 150,
+    QExecDmlDuplicate = 108,
     /// the data could not be validated for being accepted into a field/function/etc.
-    QExecDmlValidationError = 151,
+    QExecDmlValidationError = 109,
     /// the where expression has an unindexed column essentially implying that we can't run this query because of perf concerns
-    QExecDmlWhereHasUnindexedColumn = 152,
+    QExecDmlWhereHasUnindexedColumn = 110,
     /// the row matching the given match expression was not found
-    QExecDmlRowNotFound = 153,
+    QExecDmlRowNotFound = 111,
     /// this query needs a lock for execution, but that wasn't explicitly allowed anywhere
-    QExecNeedLock = 154,
+    QExecNeedLock = 112,
 }
 
 impl From<super::fractal::error::Error> for QueryError {
