@@ -25,7 +25,10 @@
 */
 
 use {
-    super::lex::{InsecureLexer, SecureLexer, Symbol, Token},
+    super::{
+        ast::{self, traits::ASTNode},
+        lex::{InsecureLexer, SecureLexer, Symbol, Token},
+    },
     crate::{
         engine::{data::cell::Datacell, error::QueryResult},
         util::test_utils,
@@ -137,4 +140,39 @@ fn fuzz_tokens(src: &[u8], fuzzverify: impl Fn(bool, &[Token]) -> bool) {
             )
         }
     }
+}
+
+pub(self) fn fullparse_verify<'a, A: ASTNode<'a> + 'a>(q: &'a str, offset: usize, v: impl Fn(A)) {
+    let tok = lex_insecure(q.as_bytes()).unwrap();
+    unsafe {
+        let q: &'a [_] = core::mem::transmute(tok.as_slice());
+        let a: A = ASTNode::from_insecure_tokens_full(&q[offset..]).unwrap();
+        v(a);
+    }
+}
+
+pub(self) fn fullparse_verify_substmt<'a, A: ASTNode<'a> + 'a>(q: &'a str, v: impl Fn(A)) {
+    fullparse_verify(q, 2, v)
+}
+
+pub(self) fn fullparse_verify_with_space<'a, A: ASTNode<'a> + 'a>(
+    q: &'a str,
+    space_name: &'static str,
+    offset: usize,
+    v: impl Fn(A),
+) {
+    let tok = lex_insecure(q.as_bytes()).unwrap();
+    unsafe {
+        let q: &'static [_] = core::mem::transmute(&tok.as_slice()[offset..]);
+        let a: A = ast::parse_ast_node_full_with_space(q, space_name).unwrap();
+        v(a);
+    }
+}
+
+pub(self) fn fullparse_verify_substmt_with_space<'a, A: ASTNode<'a> + 'a>(
+    q: &'a str,
+    space_name: &'static str,
+    v: impl Fn(A),
+) {
+    fullparse_verify_with_space(q, space_name, 2, v)
 }

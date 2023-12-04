@@ -33,23 +33,33 @@ use crate::engine::{
     },
 };
 
+fn sig_if_exists<'a, Qd: QueryData<'a>>(state: &State<'a, Qd>) -> bool {
+    Token![if].eq(state.offset_current_r(0)) & Token![exists].eq(state.offset_current_r(1))
+}
+
 #[derive(Debug, PartialEq)]
 /// A generic representation of `drop` query
 pub struct DropSpace<'a> {
     pub(in crate::engine) space: Ident<'a>,
     pub(in crate::engine) force: bool,
+    pub(in crate::engine) if_exists: bool,
 }
 
 impl<'a> DropSpace<'a> {
     #[inline(always)]
     /// Instantiate
-    pub const fn new(space: Ident<'a>, force: bool) -> Self {
-        Self { space, force }
+    pub const fn new(space: Ident<'a>, force: bool, if_exists: bool) -> Self {
+        Self {
+            space,
+            force,
+            if_exists,
+        }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<DropSpace<'a>> {
         /*
             either drop space <myspace> OR drop space allow not empty <myspace>
         */
+        let if_exists = check_if_exists(state)?;
         if state.cursor_is_ident() {
             let ident = state.fw_read();
             // either `force` or nothing
@@ -59,6 +69,7 @@ impl<'a> DropSpace<'a> {
                     ident.uck_read_ident()
                 },
                 false,
+                if_exists,
             ));
         } else {
             if ddl_allow_non_empty(state) {
@@ -67,11 +78,23 @@ impl<'a> DropSpace<'a> {
                     // UNSAFE(@ohsayan): verified in branch
                     state.fw_read().uck_read_ident()
                 };
-                return Ok(DropSpace::new(space_name, true));
+                return Ok(DropSpace::new(space_name, true, if_exists));
             }
         }
         Err(QueryError::QLInvalidSyntax)
     }
+}
+
+fn check_if_exists<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Result<bool, QueryError> {
+    if state.exhausted() {
+        return Err(QueryError::QLUnexpectedEndOfStatement);
+    }
+    let if_exists = sig_if_exists(state);
+    state.cursor_ahead_by((if_exists as usize) << 1);
+    if state.exhausted() {
+        return Err(QueryError::QLUnexpectedEndOfStatement);
+    }
+    Ok(if_exists)
 }
 
 #[inline(always)]
@@ -87,22 +110,28 @@ fn ddl_allow_non_empty<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> bool
 pub struct DropModel<'a> {
     pub(in crate::engine) entity: EntityIDRef<'a>,
     pub(in crate::engine) force: bool,
+    pub(in crate::engine) if_exists: bool,
 }
 
 impl<'a> DropModel<'a> {
     #[inline(always)]
-    pub fn new(entity: EntityIDRef<'a>, force: bool) -> Self {
-        Self { entity, force }
+    pub fn new(entity: EntityIDRef<'a>, force: bool, if_exists: bool) -> Self {
+        Self {
+            entity,
+            force,
+            if_exists,
+        }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+        let if_exists = check_if_exists(state)?;
         if state.cursor_is_ident() {
             let e = state.try_entity_ref_result()?;
-            return Ok(DropModel::new(e, false));
+            return Ok(DropModel::new(e, false, if_exists));
         } else {
             if ddl_allow_non_empty(state) {
                 state.cursor_ahead_by(3); // allow not empty
                 let e = state.try_entity_ref_result()?;
-                return Ok(DropModel::new(e, true));
+                return Ok(DropModel::new(e, true, if_exists));
             }
         }
         Err(QueryError::QLInvalidSyntax)

@@ -51,6 +51,7 @@ pub struct Space {
 struct ProcedureCreate {
     space_name: Box<str>,
     space: Space,
+    if_not_exists: bool,
 }
 
 impl Space {
@@ -106,6 +107,7 @@ impl Space {
         CreateSpace {
             space_name,
             mut props,
+            if_not_exists,
         }: CreateSpace,
     ) -> QueryResult<ProcedureCreate> {
         let space_name = space_name.to_string().into_boxed_str();
@@ -137,6 +139,7 @@ impl Space {
         Ok(ProcedureCreate {
             space_name,
             space: Space::new_empty_auto(dict::rflatten_metadata(props)),
+            if_not_exists,
         })
     }
 }
@@ -145,13 +148,21 @@ impl Space {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         space: CreateSpace,
-    ) -> QueryResult<()> {
+    ) -> QueryResult<bool> {
         // process create
-        let ProcedureCreate { space_name, space } = Self::process_create(space)?;
+        let ProcedureCreate {
+            space_name,
+            space,
+            if_not_exists,
+        } = Self::process_create(space)?;
         // lock the global namespace
         global.namespace().ddl_with_spaces_write(|spaces| {
             if spaces.st_contains(&space_name) {
-                return Err(QueryError::QExecDdlObjectAlreadyExists);
+                if if_not_exists {
+                    return Ok(false);
+                } else {
+                    return Err(QueryError::QExecDdlObjectAlreadyExists);
+                }
             }
             // commit txn
             if G::FS_IS_NON_NULL {
@@ -176,7 +187,7 @@ impl Space {
             }
             // update global state
             let _ = spaces.st_insert(space_name, space);
-            Ok(())
+            Ok(true)
         })
     }
     #[allow(unused)]
@@ -221,12 +232,17 @@ impl Space {
         DropSpace {
             space: space_name,
             force,
+            if_exists,
         }: DropSpace,
-    ) -> QueryResult<()> {
+    ) -> QueryResult<bool> {
         if force {
             global.namespace().ddl_with_all_mut(|spaces, models| {
                 let Some(space) = spaces.remove(space_name.as_str()) else {
-                    return Err(QueryError::QExecObjectNotFound);
+                    if if_exists {
+                        return Ok(false);
+                    } else {
+                        return Err(QueryError::QExecObjectNotFound);
+                    }
                 };
                 // commit drop
                 if G::FS_IS_NON_NULL {
@@ -256,12 +272,16 @@ impl Space {
                     );
                 }
                 let _ = spaces.st_delete(space_name.as_str());
-                Ok(())
+                Ok(true)
             })
         } else {
             global.namespace().ddl_with_spaces_write(|spaces| {
                 let Some(space) = spaces.get(space_name.as_str()) else {
-                    return Err(QueryError::QExecObjectNotFound);
+                    if if_exists {
+                        return Ok(false);
+                    } else {
+                        return Err(QueryError::QExecObjectNotFound);
+                    }
                 };
                 if !space.models.is_empty() {
                     // nonempty, we can't do anything
@@ -280,7 +300,7 @@ impl Space {
                     ));
                 }
                 let _ = spaces.st_delete(space_name.as_str());
-                Ok(())
+                Ok(true)
             })
         }
     }

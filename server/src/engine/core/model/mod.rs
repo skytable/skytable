@@ -210,6 +210,7 @@ impl Model {
             model_name: _,
             fields,
             props,
+            ..
         }: CreateModel,
     ) -> QueryResult<Self> {
         let mut private = ModelPrivate::empty();
@@ -266,13 +267,18 @@ impl Model {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         stmt: CreateModel,
-    ) -> QueryResult<()> {
+    ) -> QueryResult<bool> {
         let (space_name, model_name) = (stmt.model_name.space(), stmt.model_name.entity());
+        let if_nx = stmt.if_not_exists;
         let model = Self::process_create(stmt)?;
         global.namespace().ddl_with_space_mut(&space_name, |space| {
             // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
             if space.models().contains(model_name) {
-                return Err(QueryError::QExecDdlObjectAlreadyExists);
+                if if_nx {
+                    return Ok(false);
+                } else {
+                    return Err(QueryError::QExecDdlObjectAlreadyExists);
+                }
             }
             // since we've locked this down, no one else can parallely create another model in the same space (or remove)
             if G::FS_IS_NON_NULL {
@@ -314,18 +320,22 @@ impl Model {
                 .idx_models()
                 .write()
                 .insert(EntityID::new(&space_name, &model_name), model);
-            Ok(())
+            Ok(true)
         })
     }
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         stmt: DropModel,
-    ) -> QueryResult<()> {
+    ) -> QueryResult<bool> {
         let (space_name, model_name) = (stmt.entity.space(), stmt.entity.entity());
         global.namespace().ddl_with_space_mut(&space_name, |space| {
             if !space.models().contains(model_name) {
-                // the model isn't even present
-                return Err(QueryError::QExecObjectNotFound);
+                if stmt.if_exists {
+                    return Ok(false);
+                } else {
+                    // the model isn't even present
+                    return Err(QueryError::QExecObjectNotFound);
+                }
             }
             // get exclusive lock on models
             let mut models_idx = global.namespace().idx_models().write();
@@ -360,7 +370,7 @@ impl Model {
             // update global state
             let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
             let _ = space.models_mut().remove(model_name);
-            Ok(())
+            Ok(true)
         })
     }
 }

@@ -328,7 +328,10 @@ macro_rules! Token {
     };
     (all) => {
         __kw_misc!(All)
-    }
+    };
+    (exists) => {
+        __kw_stmt!(Exists)
+    };
 }
 
 macro_rules! union {

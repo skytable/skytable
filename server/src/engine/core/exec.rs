@@ -62,6 +62,16 @@ pub async fn dispatch_to_executor<'a>(
     }
 }
 
+fn _callgs_map<A: ASTNode<'static> + core::fmt::Debug, T>(
+    g: &Global,
+    state: &mut State<'static, InplaceData>,
+    f: impl FnOnce(&Global, A) -> Result<T, QueryError>,
+    map: impl FnOnce(T) -> Response,
+) -> QueryResult<Response> {
+    let cs = ASTNode::parse_from_state_hardened(state)?;
+    Ok(map(f(&g, cs)?))
+}
+
 #[inline(always)]
 fn _callgs<A: ASTNode<'static> + core::fmt::Debug, T>(
     g: &Global,
@@ -106,27 +116,28 @@ async fn run_blocking_stmt(
     let drop = stmt == KeywordStmt::Drop;
     let last_id = b.is_ident();
     let last_allow = Token![allow].eq(b);
-    let c_s = (create & Token![space].eq(a) & last_id) as u8 * 2;
-    let c_m = (create & Token![model].eq(a) & last_id) as u8 * 3;
+    let last_if = Token![if].eq(b);
+    let c_s = (create & Token![space].eq(a) & (last_id | last_if)) as u8 * 2;
+    let c_m = (create & Token![model].eq(a) & (last_id | last_if)) as u8 * 3;
     let a_s = (alter & Token![space].eq(a) & last_id) as u8 * 4;
     let a_m = (alter & Token![model].eq(a) & last_id) as u8 * 5;
-    let d_s = (drop & Token![space].eq(a) & (last_id | last_allow)) as u8 * 6;
-    let d_m = (drop & Token![model].eq(a) & (last_id | last_allow)) as u8 * 7;
+    let d_s = (drop & Token![space].eq(a) & (last_id | last_allow | last_if)) as u8 * 6;
+    let d_m = (drop & Token![model].eq(a) & (last_id | last_allow | last_if)) as u8 * 7;
     let fc = sysctl as u8 | c_s | c_m | a_s | a_m | d_s | d_m;
     state.cursor_ahead_if(!sysctl);
     static BLK_EXEC: [fn(
         Global,
         &ClientLocalState,
         &mut State<'static, InplaceData>,
-    ) -> QueryResult<()>; 8] = [
+    ) -> QueryResult<Response>; 8] = [
         |_, _, _| Err(QueryError::QLUnknownStatement),
         blocking_exec_sysctl,
-        |g, _, t| _callgs(&g, t, Space::transactional_exec_create),
-        |g, _, t| _callgs(&g, t, Model::transactional_exec_create),
-        |g, _, t| _callgs(&g, t, Space::transactional_exec_alter),
-        |g, _, t| _callgs(&g, t, Model::transactional_exec_alter),
-        |g, _, t| _callgs(&g, t, Space::transactional_exec_drop),
-        |g, _, t| _callgs(&g, t, Model::transactional_exec_drop),
+        |g, _, t| _callgs_map(&g, t, Space::transactional_exec_create, Response::Bool),
+        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_create, Response::Bool),
+        |g, _, t| _callgs_map(&g, t, Space::transactional_exec_alter, |_| Response::Empty),
+        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_alter, |_| Response::Empty),
+        |g, _, t| _callgs_map(&g, t, Space::transactional_exec_drop, Response::Bool),
+        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_drop, Response::Bool),
     ];
     let r = unsafe {
         // UNSAFE(@ohsayan): the only await is within this block
@@ -135,8 +146,7 @@ async fn run_blocking_stmt(
         let static_state: &'static mut State<'static, InplaceData> =
             core::mem::transmute(&mut state);
         tokio::task::spawn_blocking(move || {
-            BLK_EXEC[fc as usize](c_glob, static_cstate, static_state)?;
-            Ok(Response::Empty)
+            BLK_EXEC[fc as usize](c_glob, static_cstate, static_state)
         })
         .await
     };
@@ -147,9 +157,9 @@ fn blocking_exec_sysctl(
     g: Global,
     cstate: &ClientLocalState,
     state: &mut State<'static, InplaceData>,
-) -> QueryResult<()> {
+) -> QueryResult<Response> {
     let r = ASTNode::parse_from_state_hardened(state)?;
-    super::dcl::exec(g, cstate, r)
+    super::dcl::exec(g, cstate, r).map(|_| Response::Empty)
 }
 
 /*

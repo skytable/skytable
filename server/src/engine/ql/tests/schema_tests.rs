@@ -32,38 +32,34 @@ use {
 mod alter_space {
     use {
         super::*,
-        crate::engine::{
-            data::lit::Lit,
-            ql::{ast::parse_ast_node_full, ddl::alt::AlterSpace},
-        },
+        crate::engine::{data::lit::Lit, ql::ddl::alt::AlterSpace},
     };
     #[test]
     fn alter_space_mini() {
-        let tok = lex_insecure(b"alter model mymodel with {}").unwrap();
-        let r = parse_ast_node_full::<AlterSpace>(&tok[2..]).unwrap();
-        assert_eq!(r, AlterSpace::new(Ident::from("mymodel"), null_dict! {}));
+        fullparse_verify_substmt("alter model mymodel with {}", |r: AlterSpace| {
+            assert_eq!(r, AlterSpace::new(Ident::from("mymodel"), null_dict! {}));
+        })
     }
     #[test]
     fn alter_space() {
-        let tok = lex_insecure(
-            br#"
-                alter model mymodel with {
-                    max_entry: 1000,
-                    driver: "ts-0.8"
-                }
-            "#,
-        )
-        .unwrap();
-        let r = parse_ast_node_full::<AlterSpace>(&tok[2..]).unwrap();
-        assert_eq!(
-            r,
-            AlterSpace::new(
-                Ident::from("mymodel"),
-                null_dict! {
-                    "max_entry" => Lit::new_uint(1000),
-                    "driver" => Lit::new_string("ts-0.8".into())
-                }
-            )
+        fullparse_verify_substmt(
+            r#"
+            alter model mymodel with {
+                max_entry: 1000,
+                driver: "ts-0.8"
+            }"#,
+            |r: AlterSpace| {
+                assert_eq!(
+                    r,
+                    AlterSpace::new(
+                        Ident::from("mymodel"),
+                        null_dict! {
+                            "max_entry" => Lit::new_uint(1000),
+                            "driver" => Lit::new_string("ts-0.8".into())
+                        }
+                    )
+                );
+            },
         );
     }
 }
@@ -378,233 +374,221 @@ mod fields {
 }
 mod schemas {
     use super::*;
-    use crate::engine::ql::{
-        ast::parse_ast_node_full_with_space,
-        ddl::{
-            crt::CreateModel,
-            syn::{FieldSpec, LayerSpec},
-        },
+    use crate::engine::ql::ddl::{
+        crt::CreateModel,
+        syn::{FieldSpec, LayerSpec},
     };
     #[test]
     fn schema_mini() {
-        let tok = lex_insecure(
-            b"
-                create model mymodel(
-                    primary username: string,
-                    password: binary
-                )
-            ",
-        )
-        .unwrap();
-        let tok = &tok[2..];
-
-        // parse model
-        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
-
-        assert_eq!(
-            model,
-            CreateModel::new(
-                ("apps", "mymodel").into(),
-                vec![
-                    FieldSpec::new(
-                        Ident::from("username"),
-                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
-                        false,
-                        true,
-                    ),
-                    FieldSpec::new(
-                        Ident::from("password"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        false,
-                        false,
-                    )
-                ],
-                null_dict! {}
-            )
-        )
+        let mut ret = CreateModel::new(
+            ("apps", "mymodel").into(),
+            vec![
+                FieldSpec::new(
+                    Ident::from("username"),
+                    vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
+                    false,
+                    true,
+                ),
+                FieldSpec::new(
+                    Ident::from("password"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    false,
+                    false,
+                ),
+            ],
+            null_dict! {},
+            false,
+        );
+        fullparse_verify_substmt_with_space(
+            "create model mymodel(
+                primary username: string,
+                password: binary
+            )",
+            "apps",
+            |r: CreateModel| assert_eq!(r, ret),
+        );
+        ret.if_not_exists = true;
+        fullparse_verify_substmt_with_space(
+            "create model if not exists mymodel(
+                primary username: string,
+                password: binary
+            )",
+            "apps",
+            |r: CreateModel| assert_eq!(r, ret),
+        );
     }
     #[test]
     fn schema() {
-        let tok = lex_insecure(
-            b"
-                create model mymodel(
-                    primary username: string,
-                    password: binary,
-                    null profile_pic: binary
-                )
-            ",
-        )
-        .unwrap();
-        let tok = &tok[2..];
-
-        // parse model
-        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
-
-        assert_eq!(
-            model,
-            CreateModel::new(
-                ("apps", "mymodel").into(),
-                vec![
-                    FieldSpec::new(
-                        Ident::from("username"),
-                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
-                        false,
-                        true,
-                    ),
-                    FieldSpec::new(
-                        Ident::from("password"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        false,
-                        false,
-                    ),
-                    FieldSpec::new(
-                        Ident::from("profile_pic"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        true,
-                        false,
-                    )
-                ],
-                null_dict! {}
-            )
-        )
+        let mut ret = CreateModel::new(
+            ("apps", "mymodel").into(),
+            vec![
+                FieldSpec::new(
+                    Ident::from("username"),
+                    vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
+                    false,
+                    true,
+                ),
+                FieldSpec::new(
+                    Ident::from("password"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    false,
+                    false,
+                ),
+                FieldSpec::new(
+                    Ident::from("profile_pic"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    true,
+                    false,
+                ),
+            ],
+            null_dict! {},
+            false,
+        );
+        fullparse_verify_substmt_with_space(
+            "create model mymodel(
+            primary username: string,
+            password: binary,
+            null profile_pic: binary
+        )",
+            "apps",
+            |r: CreateModel| assert_eq!(r, ret),
+        );
+        ret.if_not_exists = true;
+        fullparse_verify_substmt_with_space(
+            "create model if not exists mymodel(
+            primary username: string,
+            password: binary,
+            null profile_pic: binary
+        )",
+            "apps",
+            |r: CreateModel| assert_eq!(r, ret),
+        );
     }
 
     #[test]
     fn schema_pro() {
-        let tok = lex_insecure(
-            b"
-                create model mymodel(
-                    primary username: string,
-                    password: binary,
-                    null profile_pic: binary,
-                    null notes: list {
-                        type: string,
-                        unique: true,
-                    }
-                )
-            ",
+        let mut ret = CreateModel::new(
+            ("apps", "mymodel").into(),
+            vec![
+                FieldSpec::new(
+                    Ident::from("username"),
+                    vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
+                    false,
+                    true,
+                ),
+                FieldSpec::new(
+                    Ident::from("password"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    false,
+                    false,
+                ),
+                FieldSpec::new(
+                    Ident::from("profile_pic"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    true,
+                    false,
+                ),
+                FieldSpec::new(
+                    Ident::from("notes"),
+                    vec![
+                        LayerSpec::new(Ident::from("string"), null_dict! {}),
+                        LayerSpec::new(
+                            Ident::from("list"),
+                            null_dict! {
+                                "unique" => Lit::new_bool(true)
+                            },
+                        ),
+                    ],
+                    true,
+                    false,
+                ),
+            ],
+            null_dict! {},
+            false,
+        );
+        ret.if_not_exists = true;
+        fullparse_verify_substmt_with_space(
+            "
+        create model if not exists mymodel(
+            primary username: string,
+            password: binary,
+            null profile_pic: binary,
+            null notes: list {
+                type: string,
+                unique: true,
+            }
         )
-        .unwrap();
-        let tok = &tok[2..];
-
-        // parse model
-        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
-
-        assert_eq!(
-            model,
-            CreateModel::new(
-                ("apps", "mymodel").into(),
-                vec![
-                    FieldSpec::new(
-                        Ident::from("username"),
-                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
-                        false,
-                        true
-                    ),
-                    FieldSpec::new(
-                        Ident::from("password"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        false,
-                        false
-                    ),
-                    FieldSpec::new(
-                        Ident::from("profile_pic"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        true,
-                        false
-                    ),
-                    FieldSpec::new(
-                        Ident::from("notes"),
-                        vec![
-                            LayerSpec::new(Ident::from("string"), null_dict! {}),
-                            LayerSpec::new(
-                                Ident::from("list"),
-                                null_dict! {
-                                    "unique" => Lit::new_bool(true)
-                                }
-                            )
-                        ],
-                        true,
-                        false
-                    )
-                ],
-                null_dict! {}
-            )
-        )
+        ",
+            "apps",
+            |r: CreateModel| assert_eq!(ret, r),
+        );
     }
-
     #[test]
     fn schema_pro_max() {
-        let tok = lex_insecure(
-            b"
-                create model mymodel(
-                    primary username: string,
-                    password: binary,
-                    null profile_pic: binary,
-                    null notes: list {
-                        type: string,
-                        unique: true,
-                    }
-                ) with {
-                    env: {
-                        free_user_limit: 100,
-                    },
-                    storage_driver: \"skyheap\"
+        let mut ret = CreateModel::new(
+            ("apps", "mymodel").into(),
+            vec![
+                FieldSpec::new(
+                    Ident::from("username"),
+                    vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
+                    false,
+                    true,
+                ),
+                FieldSpec::new(
+                    Ident::from("password"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    false,
+                    false,
+                ),
+                FieldSpec::new(
+                    Ident::from("profile_pic"),
+                    vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
+                    true,
+                    false,
+                ),
+                FieldSpec::new(
+                    Ident::from("notes"),
+                    vec![
+                        LayerSpec::new(Ident::from("string"), null_dict! {}),
+                        LayerSpec::new(
+                            Ident::from("list"),
+                            null_dict! {
+                                "unique" => Lit::new_bool(true)
+                            },
+                        ),
+                    ],
+                    true,
+                    false,
+                ),
+            ],
+            null_dict! {
+                "env" => null_dict! {
+                    "free_user_limit" => Lit::new_uint(100),
+                },
+                "storage_driver" => Lit::new_string("skyheap".into()),
+            },
+            false,
+        );
+        ret.if_not_exists = true;
+        fullparse_verify_substmt_with_space(
+            "
+            create model if not exists mymodel(
+                primary username: string,
+                password: binary,
+                null profile_pic: binary,
+                null notes: list {
+                    type: string,
+                    unique: true,
                 }
-            ",
-        )
-        .unwrap();
-        let tok = &tok[2..];
-
-        // parse model
-        let model = parse_ast_node_full_with_space::<CreateModel>(tok, "apps").unwrap();
-
-        assert_eq!(
-            model,
-            CreateModel::new(
-                ("apps", "mymodel").into(),
-                vec![
-                    FieldSpec::new(
-                        Ident::from("username"),
-                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
-                        false,
-                        true
-                    ),
-                    FieldSpec::new(
-                        Ident::from("password"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        false,
-                        false
-                    ),
-                    FieldSpec::new(
-                        Ident::from("profile_pic"),
-                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
-                        true,
-                        false
-                    ),
-                    FieldSpec::new(
-                        Ident::from("notes"),
-                        vec![
-                            LayerSpec::new(Ident::from("string"), null_dict! {}),
-                            LayerSpec::new(
-                                Ident::from("list"),
-                                null_dict! {
-                                    "unique" => Lit::new_bool(true)
-                                }
-                            )
-                        ],
-                        true,
-                        false
-                    )
-                ],
-                null_dict! {
-                    "env" => null_dict! {
-                        "free_user_limit" => Lit::new_uint(100),
-                    },
-                    "storage_driver" => Lit::new_string("skyheap".into()),
-                }
-            )
-        )
+            ) with {
+                env: {
+                    free_user_limit: 100,
+                },
+                storage_driver: \"skyheap\"
+            }",
+            "apps",
+            |r: CreateModel| assert_eq!(r, ret),
+        );
     }
 }
 mod dict_field_syntax {
@@ -1119,7 +1103,12 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
             parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
-            DropSpace::new(Ident::from("myspace"), false)
+            DropSpace::new(Ident::from("myspace"), false, false)
+        );
+        let src = lex_insecure(br"drop space if exists myspace").unwrap();
+        assert_eq!(
+            parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
+            DropSpace::new(Ident::from("myspace"), false, true)
         );
     }
     #[test]
@@ -1127,7 +1116,12 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop space allow not empty myspace").unwrap();
         assert_eq!(
             parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
-            DropSpace::new(Ident::from("myspace"), true)
+            DropSpace::new(Ident::from("myspace"), true, false)
+        );
+        let src = lex_insecure(br"drop space if exists allow not empty myspace").unwrap();
+        assert_eq!(
+            parse_ast_node_full::<DropSpace>(&src[2..]).unwrap(),
+            DropSpace::new(Ident::from("myspace"), true, true)
         );
     }
     #[test]
@@ -1135,7 +1129,12 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
             parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
-            DropModel::new(("apps", "mymodel").into(), false)
+            DropModel::new(("apps", "mymodel").into(), false, false)
+        );
+        let src = lex_insecure(br"drop model if exists mymodel").unwrap();
+        assert_eq!(
+            parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
+            DropModel::new(("apps", "mymodel").into(), false, true)
         );
     }
     #[test]
@@ -1143,7 +1142,12 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop model allow not empty mymodel").unwrap();
         assert_eq!(
             parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
-            DropModel::new(("apps", "mymodel").into(), true)
+            DropModel::new(("apps", "mymodel").into(), true, false)
+        );
+        let src = lex_insecure(br"drop model if exists allow not empty mymodel").unwrap();
+        assert_eq!(
+            parse_ast_node_full_with_space::<DropModel>(&src[2..], "apps").unwrap(),
+            DropModel::new(("apps", "mymodel").into(), true, true)
         );
     }
 }

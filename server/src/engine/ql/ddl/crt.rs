@@ -40,6 +40,13 @@ use {
     },
 };
 
+fn sig_if_not_exists<'a, Qd: QueryData<'a>>(state: &State<'a, Qd>) -> bool {
+    Token![if].eq(state.offset_current_r(0))
+        & Token![not].eq(state.offset_current_r(1))
+        & Token![exists].eq(state.offset_current_r(2))
+        & (state.remaining() >= 3)
+}
+
 #[derive(Debug, PartialEq)]
 /// A space
 pub struct CreateSpace<'a> {
@@ -47,6 +54,7 @@ pub struct CreateSpace<'a> {
     pub space_name: Ident<'a>,
     /// properties
     pub props: DictGeneric,
+    pub if_not_exists: bool,
 }
 
 impl<'a> CreateSpace<'a> {
@@ -57,6 +65,13 @@ impl<'a> CreateSpace<'a> {
         if compiler::unlikely(state.remaining() < 1) {
             return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
+        // check for `if not exists`
+        let if_not_exists = sig_if_not_exists(state);
+        state.cursor_ahead_by(if_not_exists as usize * 3);
+        // get space name
+        if state.exhausted() {
+            return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
+        }
         let space_name = state.fw_read();
         state.poison_if_not(space_name.is_ident());
         // either we have `with` or nothing. don't be stupid
@@ -65,7 +80,7 @@ impl<'a> CreateSpace<'a> {
         state.cursor_ahead_if(has_more_properties); // +WITH
         let mut d = DictGeneric::new();
         // properties
-        if has_more_properties && state.okay() {
+        if has_more_properties & state.okay() {
             syn::rfold_dict(DictFoldState::OB, state, &mut d);
         }
         if state.okay() {
@@ -75,6 +90,7 @@ impl<'a> CreateSpace<'a> {
                     space_name.uck_read_ident()
                 },
                 props: d,
+                if_not_exists,
             })
         } else {
             Err(QueryError::QLInvalidSyntax)
@@ -91,6 +107,8 @@ pub struct CreateModel<'a> {
     pub(in crate::engine) fields: Vec<FieldSpec<'a>>,
     /// properties
     pub(in crate::engine) props: DictGeneric,
+    /// if not exists
+    pub(in crate::engine) if_not_exists: bool,
 }
 
 /*
@@ -106,18 +124,22 @@ impl<'a> CreateModel<'a> {
         model_name: EntityIDRef<'a>,
         fields: Vec<FieldSpec<'a>>,
         props: DictGeneric,
+        if_not_exists: bool,
     ) -> Self {
         Self {
             model_name,
             fields,
             props,
+            if_not_exists,
         }
     }
-
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 10) {
             return compiler::cold_rerr(QueryError::QLUnexpectedEndOfStatement);
         }
+        // if not exists?
+        let if_not_exists = sig_if_not_exists(state);
+        state.cursor_ahead_by(if_not_exists as usize * 3);
         // model name; ignore errors
         let model_uninit = state.try_entity_buffered_into_state_uninit();
         state.poison_if_not(state.cursor_eq(Token![() open]));
@@ -150,6 +172,7 @@ impl<'a> CreateModel<'a> {
                 },
                 fields,
                 props,
+                if_not_exists,
             })
         } else {
             Err(QueryError::QLInvalidSyntax)

@@ -120,6 +120,7 @@ pub enum Response {
         size: usize,
         data: Vec<u8>,
     },
+    Bool(bool),
 }
 
 pub(super) async fn query_loop<S: Socket>(
@@ -168,8 +169,8 @@ pub(super) async fn query_loop<S: Socket>(
             }
             (_, QExchangeResult::Error) => {
                 // respond with error
-                let [a, b] =
-                    (QueryError::SysNetworkSystemIllegalClientPacket.value_u8() as u16).to_le_bytes();
+                let [a, b] = (QueryError::SysNetworkSystemIllegalClientPacket.value_u8() as u16)
+                    .to_le_bytes();
                 con.write_all(&[ResponseType::Error.value_u8(), a, b])
                     .await?;
                 con.flush().await?;
@@ -191,6 +192,10 @@ pub(super) async fn query_loop<S: Socket>(
                 con.write_all(irep.as_bytes(size as u64)).await?;
                 con.write_u8(b'\n').await?;
                 con.write_all(&data).await?;
+            }
+            Ok(Response::Bool(b)) => {
+                con.write_all(&[ResponseType::Bool.value_u8(), b as u8])
+                    .await?
             }
             Ok(Response::Null) => con.write_u8(ResponseType::Null.value_u8()).await?,
             Err(e) => {
