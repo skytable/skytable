@@ -46,6 +46,7 @@ use {
     std::{fs, io::Write},
 };
 mod svc;
+pub use svc::get_children;
 
 /// Run the test suite
 pub fn run_test() -> HarnessResult<()> {

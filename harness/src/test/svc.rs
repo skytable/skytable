@@ -33,11 +33,72 @@ use {
         HarnessError, HarnessResult, ROOT_DIR,
     },
     std::{
+        cell::RefCell,
         io::ErrorKind,
         path::Path,
-        process::{Child, Command},
+        process::{Child, Command, Output, Stdio},
     },
 };
+
+thread_local! {
+    static CHILDREN: RefCell<Vec<(&'static str, Child)>> = RefCell::default();
+}
+
+pub struct ChildStatus {
+    id: &'static str,
+    stdout: String,
+    stderr: String,
+    exit_code: i32,
+}
+
+impl ChildStatus {
+    pub fn new(id: &'static str, stdout: String, stderr: String, exit_code: i32) -> Self {
+        Self {
+            id,
+            stdout,
+            stderr,
+            exit_code,
+        }
+    }
+    pub fn print_logs(&self) {
+        println!(
+            "######################### LOGS FROM {} #########################",
+            self.id
+        );
+        println!("-> exit code: `{}`", self.exit_code);
+        if !self.stdout.is_empty() {
+            println!("+++++++++++++++++++++ STDOUT +++++++++++++++++++++");
+            println!("{}", self.stdout);
+            println!("++++++++++++++++++++++++++++++++++++++++++++++++++");
+        }
+        if !self.stderr.is_empty() {
+            println!("+++++++++++++++++++++ STDERR +++++++++++++++++++++");
+            println!("{}", self.stderr);
+            println!("++++++++++++++++++++++++++++++++++++++++++++++++++");
+        }
+        println!("######################### ############ #########################");
+    }
+}
+
+pub fn get_children() -> Vec<ChildStatus> {
+    CHILDREN.with(|c| {
+        let mut ret = vec![];
+        for (name, child) in c.borrow_mut().drain(..) {
+            let Output {
+                status,
+                stdout,
+                stderr,
+            } = child.wait_with_output().unwrap();
+            ret.push(ChildStatus::new(
+                name,
+                String::from_utf8(stdout).unwrap(),
+                String::from_utf8(stderr).unwrap(),
+                status.code().unwrap(),
+            ))
+        }
+        ret
+    })
+}
 
 #[cfg(windows)]
 /// The powershell script hack to send CTRL+C using kernel32
@@ -69,6 +130,8 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
     ];
     let mut cmd = util::assemble_command_from_slice(&args);
     cmd.current_dir(server_id);
+    cmd.stdout(Stdio::null());
+    cmd.stderr(Stdio::piped());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NEW_CONSOLE);
     cmd
@@ -174,15 +237,15 @@ fn wait_for_shutdown() -> HarnessResult<()> {
 }
 
 /// Start the servers returning handles to the child processes
-fn start_servers(target_folder: impl AsRef<Path>) -> HarnessResult<Vec<Child>> {
-    let mut ret = Vec::with_capacity(SERVERS.len());
+fn start_servers(target_folder: impl AsRef<Path>) -> HarnessResult<()> {
     for (server_id, _ports) in SERVERS {
         let cmd = get_run_server_cmd(server_id, target_folder.as_ref());
         info!("Starting {server_id} ...");
-        ret.push(util::get_child(format!("start {server_id}"), cmd)?);
+        let child = util::get_child(format!("start {server_id}"), cmd)?;
+        CHILDREN.with(|c| c.borrow_mut().push((server_id, child)));
     }
     wait_for_startup()?;
-    Ok(ret)
+    Ok(())
 }
 
 pub(super) fn run_with_servers(
@@ -191,14 +254,12 @@ pub(super) fn run_with_servers(
     run_what: impl FnOnce() -> HarnessResult<()>,
 ) -> HarnessResult<()> {
     info!("Starting servers ...");
-    let children = start_servers(target_folder.as_ref())?;
+    start_servers(target_folder.as_ref())?;
     run_what()?;
     if kill_servers_when_done {
         kill_servers()?;
         wait_for_shutdown()?;
     }
-    // just use this to avoid ignoring the children vector
-    assert_eq!(children.len(), SERVERS.len());
     Ok(())
 }
 

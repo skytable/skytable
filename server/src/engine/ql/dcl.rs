@@ -25,23 +25,23 @@
 */
 
 use crate::engine::{
-    data::{
-        tag::{DataTag, TagClass},
-        DictGeneric,
-    },
+    data::DictGeneric,
     error::{QueryError, QueryResult},
     ql::{
         ast::{traits, QueryData, State},
         ddl::syn,
+        lex::Ident,
     },
 };
 
 #[derive(Debug, PartialEq)]
 pub enum SysctlCommand<'a> {
     /// `sysctl create user ...`
-    CreateUser(UserAdd<'a>),
+    CreateUser(UserDecl<'a>),
     /// `sysctl drop user ...`
     DropUser(UserDel<'a>),
+    /// `systcl alter user ...`
+    AlterUser(UserDecl<'a>),
     /// `sysctl status`
     ReportStatus,
 }
@@ -62,16 +62,19 @@ impl<'a> traits::ASTNode<'a> for SysctlCommand<'a> {
             return Err(QueryError::QLUnexpectedEndOfStatement);
         }
         let (a, b) = (state.fw_read(), state.fw_read());
+        let alter = Token![alter].eq(a) & b.ident_eq("user");
         let create = Token![create].eq(a) & b.ident_eq("user");
         let drop = Token![drop].eq(a) & b.ident_eq("user");
         let status = a.ident_eq("report") & b.ident_eq("status");
-        if !(create | drop | status) {
+        if !(create | drop | status | alter) {
             return Err(QueryError::QLUnknownStatement);
         }
         if create {
-            UserAdd::parse(state).map(SysctlCommand::CreateUser)
+            UserDecl::parse(state).map(SysctlCommand::CreateUser)
         } else if drop {
             UserDel::parse(state).map(SysctlCommand::DropUser)
+        } else if alter {
+            UserDecl::parse(state).map(SysctlCommand::AlterUser)
         } else {
             Ok(SysctlCommand::ReportStatus)
         }
@@ -89,7 +92,7 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
     }
     let token_buffer = state.current();
     // initial sig
-    let signature_okay = token_buffer[0].is_lit()
+    let signature_okay = token_buffer[0].is_ident()
         & token_buffer[1].eq(&Token![with])
         & token_buffer[2].eq(&Token![open {}]);
     // get props
@@ -100,45 +103,38 @@ fn parse<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<UserMe
     };
     let maybe_username = unsafe {
         // UNSAFE(@ohsayan): the dict parse ensures state correctness
-        token_buffer[0].uck_read_lit()
+        token_buffer[0].uck_read_ident()
     };
-    state.poison_if_not(maybe_username.kind().tag_class() == TagClass::Str);
     if state.not_exhausted() | !state.okay() {
         // we shouldn't have more tokens
         return Err(QueryError::QLInvalidSyntax);
     }
     Ok(UserMeta {
-        username: unsafe {
-            // UNSAFE(@ohsayan): +tagck in state
-            maybe_username.str()
-        },
+        username: maybe_username,
         options: dict,
     })
 }
 
 struct UserMeta<'a> {
-    username: &'a str,
+    username: Ident<'a>,
     options: DictGeneric,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct UserAdd<'a> {
-    username: &'a str,
+pub struct UserDecl<'a> {
+    username: Ident<'a>,
     options: DictGeneric,
 }
 
-impl<'a> UserAdd<'a> {
-    pub(in crate::engine::ql) fn new(username: &'a str, options: DictGeneric) -> Self {
+impl<'a> UserDecl<'a> {
+    pub(in crate::engine::ql) fn new(username: Ident<'a>, options: DictGeneric) -> Self {
         Self { username, options }
     }
-    /// Parse a `user add` DCL command
-    ///
-    /// MUSTENDSTREAM: YES
     pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         parse(state).map(|UserMeta { username, options }: UserMeta| Self::new(username, options))
     }
     pub fn username(&self) -> &str {
-        self.username
+        self.username.as_str()
     }
     pub fn options_mut(&mut self) -> &mut DictGeneric {
         &mut self.options
@@ -150,33 +146,28 @@ impl<'a> UserAdd<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct UserDel<'a> {
-    username: &'a str,
+    username: Ident<'a>,
 }
 
 impl<'a> UserDel<'a> {
-    pub(in crate::engine::ql) fn new(username: &'a str) -> Self {
+    pub(in crate::engine::ql) fn new(username: Ident<'a>) -> Self {
         Self { username }
     }
     /// Parse a `user del` DCL command
     ///
     /// MUSTENDSTREAM: YES
     pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
-        if state.can_read_lit_rounded() & (state.remaining() == 1) {
-            let lit = unsafe {
+        if state.cursor_has_ident_rounded() & (state.remaining() == 1) {
+            let username = unsafe {
                 // UNSAFE(@ohsayan): +boundck
-                state.read_cursor_lit_unchecked()
+                state.read().uck_read_ident()
             };
             state.cursor_ahead();
-            if lit.kind().tag_class() == TagClass::Str {
-                return Ok(Self::new(unsafe {
-                    // UNSAFE(@ohsayan): +tagck
-                    lit.str()
-                }));
-            }
+            return Ok(Self::new(username));
         }
         Err(QueryError::QLInvalidSyntax)
     }
     pub fn username(&self) -> &str {
-        self.username
+        self.username.as_str()
     }
 }

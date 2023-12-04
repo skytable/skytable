@@ -29,7 +29,7 @@ use crate::engine::{
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     net::protocol::ClientLocalState,
-    ql::dcl::{SysctlCommand, UserAdd, UserDel},
+    ql::dcl::{SysctlCommand, UserDecl, UserDel},
 };
 
 const KEY_PASSWORD: &str = "password";
@@ -45,22 +45,41 @@ pub fn exec<G: GlobalInstanceLike>(
     match cmd {
         SysctlCommand::CreateUser(new) => create_user(&g, new),
         SysctlCommand::DropUser(drop) => drop_user(&g, current_user, drop),
+        SysctlCommand::AlterUser(usermod) => alter_user(&g, current_user, usermod),
         SysctlCommand::ReportStatus => Ok(()),
     }
 }
 
-fn create_user(global: &impl GlobalInstanceLike, mut user_add: UserAdd<'_>) -> QueryResult<()> {
-    let username = user_add.username().to_owned();
-    let password = match user_add.options_mut().remove(KEY_PASSWORD) {
+fn alter_user(
+    global: &impl GlobalInstanceLike,
+    cstate: &ClientLocalState,
+    user: UserDecl,
+) -> QueryResult<()> {
+    if cstate.is_root() {
+        // the root password can only be changed by shutting down the server
+        return Err(QueryError::SysAuthError);
+    }
+    let (username, password) = get_user_data(user)?;
+    global.sys_store().alter_user(username, password)
+}
+
+fn create_user(global: &impl GlobalInstanceLike, user: UserDecl) -> QueryResult<()> {
+    let (username, password) = get_user_data(user)?;
+    global.sys_store().create_new_user(username, password)
+}
+
+fn get_user_data(mut user: UserDecl) -> Result<(String, String), QueryError> {
+    let username = user.username().to_owned();
+    let password = match user.options_mut().remove(KEY_PASSWORD) {
         Some(DictEntryGeneric::Data(d))
-            if d.kind() == TagClass::Str && user_add.options().is_empty() =>
+            if d.kind() == TagClass::Str && user.options().is_empty() =>
         unsafe { d.into_str().unwrap_unchecked() },
         None | Some(_) => {
             // invalid properties
             return Err(QueryError::QExecDdlInvalidProperties);
         }
     };
-    global.sys_store().create_new_user(username, password)
+    Ok((username, password))
 }
 
 fn drop_user(

@@ -230,10 +230,9 @@ pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 /// password set by [`sky_macros::dbtest`] (relogin)
                 const __DBTEST_PASS: &str = #new_password;
                 {
+                    let query_assembled = format!("sysctl create user {} with {{ password: ? }}", #new_username);
                     let mut db = skytable::Config::new(#host, #port, #login_username, #login_password).connect().unwrap();
-                    db.query_parse::<()>(
-                        &skytable::query!("sysctl create user ? with { password: ? }", #new_username, #new_password)
-                    ).unwrap();
+                    db.query_parse::<()>(&skytable::query!(query_assembled, #new_password)).unwrap();
                 }
             };
         }
@@ -272,10 +271,9 @@ pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
             ret_block = quote! {
                 #ret_block
                 {
+                    let query_assembled = format!("sysctl drop user {}", #new_username);
                     let mut db = skytable::Config::new(#host, #port, #login_username, #login_password).connect().unwrap();
-                    db.query_parse::<()>(
-                        &skytable::query!("sysctl drop user ?", #new_username)
-                    ).unwrap();
+                    db.query_parse::<()>(&skytable::query!(query_assembled)).unwrap();
                 }
             };
         }

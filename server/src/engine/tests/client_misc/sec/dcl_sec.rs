@@ -57,12 +57,9 @@ fn ensure_sysctl_status_end_of_tokens() {
 #[dbtest]
 fn ensure_sysctl_create_user() {
     let mut db = db!();
+    let query = format!("sysctl create user myuser with {{ password: ? }} blah");
     assert_err_eq!(
-        db.query_parse::<()>(&query!(
-            "sysctl create user ? with { password: ? } blah",
-            "myuser",
-            "mypass"
-        )),
+        db.query_parse::<()>(&query!(query, "mypass")),
         Error::ServerError(INVALID_SYNTAX_ERR)
     );
 }

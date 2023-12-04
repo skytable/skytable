@@ -14,15 +14,15 @@ All changes in this project will be noted in this file.
   - `space`s are the equivalent of the `keyspace` from previous versions
   - `model`s are the equivalent of `table`s from previous version
   - The following queries were added:
-    - `CREATE SPACE ...`
-    - `CREATE MODEL ...`
+    - `CREATE SPACE [IF NOT EXISTS] ...`
+    - `CREATE MODEL [IF NOT EXISTS] ...`
       - Nested lists are now supported
       - Type definitions are now supported
       - Multiple fields are now supported
     - `ALTER SPACE ...`
     - `ALTER MODEL ...`
-    - `DROP SPACE ...`
-    - `DROP MODEL ...`
+    - `DROP SPACE [IF EXISTS] ...`
+    - `DROP MODEL [IF EXISTS] ...`
     - `USE <space>`:
       - works just like SQL
       - **does not work with DDL queries**: the reason it works in this way is to prevent accidental deletes
@@ -56,6 +56,7 @@ All changes in this project will be noted in this file.
     - `DELETE FROM <space>.<model> WHERE <primary_key_column> = <value>`
 - DCL:
   - `SYSCTL CREATE USER <name> WITH { password: <password> }`
+  - `SYSCTL ALTER USER <name> WITH { password: <new password> }`
   - `SYSCTL DROP USER <name>`
 
 #### Fractal engine

@@ -39,12 +39,25 @@ fn report_status_simple() {
 
 #[test]
 fn create_user_simple() {
-    let query = lex_insecure(b"sysctl create user 'sayan' with { password: 'mypass123' }").unwrap();
+    let query = lex_insecure(b"sysctl create user sayan with { password: 'mypass123' }").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
     assert_eq!(
         q,
-        SysctlCommand::CreateUser(dcl::UserAdd::new(
-            "sayan",
+        SysctlCommand::CreateUser(dcl::UserDecl::new(
+            "sayan".into(),
+            into_dict!("password" => lit!("mypass123"))
+        ))
+    )
+}
+
+#[test]
+fn alter_user_simple() {
+    let query = lex_insecure(b"sysctl alter user sayan with { password: 'mypass123' }").unwrap();
+    let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
+    assert_eq!(
+        q,
+        SysctlCommand::AlterUser(dcl::UserDecl::new(
+            "sayan".into(),
             into_dict!("password" => lit!("mypass123"))
         ))
     )
@@ -52,7 +65,10 @@ fn create_user_simple() {
 
 #[test]
 fn delete_user_simple() {
-    let query = lex_insecure(b"sysctl drop user 'monster'").unwrap();
+    let query = lex_insecure(b"sysctl drop user monster").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
-    assert_eq!(q, SysctlCommand::DropUser(dcl::UserDel::new("monster")));
+    assert_eq!(
+        q,
+        SysctlCommand::DropUser(dcl::UserDel::new("monster".into()))
+    );
 }

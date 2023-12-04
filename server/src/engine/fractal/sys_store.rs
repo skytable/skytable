@@ -183,6 +183,23 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
             Entry::Occupied(_) => Err(QueryError::SysAuthError),
         }
     }
+    pub fn alter_user(&self, username: String, password: String) -> QueryResult<()> {
+        let mut auth = self.system_store().auth_data().write();
+        match auth.users.get_mut(username.as_str()) {
+            Some(user) => {
+                let last_pass_hash = core::mem::replace(
+                    &mut user.key,
+                    rcrypt::hash(password, rcrypt::DEFAULT_COST)
+                        .unwrap()
+                        .into_boxed_slice(),
+                );
+                self._try_sync_or(&mut auth, |auth| {
+                    auth.users.get_mut(username.as_str()).unwrap().key = last_pass_hash;
+                })
+            }
+            None => Err(QueryError::SysAuthError),
+        }
+    }
     pub fn drop_user(&self, username: &str) -> QueryResult<()> {
         let mut auth = self.system_store().auth_data().write();
         if username == SysAuthUser::USER_ROOT {
