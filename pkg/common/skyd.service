@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=skytable
-ExecStart=/usr/bin/skyd --noart
+ExecStart=/usr/bin/skyd --config=/var/lib/skytable/config.yaml
 WorkingDirectory=/var/lib/skytable
 
 [Install]

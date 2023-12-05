@@ -1,0 +1,14 @@
+# this is the default configuration for the Debian package. Modify to use your own settings.
+system:
+  mode: prod
+  rs_window: 300
+
+auth:
+  plugin: pwd
+  # replace with your root password of choice
+  root_pass: rootpass
+
+endpoints:
+  insecure:
+    host: 127.0.0.1
+    port: 2003

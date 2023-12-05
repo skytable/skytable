@@ -1,0 +1,27 @@
+#!/bin/sh -e
+
+SKY_DIR=/var/lib/skytable
+SERVICE_NAME=skyd
+
+# Only perform cleanup on package removal, not on upgrade
+case "$1" in
+    remove)
+        echo "Removing the skytable user..."
+        # Remove the user and group, if they exist
+        # This will not remove the /var/lib/skytable directory
+        if getent passwd skytable > /dev/null; then
+            deluser --system skytable
+        fi
+        if getent group skytable > /dev/null; then
+            delgroup skytable
+        fi
+        echo "Removing the configuration file ..."
+        rm /var/lib/skytable/config.yaml
+        echo "Cleanup complete."
+        ;;
+    *)
+        # No action required for other cases (upgrade, failed-upgrade, etc.)
+        ;;
+esac
+
+#DEBHELPER#

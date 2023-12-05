@@ -57,7 +57,7 @@ use {
 
 /*
     HACK(@ohsayan): Until https://github.com/rust-lang/rust/issues/76560 is stabilized which is likely to take a while,
-    we need to settle for trait objects
+    we need to settle for trait objects.
 */
 
 #[cfg(debug_assertions)]

@@ -11,7 +11,7 @@ on:
       - v*
 
 env:
-  IMAGE_NAME: sdb
+  IMAGE_NAME: skytable
   BUILD: "false"
 
 jobs:
