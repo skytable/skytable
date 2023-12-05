@@ -1,0 +1,17 @@
+system:
+  mode: prod
+
+auth:
+  plugin: pwd
+  root_pass: mypassword12345678
+
+endpoints:
+  insecure:
+    host: 127.0.0.1
+    port: 2003
+  secure:
+    host: 127.0.0.1
+    port: 2004
+    cert: ../cert.pem
+    private_key: ../key.pem
+    pkey_passphrase: ../passphrase.txt

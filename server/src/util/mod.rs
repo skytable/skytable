@@ -27,18 +27,27 @@
 #[macro_use]
 mod macros;
 pub mod compiler;
-pub mod error;
 pub mod os;
+#[cfg(test)]
+pub mod test_utils;
 use {
-    crate::{
-        actions::{ActionError, ActionResult},
-        protocol::interface::ProtocolSpec,
+    core::{
+        fmt::{self, Debug},
+        marker::PhantomData,
+        mem::{self, MaybeUninit},
+        ops::Deref,
+        slice,
     },
-    core::{fmt::Debug, marker::PhantomData, ops::Deref},
     std::process,
 };
 
+pub const IS_ON_CI: bool = option_env!("CI").is_some();
+
 const EXITCODE_ONE: i32 = 0x01;
+
+pub fn bx_to_vec<T>(bx: Box<[T]>) -> Vec<T> {
+    Vec::from(bx)
+}
 
 /// # Unsafe unwrapping
 ///
@@ -74,20 +83,6 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
             Some(t) => t,
             None => impossible!(),
         }
-    }
-}
-
-pub trait UnwrapActionError<T> {
-    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T>;
-    fn unwrap_or_aerr<P: ProtocolSpec>(self) -> ActionResult<T>;
-}
-
-impl<T> UnwrapActionError<T> for Option<T> {
-    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T> {
-        self.ok_or_else(|| e.into())
-    }
-    fn unwrap_or_aerr<P: ProtocolSpec>(self) -> ActionResult<T> {
-        self.ok_or_else(|| P::RCODE_ACTION_ERR.into())
     }
 }
 
@@ -136,7 +131,8 @@ impl<T: Clone> Clone for Wrapper<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
+#[repr(transparent)]
 /// This is yet another compiler hack and has no "actual impact" in terms of memory alignment.
 ///
 /// When it's hard to have a _split mutable borrow_, all across the source we use custom
@@ -156,18 +152,19 @@ impl<T: Clone> Clone for Wrapper<T> {
 /// to explicitly annotate bounds
 /// - this type derefs to the base type
 #[derive(Copy, Clone)]
-pub struct Life<'a, T> {
+pub struct Life<'a, T: 'a> {
     _lt: PhantomData<&'a T>,
     v: T,
 }
 
-impl<'a, T> Life<'a, T> {
+impl<'a, T: 'a> Life<'a, T> {
     /// Ensure compile-time alignment (this is just a sanity check)
     const _ENSURE_COMPILETIME_ALIGN: () =
-        assert!(std::mem::align_of::<Life<Vec<u8>>>() == std::mem::align_of::<Vec<u8>>());
+        assert!(std::mem::align_of::<Life<T>>() == std::mem::align_of::<T>());
 
     #[inline(always)]
     pub const fn new(v: T) -> Self {
+        let _ = Self::_ENSURE_COMPILETIME_ALIGN;
         Life {
             v,
             _lt: PhantomData,
@@ -211,3 +208,219 @@ impl<'a, T: PartialEq> PartialEq<T> for Life<'a, T> {
 
 unsafe impl<'a, T: Send> Send for Life<'a, T> {}
 unsafe impl<'a, T: Sync> Sync for Life<'a, T> {}
+
+/// [`MaybeInit`] is a structure that is like an [`Option`] in debug mode and like
+/// [`MaybeUninit`] in release mode. This means that provided there are good enough test cases, most
+/// incorrect `assume_init` calls should be detected in the test phase.
+#[cfg_attr(not(test), repr(transparent))]
+pub struct MaybeInit<T> {
+    #[cfg(test)]
+    is_init: bool,
+    #[cfg(not(test))]
+    is_init: (),
+    base: MaybeUninit<T>,
+}
+
+impl<T> MaybeInit<T> {
+    /// Initialize a new uninitialized variant
+    #[inline(always)]
+    pub const fn uninit() -> Self {
+        Self {
+            #[cfg(test)]
+            is_init: false,
+            #[cfg(not(test))]
+            is_init: (),
+            base: MaybeUninit::uninit(),
+        }
+    }
+    /// Initialize with a value
+    #[inline(always)]
+    pub const fn new(val: T) -> Self {
+        Self {
+            #[cfg(test)]
+            is_init: true,
+            #[cfg(not(test))]
+            is_init: (),
+            base: MaybeUninit::new(val),
+        }
+    }
+    const fn ensure_init(#[cfg(test)] is_init: bool, #[cfg(not(test))] is_init: ()) {
+        #[cfg(test)]
+        {
+            if !is_init {
+                panic!("Tried to `assume_init` on uninitialized data");
+            }
+        }
+        let _ = is_init;
+    }
+    /// Assume that `self` is initialized and return the inner value
+    ///
+    /// ## Safety
+    ///
+    /// Caller needs to ensure that the data is actually initialized
+    #[inline(always)]
+    pub const unsafe fn assume_init(self) -> T {
+        Self::ensure_init(self.is_init);
+        self.base.assume_init()
+    }
+    /// Assume that `self` is initialized and return a reference
+    ///
+    /// ## Safety
+    ///
+    /// Caller needs to ensure that the data is actually initialized
+    #[inline(always)]
+    pub const unsafe fn assume_init_ref(&self) -> &T {
+        Self::ensure_init(self.is_init);
+        self.base.assume_init_ref()
+    }
+    /// Assumes `self` is initialized, replaces `self` with an uninit state, returning
+    /// the older value
+    ///
+    /// ## Safety
+    pub unsafe fn take(&mut self) -> T {
+        Self::ensure_init(self.is_init);
+        let mut r = MaybeUninit::uninit();
+        mem::swap(&mut r, &mut self.base);
+        #[cfg(test)]
+        {
+            self.is_init = false;
+        }
+        r.assume_init()
+    }
+}
+
+#[cfg(test)]
+impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let dat_fmt = if self.is_init {
+            unsafe { format!("{:?}", self.base.assume_init_ref()) }
+        } else {
+            "MaybeUninit {..}".to_string()
+        };
+        f.debug_struct("MaybeInit")
+            .field("is_init", &self.is_init)
+            .field("base", &dat_fmt)
+            .finish()
+    }
+}
+
+#[cfg(not(test))]
+impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MaybeInit")
+            .field("base", &self.base)
+            .finish()
+    }
+}
+
+pub unsafe trait ByteRepr {
+    fn repr(&self) -> &[u8];
+}
+
+unsafe impl ByteRepr for [u8] {
+    fn repr(&self) -> &[u8] {
+        self
+    }
+}
+unsafe impl ByteRepr for str {
+    fn repr(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+pub trait NumericRepr: ByteRepr {
+    fn be(&self) -> Self;
+    fn le(&self) -> Self;
+}
+
+macro_rules! byte_repr_impls {
+    ($($ty:ty),*) => {
+        $(
+            unsafe impl ByteRepr for $ty { fn repr(&self) -> &[u8] { unsafe { slice::from_raw_parts(self as *const $ty as *const u8, mem::size_of::<Self>()) } } }
+            impl NumericRepr for $ty { fn be(&self) -> $ty { <$ty>::to_be(*self) } fn le(&self) -> $ty { <$ty>::to_le(*self) } }
+        )*
+    };
+}
+
+byte_repr_impls!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
+
+pub const fn copy_slice_to_array<const N: usize>(bytes: &[u8]) -> [u8; N] {
+    assert!(bytes.len() <= N);
+    let mut data = [0u8; N];
+    let mut i = 0;
+    while i < bytes.len() {
+        data[i] = bytes[i];
+        i += 1;
+    }
+    data
+}
+pub const fn copy_str_to_array<const N: usize>(str: &str) -> [u8; N] {
+    copy_slice_to_array(str.as_bytes())
+}
+/// Copy the elements of a into b, beginning the copy at `pos`
+pub const fn copy_a_into_b<const M: usize, const N: usize>(
+    from: [u8; M],
+    mut to: [u8; N],
+    mut pos: usize,
+) -> [u8; N] {
+    assert!(M <= N);
+    assert!(pos < N);
+    let mut i = 0;
+    while i < M {
+        to[pos] = from[i];
+        i += 1;
+        pos += 1;
+    }
+    to
+}
+
+pub struct Threshold<const N: usize> {
+    now: usize,
+}
+
+impl<const N: usize> Threshold<N> {
+    pub const fn new() -> Self {
+        Self { now: 0 }
+    }
+    pub fn bust_one(&mut self) {
+        self.now += 1;
+    }
+    pub fn not_busted(&self) -> bool {
+        self.now < N
+    }
+}
+
+pub trait EndianQW {
+    fn u64_bytes_le(&self) -> [u8; 8];
+    fn u64_bytes_be(&self) -> [u8; 8];
+    fn u64_bytes_ne(&self) -> [u8; 8] {
+        if cfg!(target_endian = "big") {
+            self.u64_bytes_be()
+        } else {
+            self.u64_bytes_le()
+        }
+    }
+}
+
+pub trait EndianDW {
+    fn u32_bytes_le(&self) -> [u8; 8];
+    fn u32_bytes_be(&self) -> [u8; 8];
+    fn u32_bytes_ne(&self) -> [u8; 8] {
+        if cfg!(target_endian = "big") {
+            self.u32_bytes_be()
+        } else {
+            self.u32_bytes_le()
+        }
+    }
+}
+
+macro_rules! impl_endian {
+    ($($ty:ty),*) => {
+        $(impl EndianQW for $ty {
+            fn u64_bytes_le(&self) -> [u8; 8] { (*self as u64).to_le_bytes() }
+            fn u64_bytes_be(&self) -> [u8; 8] { (*self as u64).to_le_bytes() }
+        })*
+    }
+}
+
+impl_endian!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);

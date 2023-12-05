@@ -35,8 +35,9 @@ use {
         bn::{BigNum, MsbOption},
         error::ErrorStack,
         hash::MessageDigest,
-        pkey::{PKey, Private},
+        pkey::PKey,
         rsa::Rsa,
+        symm::Cipher,
         x509::{
             extension::{BasicConstraints, KeyUsage, SubjectKeyIdentifier},
             X509NameBuilder, X509,
@@ -45,6 +46,7 @@ use {
     std::{fs, io::Write},
 };
 mod svc;
+pub use svc::get_children;
 
 /// Run the test suite
 pub fn run_test() -> HarnessResult<()> {
@@ -89,16 +91,16 @@ fn append_target(args: &mut Vec<String>) {
 /// - The standard test suite
 /// - The persistence test suite
 fn run_test_inner() -> HarnessResult<()> {
+    const TEST_PASSWORD: &str = "xCqe4yuVM7l2MnHZOFZDDieqjqmmL3qvO5LOEOhpXPE=";
     // first create the TLS keys
     info!("Creating TLS key+cert");
-    let (cert, pkey) = mk_ca_cert().expect("Failed to create cert");
+    let (cert, pkey) = mk_ca_cert(TEST_PASSWORD.as_bytes()).expect("Failed to create cert");
+    let mut passfile = fs::File::create("passphrase.txt").unwrap();
+    passfile.write_all(TEST_PASSWORD.as_bytes()).unwrap();
     let mut certfile = fs::File::create("cert.pem").expect("failed to create cert.pem");
-    certfile.write_all(&cert.to_pem().unwrap()).unwrap();
+    certfile.write_all(&cert).unwrap();
     let mut pkeyfile = fs::File::create("key.pem").expect("failed to create key.pem");
-    pkeyfile
-        .write_all(&pkey.private_key_to_pem_pkcs8().unwrap())
-        .unwrap();
-
+    pkeyfile.write_all(&pkey).unwrap();
     // assemble commands
     let target_folder = util::get_target_folder(BuildMode::Debug);
     let mut standard_test_suite_args = vec!["cargo".to_owned(), "test".into()];
@@ -110,15 +112,9 @@ fn run_test_inner() -> HarnessResult<()> {
     ];
     append_target(&mut build_cmd_args);
     append_target(&mut standard_test_suite_args);
-    let persist_test_suite_args = [
-        standard_test_suite_args.as_slice(),
-        &["--features".to_owned(), "persist-suite".into()],
-    ]
-    .concat();
     // get cmd
     let build_cmd = util::assemble_command_from_slice(build_cmd_args);
     let standard_test_suite = util::assemble_command_from_slice(standard_test_suite_args);
-    let persist_test_suite = util::assemble_command_from_slice(persist_test_suite_args);
 
     // build skyd
     info!("Building server binary ...");
@@ -130,20 +126,11 @@ fn run_test_inner() -> HarnessResult<()> {
         util::handle_child("standard test suite", standard_test_suite)?;
         Ok(())
     })?;
-
-    // run persistence tests; don't kill the servers because if either of the tests fail
-    // then we can ensure that they will be killed by `run_test`
-    svc::run_with_servers(&target_folder, false, move || {
-        info!("Running persistence test suite ...");
-        util::handle_child("standard test suite", persist_test_suite)?;
-        Ok(())
-    })?;
-
     Ok(())
 }
 
 /// Generate certificates
-fn mk_ca_cert() -> Result<(X509, PKey<Private>), ErrorStack> {
+fn mk_ca_cert(password: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ErrorStack> {
     let rsa = Rsa::generate(2048)?;
     let key_pair = PKey::from_rsa(rsa)?;
 
@@ -182,9 +169,8 @@ fn mk_ca_cert() -> Result<(X509, PKey<Private>), ErrorStack> {
     let subject_key_identifier =
         SubjectKeyIdentifier::new().build(&cert_builder.x509v3_context(None, None))?;
     cert_builder.append_extension(subject_key_identifier)?;
-
     cert_builder.sign(&key_pair, MessageDigest::sha256())?;
-    let cert = cert_builder.build();
-
+    let cert = cert_builder.build().to_pem().unwrap();
+    let key_pair = key_pair.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), password)?;
     Ok((cert, key_pair))
 }

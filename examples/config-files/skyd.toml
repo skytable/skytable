@@ -1,5 +1,0 @@
-# This is a 'good' configuration file since it contains a valid port
-# and appropriate keys
-[server]
-host = '127.0.0.1'
-port = 2003 # Set the server's port to 2003

@@ -1,0 +1,33 @@
+sky-bench 0.8.0
+Sayan N. <ohsayan@outlook.com>
+Skytable benchmark tool
+
+USAGE:
+    sky-bench [OPTIONS]
+
+FLAGS:
+    --help      Displays this help message
+    --version   Displays the benchmark tool version
+
+REQUIRED OPTIONS:
+    --password  Provide the password
+
+OPTIONS:
+    --endpoint    Set the endpoint (defaults to tcp@127.0.0.1:2003)
+    --threads     Set the number of threads to be used (defaults to logical
+                  CPU count)
+    --connections Set the number of connections. Defaults to 8 x logical CPU
+                  count. Only supported by the `fury` engine.
+    --keysize     Set the default primary key size. defaults to 7
+    --rowcount    Set the number of rows to be manipulated for the benchmark
+                  Defaults to 1,000,000 rows.
+    --engine      Set the engine for benchmarking. `rookie` is the stable engine
+                  and `fury` is the new experimental engine. Defaults to `fury`
+
+NOTES:
+    - The user for auth will be 'root' since only 'root' accounts allow the
+      creation and deletion of spaces and models
+    - A space called 'bench' will be created
+    - A model called 'bench' will be created in the space
+      created above. The created model has the structure {un: string, pw: uint8}
+    - The model and space will be removed once the benchmark is complete

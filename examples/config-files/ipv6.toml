@@ -1,4 +1,0 @@
-# This makes use of an IPv6 address
-[server]
-host = "::1"
-port = 2003

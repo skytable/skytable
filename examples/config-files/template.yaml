@@ -1,0 +1,22 @@
+system:
+  mode: prod
+  rs_window: 600
+
+auth:
+  plugin: pwd
+  # replace with your root password of choice
+  root_pass: password
+
+endpoints:
+  secure:
+    host: 127.0.0.1
+    port: 2004
+    # replace `cert` with the path to your self-signed certificate
+    cert: cert.pem
+    # replace `private_key` with the path to your private key
+    private_key: private.key
+    # replace `passphrase.txt` with the path to your private key passphrase
+    pkey_passphrase: passphrase.txt
+  insecure:
+    host: 127.0.0.1
+    port: 2003

@@ -1,0 +1,16 @@
+Welcome to the Skytable Interactive shell (REPL environment).
+
+Here are a few tips to help you get started:
+- Skytable uses its own query language called BlueQL. It is mostly like SQL
+but with some important changes for security
+- Since BlueQL doesn't need a query terminator ';' you do not need to use it
+here for running queries
+- You might be surprised to see that you can use literals in this REPL while
+Skytable does not allow the use of literals for security concerns. This is
+because whenever you run a query, the REPL turns it into a parameterized query.
+- You can also run some `skysh` specific commands:
+    - `!help` displays this help message
+    - `clear` clears the terminal screen
+    - `exit` exits the REPL session
+
+Now, it's time to get querying!

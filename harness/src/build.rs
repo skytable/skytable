@@ -34,7 +34,7 @@ use {
 };
 
 /// The binaries that will be present in a bundle
-pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
+pub const BINARIES: [&str; 3] = ["skyd", "sky-bench", "skysh"];
 
 /// The build mode
 #[derive(Copy, Clone, PartialEq, Eq)]

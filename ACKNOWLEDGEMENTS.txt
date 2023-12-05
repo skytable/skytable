@@ -1,0 +1,18 @@
+----
+Notes for v0.8.0
+----
+
+I'd like to thank a lot of the people that have very indirectly had some influence on Skytable's design. Here's a little list (in no
+particular order):
+
+- First of all I'd like to thank Raymond F. Boyce and Donald D. Chamberlin for their work on SQL. While I'm not fortunate enough to have
+any connection to them, a lot of their work have laid out guiding principles for my work.
+- I'd also like to thank several people from the Rust community (listed in no particular order):
+    - Aaron Turon: Aaron's work on concurrency libraries have greatly helped in parts of "design thinking"
+    - Carl Lerche (@carllerche): For the immense amount of work Carl done on Tokio and related systems.
+    - Michael Vaner (@vorner): For their work on designing concurrency primitives. I'm a great admirer of Michael's work but
+      unfortunately haven't had the opportunity to directly talk.
+    - Amanieu d'Antras (@Amanieu): Amanieu's work on parking_lot and hashbrown have been eye openers for several things that I've designed
+      and implemented, both in and out of Skytable
+
+-- Sayan N. (Dec, 2023 <ohsayan@outlook.com>)

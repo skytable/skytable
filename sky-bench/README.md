@@ -3,18 +3,31 @@
 `sky-bench` is Skytable's benchmarking tool. Unlike most other benchmarking tools, Skytable's benchmark
 tool doesn't do anything "fancy" to make benchmarks appear better than they are. As it happens, the benchmark tool might show Skytable to be slower!
 
+> **The benchmarking engine is currently experimental!** You can indirectly compare it to the working of `redis-benchmark` but one
+> important note: **Skytable has a full fledged query language.** *Even then, you will probably enjoy the benchmarks!*
+>
+> Other tools like `memtier_benchmark` are far more sophisticated and use several strategies that can hugely affect benchmark 
+> numbers.
+>
+> We will upgrade the benchmark engine from time to time to improve the reporting of statistics. For example, right now the 
+> engine only outputs the slowest and fastest query speeds **in nanoseconds** but we plan to provide a overall distribution of 
+> latencies.
+
+## Working
+
 Here's how the benchmark tool works (it's dead simple):
 
-1. Depending on the configuration it launches "network pools" which are just thread pools where each worker
-   holds a persistent connection to the database (something like a connection pool)
-2. A collection of unique, random keys are generated using a PRNG provided by the `rand` library that is
-   seeded using the OS' source of randomness. The values are allowed to repeat
-3. The [Skytable Rust driver](https://github.com/skytable/client-rust) is used to generate _raw query packets_. To put it simply, the keys and values are turned into `Query` objects and then into the raw bytes that will be sent over the network. (This just makes it simpler to design the network pool interface)
-4. For every type of benchmark (GET,SET,...) we use the network pool to send all the bytes and wait until we receive the expected response. We time how long it takes to send and receive the response for all the queries for the given test (aggregate)
-5. We repeat this for all the remaining tests
-6. We repeat the entire set of tests 5 times (by default, this can be changed).
-7. We do the calculations and output the results.
+1. We spawn up multiple client tasks (or what you can call "green threads") that can each handle tasks. These tasks are run on a threadpool which has multiple worker threads, kind of simulating multiple "application server instances"
+   - You can use `--connections` to set the number of client connections
+   - You can use `--threads` to set the number of threads to be used
+2. An overall target is sent to these tasks and all tasks start executing queries until the overall target is reached
+   > The distribution of tasks across clients is generally unspecified, but because of Skytable's extremely low average latencies, in most common scenarios, the distribution is even.
+3. Once the overall target is reached, each task relays its local execution statistics to the monitoring task
+4. The monitoring task then prepares the final results, and this is returned
 
-## License
+### Engines
 
-All files in this directory are distributed under the [AGPL-3.0 License](../LICENSE).
+There are two benchmark engines:
+
+- `fury`: this is the new experimental engine, but also set as the default engine. It is generally more efficient and tracks statistics more effectively. At the same time, it is capable of generating larger consistent loads without crashing or blowing up CPU usage
+- `rookie`: this is the old engine that's still available but is not used by default. it still uses lesser memory than prior versions (which used a very inefficient and memory hungry algorithm) but is not as resource efficient as the `fury` engine.

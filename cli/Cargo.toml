@@ -10,13 +10,7 @@ description = "The Skytable Shell (skysh)"
 [dependencies]
 # internal deps
 libsky = { path = "../libsky" }
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
-  "aio",
-  "aio-sslv",
-], default-features = false }
+skytable = { git = "https://github.com/skytable/client-rust.git", branch = "octave" }
 # external deps
-tokio = { version = "1.24.1", features = ["full"] }
-clap = { version = "4.0.32", features = ["derive"] }
-rustyline = "10.0.0"
-crossterm = "0.25.0"
-lazy_static = "1.4.0"
+crossterm = "0.27.0"
+rustyline = "13.0.0"

@@ -76,6 +76,18 @@ pub fn create_linuxpkg(package_type: LinuxPackageType) -> HarnessResult<()> {
         LinuxPackageType::Deb => {
             // install cargo-deb
             util::handle_child("install cargo-deb", cmd!("cargo", "install", "cargo-deb"))?;
+            // make files executable
+            util::handle_child(
+                "make maintainer scripts executable",
+                cmd!(
+                    "chmod",
+                    "+x",
+                    "pkg/debian/postinst",
+                    "pkg/debian/preinst",
+                    "pkg/debian/postrm",
+                    "pkg/debian/prerm"
+                ),
+            )?;
             // assemble the command
             let mut build_args = vec!["cargo".into(), "deb".to_owned()];
             if let Some(t) = util::get_var(util::VAR_TARGET) {

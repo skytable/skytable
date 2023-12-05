@@ -43,10 +43,6 @@ jobs:
           brew install gnu-tar
           echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
         if: runner.os == 'macOS'
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
       - name: Setup environment
         run: |
           chmod +x ci/setvars.sh
@@ -72,29 +68,6 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
 
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: runner.os != 'Windows'
-
-      - name: Archive artifacts
-        shell: cmd
-        run: |
-          cargo build --target ${{ matrix.rust }}
-          rm -rf dist
-          mkdir dist
-          move target\${{ matrix.rust }}\debug\*.exe dist
-        env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static
-        if: runner.os == 'Windows'
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist
   test_32bit:
     name: Test (32-bit)
     runs-on: ${{ matrix.os }}
@@ -116,10 +89,6 @@ jobs:
         run: |
           chmod +x ci/setvars.sh
           ci/setvars.sh
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
 
       - name: Restore cache
         uses: actions/cache@v3
@@ -132,6 +101,7 @@ jobs:
 
       - name: Install Rust
         run: |
+          rustup self update
           rustup default stable
           rustup target add ${{ matrix.rust }}
 
@@ -141,29 +111,6 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
 
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: runner.os == 'Linux'
-
-      - name: Archive artifacts
-        shell: cmd
-        run: |
-          cargo build --target ${{ matrix.rust }}
-          rm -rf dist
-          mkdir dist
-          move target\${{ matrix.rust }}\debug\*.exe dist
-        env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static
-        if: runner.os == 'Windows'
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist
   test_musl64:
     name: Test MUSL x86_64 (Tier 2)
     runs-on: ${{ matrix.os }}
@@ -178,10 +125,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
 
       - name: Setup environment
         run: |
@@ -199,6 +142,7 @@ jobs:
 
       - name: Install Rust
         run: |
+          rustup self update
           rustup default stable
           rustup target add ${{ matrix.rust }}
 
@@ -207,15 +151,3 @@ jobs:
         env:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
-
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist

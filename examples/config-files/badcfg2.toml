@@ -1,8 +1,0 @@
-# This is a bad toml file since it contains an invalid value of `every` in BGSAVE
-[server]
-host = "127.0.0.1"
-port = 2003
-
-[bgsave]
-every = 0.5 # Not possible!
-enabled = true

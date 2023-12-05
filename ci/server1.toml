@@ -1,9 +1,0 @@
-[server]
-host = "127.0.0.1"
-port = 2003
-noart = true
-
-[ssl]
-key="../key.pem"
-chain="../cert.pem"
-port = 2004

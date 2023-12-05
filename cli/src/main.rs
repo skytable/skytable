@@ -1,5 +1,5 @@
 /*
- * Created on Wed Jul 01 2020
+ * Created on Wed Nov 15 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,22 +24,32 @@
  *
 */
 
-#![deny(unused_crate_dependencies)]
-#![deny(unused_imports)]
+macro_rules! fatal {
+    ($($arg:tt)*) => {{
+        eprintln!($($arg)*);
+        std::process::exit(0x01);
+    }}
+}
 
-#[macro_use]
-mod macros;
-mod argparse;
-mod cli;
-mod runner;
-mod tokenizer;
+mod args;
+mod error;
+mod query;
+mod repl;
+mod resp;
 
-// tests
-#[cfg(test)]
-mod tests;
+use args::Task;
 
-#[tokio::main]
-async fn main() {
-    argparse::start_repl().await;
-    println!("Goodbye!");
+fn main() {
+    match run() {
+        Ok(()) => {}
+        Err(e) => fatal!("cli error: {e}"),
+    }
+}
+
+fn run() -> error::CliResult<()> {
+    match args::parse()? {
+        Task::HelpMessage(msg) => println!("{msg}"),
+        Task::OpenShell(cfg) => repl::start(cfg)?,
+    }
+    Ok(())
 }

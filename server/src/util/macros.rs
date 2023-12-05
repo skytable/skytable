@@ -26,9 +26,17 @@
 
 #[macro_export]
 macro_rules! impossible {
-    () => {
-        core::hint::unreachable_unchecked()
-    };
+    () => {{
+        if cfg!(debug_assertions) {
+            panic!(
+                "reached unreachable case at: {}:{}",
+                ::core::file!(),
+                ::core::line!()
+            );
+        } else {
+            ::core::hint::unreachable_unchecked()
+        }
+    }};
 }
 
 #[macro_export]
@@ -70,16 +78,43 @@ macro_rules! cfg_test {
 
 #[macro_export]
 /// Compare two vectors irrespective of their elements' position
-macro_rules! veceq {
+macro_rules! veceq_transposed {
     ($v1:expr, $v2:expr) => {
         $v1.len() == $v2.len() && $v1.iter().all(|v| $v2.contains(v))
     };
 }
 
 #[macro_export]
-macro_rules! assert_veceq {
+macro_rules! assert_veceq_transposed {
+    ($v1:expr, $v2:expr) => {{
+        if !veceq_transposed!($v1, $v2) {
+            panic!(
+                "failed to assert transposed veceq. v1: `{:#?}`, v2: `{:#?}`",
+                $v1, $v2
+            )
+        }
+    }};
+}
+
+#[cfg(test)]
+macro_rules! vecstreq_exact {
     ($v1:expr, $v2:expr) => {
-        assert!(veceq!($v1, $v2))
+        $v1.iter()
+            .zip($v2.iter())
+            .all(|(a, b)| a.as_bytes() == b.as_bytes())
+    };
+}
+
+#[cfg(test)]
+macro_rules! assert_vecstreq_exact {
+    ($v1:expr, $v2:expr) => {
+        if !vecstreq_exact!($v1, $v2) {
+            ::core::panic!(
+                "failed to assert vector data equality. lhs: {:?}, rhs: {:?}",
+                $v1,
+                $v2
+            );
+        }
     };
 }
 
@@ -192,38 +227,6 @@ macro_rules! do_sleep {
     }};
 }
 
-#[cfg(test)]
-macro_rules! tmut_bool {
-    ($e:expr) => {{
-        *(&$e as *const _ as *const bool)
-    }};
-    ($a:expr, $b:expr) => {
-        (tmut_bool!($a), tmut_bool!($b))
-    };
-}
-
-macro_rules! ucidx {
-    ($base:expr, $idx:expr) => {
-        *($base.as_ptr().add($idx as usize))
-    };
-}
-
-/// If you provide: [T; N] with M initialized elements, then you are given
-/// [MaybeUninit<T>; N] with M initialized elements and N-M uninit elements
-macro_rules! uninit_array {
-    ($($vis:vis const $id:ident: [$ty:ty; $len:expr] = [$($init_element:expr),*];)*) => {
-        $($vis const $id: [::core::mem::MaybeUninit<$ty>; $len] = {
-            let mut ret = [::core::mem::MaybeUninit::uninit(); $len];
-            let mut idx = 0;
-            $(
-                idx += 1;
-                ret[idx - 1] = ::core::mem::MaybeUninit::new($init_element);
-            )*
-            ret
-        };)*
-    };
-}
-
 #[macro_export]
 macro_rules! def {
     (
@@ -260,4 +263,58 @@ macro_rules! bench {
         #[cfg(all(feature = "nightly", test))]
         $vis mod $modname;
     };
+}
+
+#[macro_export]
+macro_rules! is_64b {
+    () => {
+        cfg!(target_pointer_width = "64")
+    };
+}
+
+#[macro_export]
+macro_rules! concat_array_to_array {
+    ($a:expr, $b:expr) => {{
+        const BUFFER_A: [u8; $a.len()] = crate::util::copy_slice_to_array($a);
+        const BUFFER_B: [u8; $b.len()] = crate::util::copy_slice_to_array($b);
+        const BUFFER: [u8; BUFFER_A.len() + BUFFER_B.len()] = unsafe {
+            // UNSAFE(@ohsayan): safe because align = 1
+            core::mem::transmute((BUFFER_A, BUFFER_B))
+        };
+        BUFFER
+    }};
+    ($a:expr, $b:expr, $c:expr) => {{
+        const LA: usize = $a.len() + $b.len();
+        const LB: usize = LA + $c.len();
+        const S_1: [u8; LA] = concat_array_to_array!($a, $b);
+        const S_2: [u8; LB] = concat_array_to_array!(&S_1, $c);
+        S_2
+    }};
+}
+
+#[macro_export]
+macro_rules! concat_str_to_array {
+    ($a:expr, $b:expr) => {
+        concat_array_to_array!($a.as_bytes(), $b.as_bytes())
+    };
+    ($a:expr, $b:expr, $c:expr) => {{
+        concat_array_to_array!($a.as_bytes(), $b.as_bytes(), $c.as_bytes())
+    }};
+}
+
+#[macro_export]
+macro_rules! concat_str_to_str {
+    ($a:expr, $b:expr) => {{
+        const BUFFER: [u8; ::core::primitive::str::len($a) + ::core::primitive::str::len($b)] =
+            concat_str_to_array!($a, $b);
+        const STATIC_BUFFER: &[u8] = &BUFFER;
+        unsafe {
+            // UNSAFE(@ohsayan): all good because of restriction to str
+            core::str::from_utf8_unchecked(&STATIC_BUFFER)
+        }
+    }};
+    ($a:expr, $b:expr, $c:expr) => {{
+        const A: &str = concat_str_to_str!($a, $b);
+        concat_str_to_str!(A, $c)
+    }};
 }

@@ -1,5 +1,5 @@
 /*
- * Created on Mon Aug 08 2022
+ * Created on Wed Nov 15 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -23,41 +23,32 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-use {
-    crate::cli::Cli,
-    clap::Parser,
-    env_logger::Builder,
-    std::{env, process},
-};
 
 #[macro_use]
 extern crate log;
-
+mod args;
 mod bench;
-mod cli;
-mod config;
 mod error;
-mod util;
+mod runtime;
 
 fn main() {
-    Builder::new()
-        .parse_filters(&env::var("SKYBENCH_LOG").unwrap_or_else(|_| "info".to_owned()))
+    env_logger::Builder::new()
+        .parse_filters(&std::env::var("SKYBENCH_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
-    if let Err(e) = run() {
-        error!("sky-bench exited with error: {}", e);
-        process::exit(0x01);
+    match run() {
+        Ok(()) => {}
+        Err(e) => {
+            error!("bench error: {e}");
+            std::process::exit(0x01);
+        }
     }
 }
 
-fn run() -> error::BResult<()> {
-    // Init CLI arg parser
-    let cli = &Cli::parse();
-
-    // Parse args and initialize configs
-    let server_config = &cli.into();
-    let bench_config = (server_config, cli).into();
-
-    // Run our task
-    bench::run_bench(server_config, bench_config)?;
-    util::cleanup(server_config)
+fn run() -> error::BenchResult<()> {
+    let task = args::parse()?;
+    match task {
+        args::Task::HelpMsg(msg) => println!("{msg}"),
+        args::Task::BenchConfig(bench) => bench::run(bench)?,
+    }
+    Ok(())
 }

@@ -1,5 +1,5 @@
 /*
- * Created on Mon Aug 08 2022
+ * Created on Sat Nov 18 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -25,44 +25,83 @@
 */
 
 use {
-    libstress::WorkpoolError,
-    skytable::error::Error as SkyError,
-    std::{collections::TryReserveError, fmt::Display},
+    crate::{
+        bench::BombardTask,
+        runtime::{fury, rookie::BombardError},
+    },
+    core::fmt,
+    skytable::error::Error,
 };
 
-pub type BResult<T> = Result<T, Error>;
+pub type BenchResult<T> = Result<T, BenchError>;
 
-/// Benchmark tool errors
-pub enum Error {
-    /// An error originating from the Skytable client
-    Client(SkyError),
-    /// A runtime error
-    Runtime(String),
+#[derive(Debug)]
+pub enum BenchError {
+    ArgsErr(String),
+    RookieEngineError(BombardError<BombardTask>),
+    FuryEngineError(fury::FuryError),
+    DirectDbError(Error),
 }
 
-impl From<SkyError> for Error {
-    fn from(e: SkyError) -> Self {
-        Self::Client(e)
+impl From<fury::FuryError> for BenchError {
+    fn from(e: fury::FuryError) -> Self {
+        Self::FuryEngineError(e)
     }
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Client(e) => write!(f, "client error: {}", e),
-            Error::Runtime(e) => write!(f, "runtime error: {}", e),
+impl From<libsky::ArgParseError> for BenchError {
+    fn from(e: libsky::ArgParseError) -> Self {
+        match e {
+            libsky::ArgParseError::Duplicate(d) => {
+                Self::ArgsErr(format!("duplicate value for `{d}`"))
+            }
+            libsky::ArgParseError::MissingValue(m) => {
+                Self::ArgsErr(format!("missing value for `{m}`"))
+            }
         }
     }
 }
 
-impl From<TryReserveError> for Error {
-    fn from(e: TryReserveError) -> Self {
-        Error::Runtime(format!("memory reserve error: {}", e))
+impl From<Error> for BenchError {
+    fn from(e: Error) -> Self {
+        Self::DirectDbError(e)
     }
 }
 
-impl From<WorkpoolError> for Error {
-    fn from(e: WorkpoolError) -> Self {
-        Error::Runtime(format!("threadpool error: {}", e))
+impl From<BombardError<BombardTask>> for BenchError {
+    fn from(e: BombardError<BombardTask>) -> Self {
+        Self::RookieEngineError(e)
+    }
+}
+
+impl fmt::Display for BenchError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ArgsErr(e) => write!(f, "args error: {e}"),
+            Self::DirectDbError(e) => write!(f, "direct operation on db failed. {e}"),
+            Self::RookieEngineError(e) => write!(f, "benchmark failed (rookie engine): {e}"),
+            Self::FuryEngineError(e) => write!(f, "benchmark failed (fury engine): {e}"),
+        }
+    }
+}
+
+impl std::error::Error for BenchError {}
+
+#[derive(Debug)]
+pub enum BenchmarkTaskWorkerError {
+    DbError(Error),
+}
+
+impl From<Error> for BenchmarkTaskWorkerError {
+    fn from(e: Error) -> Self {
+        Self::DbError(e)
+    }
+}
+
+impl fmt::Display for BenchmarkTaskWorkerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DbError(e) => write!(f, "worker failed due to DB error. {e}"),
+        }
     }
 }

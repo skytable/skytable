@@ -50,13 +50,6 @@ The main parts (ignorning CI scripts, stress test suite, test harness and custom
 - `cli`: REPL shell
 - `server`: database server
 - `sky-bench`: benchmark tool
-- `sky-migrate`: migration tool
-
-### Jargon
-
-Each project has its own jargon — and so do we!
-
-- _actiondoc_ and _actions docs_ : This refers to the `actiondoc.yml` file, which is used by the Skytable documentation website for automatically building documentation for the actions
 
 ### Branches
 
@@ -116,4 +109,4 @@ Testing is simple: just run this:
 make test
 ```
 
-> **NOTE**: Make sure ports 2003 and 2004 are not used by any applications. Also, make sure your _own instance_ isn't running on any of these ports; if that is the case, you might end up losing data due to conflicting entity names! The test suite creates a `testsuite` keyspace and some tables within it to run all the tests.
+> **NOTE**: Make sure port 2003 and 2004 are not used by any applications. Also, make sure your _own instance_ isn't running on any of these ports; if that is the case, you might end up losing data due to conflicting entity names! The test suite creates multiple spaces and some models within it to run all the tests.

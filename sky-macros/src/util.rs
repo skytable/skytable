@@ -1,5 +1,5 @@
 /*
- * Created on Wed Mar 09 2022
+ * Created on Wed Nov 29 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,66 +24,55 @@
  *
 */
 
-use {
-    core::{fmt::Display, str::FromStr},
-    proc_macro2::Span,
-    rand::Rng,
-    syn::{Lit, MetaNameValue},
-};
+use proc_macro2::Ident;
+use syn::{Lit, Meta, MetaNameValue, NestedMeta, Path};
 
-const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-pub fn get_rand_string(rng: &mut impl Rng) -> String {
-    (0..64)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
+pub enum AttributeKind {
+    Lit(Lit),
+    NestedAttrs { name: Ident, attrs: Vec<Self> },
+    Pair(Ident, Lit),
+    Path(Path),
 }
 
-pub fn parse_string(int: &Lit, span: Span, field: &str) -> Result<String, syn::Error> {
-    match int {
-        syn::Lit::Str(s) => Ok(s.value()),
-        syn::Lit::Verbatim(s) => Ok(s.to_string()),
-        _ => Err(syn::Error::new(
-            span,
-            format!("Failed to parse {} into a string.", field),
-        )),
+impl AttributeKind {
+    pub fn into_pair(self) -> (Ident, Lit) {
+        match self {
+            Self::Pair(i, l) => (i, l),
+            _ => panic!("expected attribute name pair"),
+        }
     }
 }
 
-pub fn parse_number<T: FromStr<Err = E>, E: Display>(
-    int: &Lit,
-    span: Span,
-    field: &str,
-) -> Result<T, syn::Error> {
-    match int {
-        syn::Lit::Int(int) => int.base10_parse::<T>(),
-        _ => Err(syn::Error::new(
-            span,
-            format!("Failed to parse {} into an int.", field),
-        )),
+pub fn extract_attribute(attr: &NestedMeta) -> AttributeKind {
+    match attr {
+        NestedMeta::Lit(l) => AttributeKind::Lit(l.clone()),
+        NestedMeta::Meta(m) => match m {
+            Meta::List(l) => AttributeKind::NestedAttrs {
+                name: l.path.get_ident().unwrap().clone(),
+                attrs: l.nested.iter().map(extract_attribute).collect(),
+            },
+            Meta::NameValue(MetaNameValue { path, lit, .. }) => {
+                AttributeKind::Pair(path.get_ident().unwrap().clone(), lit.clone())
+            }
+            Meta::Path(p) => AttributeKind::Path(p.clone()),
+        },
     }
 }
 
-pub fn parse_bool(boolean: &Lit, span: Span, field: &str) -> Result<bool, syn::Error> {
-    match boolean {
-        Lit::Bool(boolean) => Ok(boolean.value),
-        _ => Err(syn::Error::new(
-            span,
-            format!("Failed to parse {} into a boolean.", field),
-        )),
+pub fn extract_str_from_lit(l: &Lit) -> Option<String> {
+    match l {
+        Lit::Str(s) => Some(s.value()),
+        _ => None,
     }
 }
 
-pub fn get_metanamevalue_data(namevalue: &MetaNameValue) -> (String, &Lit, Span) {
-    match namevalue
-        .path
-        .get_ident()
-        .map(|ident| ident.to_string().to_lowercase())
-    {
-        None => panic!("Must have specified ident!"),
-        Some(ident) => (ident, &namevalue.lit, namevalue.lit.span()),
+pub fn extract_int_from_lit<I>(l: &Lit) -> Option<I>
+where
+    I: std::str::FromStr,
+    I::Err: std::fmt::Display,
+{
+    match l {
+        Lit::Int(i) => i.base10_parse::<I>().ok(),
+        _ => None,
     }
 }

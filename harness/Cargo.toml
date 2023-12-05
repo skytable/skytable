@@ -7,13 +7,10 @@ edition = "2021"
 
 [dependencies]
 # internal deps
-skytable = { git = "https://github.com/skytable/client-rust.git", features = [
-    "sync",
-], default-features = false }
 libsky = { path = "../libsky" }
 # external deps
-env_logger = "0.10.0"
-log = "0.4.17"
-zip = { version = "0.6.3", features = ["deflate"] }
-powershell_script = "1.0.4"
-openssl = { version = "0.10.45", features = ["vendored"] }
+env_logger = "0.10.1"
+log = "0.4.20"
+zip = { version = "0.6.6", features = ["deflate"] }
+powershell_script = "1.1.0"
+openssl = { version = "0.10.61", features = ["vendored"] }

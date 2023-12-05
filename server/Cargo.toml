@@ -1,9 +1,10 @@
 [package]
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
-build = "build.rs"
 edition = "2021"
 name = "skyd"
 version = "0.8.0"
+description = "Skytable is a modern NoSQL database powered by BlueQL that aims to deliver performance, scalability and flexibility with data"
+license = "AGPL-3.0"
 
 [dependencies]
 # internal deps
@@ -11,48 +12,39 @@ libsky = { path = "../libsky" }
 sky_macros = { path = "../sky-macros" }
 rcrypt = "0.4.0"
 # external deps
-ahash = "0.8.2"
-bytes = "1.3.0"
-chrono = "0.4.23"
-clap = { version = "2", features = ["yaml"] }
-env_logger = "0.10.0"
-hashbrown = { version = "0.13.1", features = ["raw"] }
-log = "0.4.17"
-openssl = { version = "0.10.45", features = ["vendored"] }
+bytes = "1.5.0"
+env_logger = "0.10.1"
+log = "0.4.20"
+openssl = { version = "0.10.61", features = ["vendored"] }
+crossbeam-epoch = { version = "0.9.15" }
 parking_lot = "0.12.1"
-regex = "1.7.1"
-serde = { version = "1.0.152", features = ["derive"] }
-tokio = { version = "1.24.1", features = ["full"] }
+serde = { version = "1.0.193", features = ["derive"] }
+tokio = { version = "1.34.0", features = ["full"] }
 tokio-openssl = "0.6.3"
-toml = "0.5.10"
-base64 = "0.13.1"
+uuid = { version = "1.6.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
+crc = "3.0.1"
+serde_yaml = "0.9.27"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
-jemallocator = "0.5.0"
+jemallocator = "0.5.4"
 [target.'cfg(target_os = "windows")'.dependencies]
 # external deps
-winapi = { version = "0.3.9", features = ["fileapi"] }
+winapi = { version = "0.3.9", features = [
+  "fileapi",
+  "sysinfoapi",
+  "minwinbase",
+] }
 
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.139"
-
-[target.'cfg(unix)'.build-dependencies]
-# external deps
-cc = "1.0.78"
+libc = "0.2.150"
 
 [dev-dependencies]
-# internal deps
-libstress = { path = "../libstress" }
-skytable = { git = "https://github.com/skytable/client-rust", features = [
-  "aio",
-  "aio-ssl",
-], default-features = false, branch = "next" }
 # external deps
-bincode = "1.3.3"
 rand = "0.8.5"
-tokio = { version = "1.24.1", features = ["test-util"] }
+tokio = { version = "1.34.0", features = ["test-util"] }
+skytable = { branch = "octave", git = "https://github.com/skytable/client-rust.git" }
 
 [features]
 nightly = []
@@ -71,18 +63,23 @@ priority = "optional"
 assets = [
   [
     "target/release/skyd",
-    "usr/bin/",
+    "/usr/bin/skyd",
     "755",
   ],
   [
     "target/release/skysh",
-    "usr/bin/",
+    "/usr/bin/skysh",
     "755",
   ],
   [
     "target/release/sky-bench",
-    "usr/bin/",
+    "/usr/bin/sky-bench",
     "755",
+  ],
+  [
+    "../examples/config-files/dpkg/config.yaml",
+    "/var/lib/skytable/config.yaml.tmp",
+    "644"
   ],
   [
     "../pkg/common/skyd.service",

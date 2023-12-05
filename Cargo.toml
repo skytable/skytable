@@ -1,15 +1,6 @@
 [workspace]
-members = [
-    "cli",
-    "server",
-    "libsky",
-    "sky-bench",
-    "sky-macros",
-    "libstress",
-    "stress-test",
-    "sky-migrate",
-    "harness",
-]
+resolver = "1"
+members = ["cli", "server", "libsky", "sky-bench", "sky-macros", "harness"]
 
 [profile.release]
 opt-level = 3

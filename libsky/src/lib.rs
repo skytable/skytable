@@ -31,25 +31,142 @@
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
-use std::error::Error;
-/// A generic result
-pub type TResult<T> = Result<T, Box<dyn Error>>;
-/// The size of the read buffer in bytes
-pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 /// The current version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The URL
 pub const URL: &str = "https://github.com/skytable/skytable";
 
-#[macro_export]
-/// Don't use unwrap_or but use this macro as the optimizer fails to optimize away usages
-/// of unwrap_or and creates a lot of LLVM IR bloat. use
-// FIXME(@ohsayan): Fix this when https://github.com/rust-lang/rust/issues/68667 is addressed
-macro_rules! option_unwrap_or {
-    ($try:expr, $fallback:expr) => {
-        match $try {
-            Some(t) => t,
-            None => $fallback,
+pub mod test_utils {
+    pub const DEFAULT_USER_NAME: &str = "root";
+    pub const DEFAULT_USER_PASS: &str = "mypassword12345678";
+    pub const DEFAULT_HOST: &str = "127.0.0.1";
+    pub const DEFAULT_PORT: u16 = 2003;
+}
+
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    env,
+};
+
+/// Returns a formatted version message `{binary} vx.y.z`
+pub fn version_msg(binary: &str) -> String {
+    format!("{binary} v{VERSION}")
+}
+
+#[derive(Debug, PartialEq)]
+/// The CLI action that is expected to be performed
+pub enum CliAction<A> {
+    /// Display the `--help` message
+    Help,
+    /// Dipslay the `--version`
+    Version,
+    /// Perform an action using the given args
+    Action(A),
+}
+
+pub type CliActionMulti = CliAction<HashMap<String, Vec<String>>>;
+pub type CliActionSingle = CliAction<HashMap<String, String>>;
+
+/*
+    generic cli arg parser
+*/
+
+#[derive(Debug, PartialEq)]
+/// Argument parse error
+pub enum AnyArgsParseError {
+    /// The value for the given argument was either incorrectly formatted or missing
+    MissingValue(String),
+}
+/// Parse CLI args, allowing duplicates (bucketing them)
+pub fn parse_cli_args_allow_duplicate() -> Result<CliActionMulti, AnyArgsParseError> {
+    parse_args(env::args())
+}
+/// Parse args allowing and bucketing any duplicates
+pub fn parse_args(
+    args: impl IntoIterator<Item = String>,
+) -> Result<CliActionMulti, AnyArgsParseError> {
+    let mut ret: HashMap<String, Vec<String>> = HashMap::new();
+    let mut args = args.into_iter().skip(1).peekable();
+    while let Some(arg) = args.next() {
+        if arg == "--help" {
+            return Ok(CliAction::Help);
+        }
+        if arg == "--version" {
+            return Ok(CliAction::Version);
+        }
+        let (arg, value) = extract_arg(arg, &mut args).map_err(AnyArgsParseError::MissingValue)?;
+        match ret.get_mut(&arg) {
+            Some(values) => {
+                values.push(value);
+            }
+            None => {
+                ret.insert(arg, vec![value]);
+            }
+        }
+    }
+    Ok(CliAction::Action(ret))
+}
+
+/*
+    no duplicate arg parser
+*/
+
+#[derive(Debug, PartialEq)]
+/// Argument parse error
+pub enum ArgParseError {
+    /// The given argument had a duplicate value
+    Duplicate(String),
+    /// The given argument did not have an appropriate value
+    MissingValue(String),
+}
+/// Parse all non-repeating CLI arguments
+pub fn parse_cli_args_disallow_duplicate() -> Result<CliActionSingle, ArgParseError> {
+    parse_args_deny_duplicate(env::args())
+}
+/// Parse all arguments but deny any duplicates
+pub fn parse_args_deny_duplicate(
+    args: impl IntoIterator<Item = String>,
+) -> Result<CliActionSingle, ArgParseError> {
+    let mut ret: HashMap<String, String> = HashMap::new();
+    let mut args = args.into_iter().skip(1).peekable();
+    while let Some(arg) = args.next() {
+        if arg == "--help" {
+            return Ok(CliAction::Help);
+        }
+        if arg == "--version" {
+            return Ok(CliAction::Version);
+        }
+        let (arg, value) = extract_arg(arg, &mut args).map_err(ArgParseError::MissingValue)?;
+        match ret.entry(arg) {
+            Entry::Vacant(v) => {
+                v.insert(value);
+            }
+            Entry::Occupied(oe) => return Err(ArgParseError::Duplicate(oe.key().into())),
+        }
+    }
+    Ok(CliAction::Action(ret))
+}
+
+/// Extract an argument:
+/// - `--arg=value`
+/// - `--arg value`
+fn extract_arg(
+    arg: String,
+    args: &mut impl Iterator<Item = String>,
+) -> Result<(String, String), String> {
+    let this_args: Vec<&str> = arg.split("=").collect();
+    let (arg, value) = if this_args.len() == 2 {
+        // self contained arg
+        (this_args[0].to_owned(), this_args[1].to_owned())
+    } else {
+        if this_args.len() == 1 {
+            match args.next() {
+                None => return Err(arg),
+                Some(val) => (arg, val),
+            }
+        } else {
+            return Err(arg);
         }
     };
+    Ok((arg, value))
 }

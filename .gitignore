@@ -1,7 +1,8 @@
 /target
 /.vscode
 *.bin
-data
+/data/
+/server/data
 /server/snapshots
 snapstore.bin
 snapstore.partmap
@@ -14,3 +15,6 @@ snapstore.partmap
 *.deb
 .skytest_*
 *.pem
+passphrase.txt
+*.db-tlog
+*.db

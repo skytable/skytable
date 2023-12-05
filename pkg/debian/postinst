@@ -1,15 +1,35 @@
 #!/bin/sh -e
 
+SKY_DIR=/var/lib/skytable
 systemctl daemon-reload
 
-if [ $1 = "install" ]; then
+echo "Doing '$1'"
+if [ "$1" = "configure" ]; then
+    # Enable and start skyd on fresh install
     systemctl enable skyd
-fi
+    systemctl start skyd
+    echo "Generating password and configuration"
 
-if [ $1 = "upgrade" ]; then
+    if [ -f /var/lib/skytable/config.yaml ]; then
+        echo "Configuration already exists. Not updating configuration."
+    else
+        mv /var/lib/skytable/config.yaml.tmp /var/lib/skytable/config.yaml
+        # Generate and set password
+        if [ ! -f "$SKY_DIR/config.yaml" ]; then
+            echo "Error: The file $SKY_DIR/config.yaml does not exist."
+            exit 1  # Exit with an error code
+        fi
+        PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16 ; echo '')
+        sed -i "s/rootpass/$PASSWORD/g" "$SKY_DIR/config.yaml"
+        echo "Your root password is: '$PASSWORD'. You can change this using the config file in $SKY_DIR/config.yaml"
+    fi
+elif [ "$1" = "upgrade" ]; then
+    # On upgrade, just restart skyd
+    echo "Not changing configuration. This is an upgrade."
     systemctl stop skyd
+    systemctl start skyd
 fi
 
-systemctl start skyd
+echo "Done executing post install scripts."
 
 #DEBHELPER#
