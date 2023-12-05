@@ -93,6 +93,14 @@ fn _callgcs<A: ASTNode<'static> + core::fmt::Debug, T>(
     f(&g, cstate, a)
 }
 
+#[inline(always)]
+fn translate_ddl_result(x: Option<bool>) -> Response {
+    match x {
+        Some(b) => Response::Bool(b),
+        None => Response::Empty,
+    }
+}
+
 async fn run_blocking_stmt(
     global: &Global,
     cstate: &mut ClientLocalState,
@@ -132,12 +140,26 @@ async fn run_blocking_stmt(
     ) -> QueryResult<Response>; 8] = [
         |_, _, _| Err(QueryError::QLUnknownStatement),
         blocking_exec_sysctl,
-        |g, _, t| _callgs_map(&g, t, Space::transactional_exec_create, Response::Bool),
-        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_create, Response::Bool),
+        |g, _, t| {
+            _callgs_map(
+                &g,
+                t,
+                Space::transactional_exec_create,
+                translate_ddl_result,
+            )
+        },
+        |g, _, t| {
+            _callgs_map(
+                &g,
+                t,
+                Model::transactional_exec_create,
+                translate_ddl_result,
+            )
+        },
         |g, _, t| _callgs_map(&g, t, Space::transactional_exec_alter, |_| Response::Empty),
         |g, _, t| _callgs_map(&g, t, Model::transactional_exec_alter, |_| Response::Empty),
-        |g, _, t| _callgs_map(&g, t, Space::transactional_exec_drop, Response::Bool),
-        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_drop, Response::Bool),
+        |g, _, t| _callgs_map(&g, t, Space::transactional_exec_drop, translate_ddl_result),
+        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_drop, translate_ddl_result),
     ];
     let r = unsafe {
         // UNSAFE(@ohsayan): the only await is within this block

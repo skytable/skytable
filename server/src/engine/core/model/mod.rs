@@ -267,7 +267,7 @@ impl Model {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         stmt: CreateModel,
-    ) -> QueryResult<bool> {
+    ) -> QueryResult<Option<bool>> {
         let (space_name, model_name) = (stmt.model_name.space(), stmt.model_name.entity());
         let if_nx = stmt.if_not_exists;
         let model = Self::process_create(stmt)?;
@@ -275,7 +275,7 @@ impl Model {
             // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
             if space.models().contains(model_name) {
                 if if_nx {
-                    return Ok(false);
+                    return Ok(Some(false));
                 } else {
                     return Err(QueryError::QExecDdlObjectAlreadyExists);
                 }
@@ -320,18 +320,22 @@ impl Model {
                 .idx_models()
                 .write()
                 .insert(EntityID::new(&space_name, &model_name), model);
-            Ok(true)
+            if if_nx {
+                Ok(Some(true))
+            } else {
+                Ok(None)
+            }
         })
     }
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         stmt: DropModel,
-    ) -> QueryResult<bool> {
+    ) -> QueryResult<Option<bool>> {
         let (space_name, model_name) = (stmt.entity.space(), stmt.entity.entity());
         global.namespace().ddl_with_space_mut(&space_name, |space| {
             if !space.models().contains(model_name) {
                 if stmt.if_exists {
-                    return Ok(false);
+                    return Ok(Some(false));
                 } else {
                     // the model isn't even present
                     return Err(QueryError::QExecObjectNotFound);
@@ -370,7 +374,11 @@ impl Model {
             // update global state
             let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
             let _ = space.models_mut().remove(model_name);
-            Ok(true)
+            if stmt.if_exists {
+                Ok(Some(true))
+            } else {
+                Ok(None)
+            }
         })
     }
 }

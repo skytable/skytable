@@ -84,7 +84,6 @@ where
     i: RawIter<'t, 'g, 'v, T, C, CfgIterEntry>,
 }
 
-
 impl<'t, 'g, 'v, T, C> IterEntry<'t, 'g, 'v, T, C>
 where
     't: 'v,

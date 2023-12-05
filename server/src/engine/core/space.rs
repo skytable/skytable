@@ -148,7 +148,7 @@ impl Space {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         space: CreateSpace,
-    ) -> QueryResult<bool> {
+    ) -> QueryResult<Option<bool>> {
         // process create
         let ProcedureCreate {
             space_name,
@@ -159,7 +159,7 @@ impl Space {
         global.namespace().ddl_with_spaces_write(|spaces| {
             if spaces.st_contains(&space_name) {
                 if if_not_exists {
-                    return Ok(false);
+                    return Ok(Some(false));
                 } else {
                     return Err(QueryError::QExecDdlObjectAlreadyExists);
                 }
@@ -187,7 +187,11 @@ impl Space {
             }
             // update global state
             let _ = spaces.st_insert(space_name, space);
-            Ok(true)
+            if if_not_exists {
+                Ok(Some(true))
+            } else {
+                Ok(None)
+            }
         })
     }
     #[allow(unused)]
@@ -234,12 +238,12 @@ impl Space {
             force,
             if_exists,
         }: DropSpace,
-    ) -> QueryResult<bool> {
+    ) -> QueryResult<Option<bool>> {
         if force {
             global.namespace().ddl_with_all_mut(|spaces, models| {
                 let Some(space) = spaces.remove(space_name.as_str()) else {
                     if if_exists {
-                        return Ok(false);
+                        return Ok(Some(false));
                     } else {
                         return Err(QueryError::QExecObjectNotFound);
                     }
@@ -272,13 +276,17 @@ impl Space {
                     );
                 }
                 let _ = spaces.st_delete(space_name.as_str());
-                Ok(true)
+                if if_exists {
+                    Ok(Some(true))
+                } else {
+                    Ok(None)
+                }
             })
         } else {
             global.namespace().ddl_with_spaces_write(|spaces| {
                 let Some(space) = spaces.get(space_name.as_str()) else {
                     if if_exists {
-                        return Ok(false);
+                        return Ok(Some(false));
                     } else {
                         return Err(QueryError::QExecObjectNotFound);
                     }
@@ -300,7 +308,11 @@ impl Space {
                     ));
                 }
                 let _ = spaces.st_delete(space_name.as_str());
-                Ok(true)
+                if if_exists {
+                    Ok(Some(true))
+                } else {
+                    Ok(None)
+                }
             })
         }
     }

@@ -43,7 +43,7 @@ use crate::{
 pub use {
     del::delete,
     ins::insert,
-    sel::{select_custom, select_all},
+    sel::{select_all, select_custom},
     upd::{collect_trace_path as update_flow_trace, update},
 };
 pub use {
