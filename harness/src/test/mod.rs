@@ -171,6 +171,6 @@ fn mk_ca_cert(password: &[u8]) -> Result<(Vec<u8>, Vec<u8>), ErrorStack> {
     cert_builder.append_extension(subject_key_identifier)?;
     cert_builder.sign(&key_pair, MessageDigest::sha256())?;
     let cert = cert_builder.build().to_pem().unwrap();
-    let key_pair = key_pair.private_key_to_pem_pkcs8_passphrase(Cipher::des_cbc(), password)?;
+    let key_pair = key_pair.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), password)?;
     Ok((cert, key_pair))
 }

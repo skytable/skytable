@@ -9,8 +9,8 @@ edition = "2021"
 # internal deps
 libsky = { path = "../libsky" }
 # external deps
-env_logger = "0.10.0"
-log = "0.4.19"
+env_logger = "0.10.1"
+log = "0.4.20"
 zip = { version = "0.6.6", features = ["deflate"] }
 powershell_script = "1.1.0"
-openssl = { version = "0.10.55", features = ["vendored"] }
+openssl = { version = "0.10.61", features = ["vendored"] }
