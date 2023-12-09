@@ -5,7 +5,7 @@
     Skytable — A modern database for building powerful experiences
 </h2>
 <h3 align="center">
-    Performance, scalability and flexibility. Choose three.
+    Performance, scalability, and flexibility. Choose three.
 </h3>
 </p>
 <p align="center">
