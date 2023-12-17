@@ -26,14 +26,35 @@
 
 use crate::engine::mem::BufferedScanner;
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Resume(usize);
+impl Resume {
+    #[cfg(test)]
+    pub(super) const fn test_new(v: usize) -> Self {
+        Self(v)
+    }
+    #[cfg(test)]
+    pub(super) const fn inner(&self) -> usize {
+        self.0
+    }
+}
+impl Default for Resume {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
 pub(super) unsafe fn resume<'a>(
     buf: &'a [u8],
-    last_cursor: usize,
+    last_cursor: Resume,
     last_state: QExchangeState,
-) -> (usize, QExchangeResult<'a>) {
-    let mut scanner = BufferedScanner::new_with_cursor(buf, last_cursor);
+) -> (Resume, QExchangeResult<'a>) {
+    let mut scanner = unsafe {
+        // UNSAFE(@ohsayan): we are the ones who generate the cursor and restore it
+        BufferedScanner::new_with_cursor(buf, last_cursor.0)
+    };
     let ret = last_state.resume(&mut scanner);
-    (scanner.cursor(), ret)
+    (Resume(scanner.cursor()), ret)
 }
 
 /*

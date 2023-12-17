@@ -144,7 +144,7 @@ pub(super) async fn query_loop<S: Socket>(
     con.write_all(b"H\x00\x00\x00").await?;
     con.flush().await?;
     let mut state = QExchangeState::default();
-    let mut cursor = 0;
+    let mut cursor = Default::default();
     loop {
         if con.read_buf(buf).await? == 0 {
             if buf.is_empty() {
@@ -158,7 +158,7 @@ pub(super) async fn query_loop<S: Socket>(
             continue;
         }
         let sq = match unsafe {
-            // UNSAFE(@ohsayan): we store the cursor from the last run
+            // UNSAFE(@ohsayan): as the resume cursor is private, we can't access this anyways
             exchange::resume(buf, cursor, state)
         } {
             (_, QExchangeResult::SQCompleted(sq)) => sq,
@@ -176,7 +176,7 @@ pub(super) async fn query_loop<S: Socket>(
                 con.flush().await?;
                 // reset buffer, cursor and state
                 buf.clear();
-                cursor = 0;
+                cursor = Default::default();
                 state = QExchangeState::default();
                 continue;
             }
@@ -207,7 +207,7 @@ pub(super) async fn query_loop<S: Socket>(
         con.flush().await?;
         // reset buffer, cursor and state
         buf.clear();
-        cursor = 0;
+        cursor = Default::default();
         state = QExchangeState::default();
     }
 }
