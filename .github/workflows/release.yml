@@ -137,6 +137,10 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           path: artifacts
+      - name: Install Hub CLI
+        run: |
+          sudo apt update
+          sudo apt install hub -y
       - name: Upload release binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
