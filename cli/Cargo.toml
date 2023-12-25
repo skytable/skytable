@@ -1,6 +1,6 @@
 [package]
 name = "skysh"
-version = "0.8.0-beta"
+version = "0.8.0-beta.2"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 description = "The Skytable Shell (skysh)"

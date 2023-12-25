@@ -2,7 +2,7 @@
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 name = "skyd"
-version = "0.8.0-beta"
+version = "0.8.0-beta.2"
 description = "Skytable is a modern NoSQL database powered by BlueQL that aims to deliver performance, scalability and flexibility with data"
 license = "AGPL-3.0"
 

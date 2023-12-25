@@ -24,7 +24,6 @@
  *
 */
 
-use crate::engine::mem::ZERO_BLOCK;
 #[cfg(test)]
 use crate::util::test_utils;
 use {
@@ -35,7 +34,7 @@ use {
             tag::{DataTag, TagUnique},
         },
         idx::meta::Comparable,
-        mem::{self, DwordQN, SpecialPaddedWord, WordIO},
+        mem::{self, DwordNN, DwordQN, SpecialPaddedWord, WordIO, ZERO_BLOCK},
     },
     core::{
         fmt,
@@ -245,7 +244,10 @@ impl Hash for PrimaryIndexKey {
 impl<'a> PartialEq<Lit<'a>> for PrimaryIndexKey {
     fn eq(&self, key: &Lit<'a>) -> bool {
         debug_assert!(key.kind().tag_unique().is_unique());
-        self.tag == key.kind().tag_unique() && self.virtual_block() == key.__vdata()
+        let pk_data = self.data.dwordnn_load_qw();
+        let lit_data = unsafe { key.data() }.dwordnn_load_qw();
+        ((self.tag == key.kind().tag_unique()) & (pk_data == lit_data))
+            && self.virtual_block() == key.__vdata()
     }
 }
 
@@ -281,6 +283,22 @@ impl fmt::Debug for PrimaryIndexKey {
         );
         dbg_struct.finish()
     }
+}
+
+#[test]
+fn gh_issue_test_325_same_type_collapse() {
+    assert_ne!(
+        PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(1)).unwrap(),
+        PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(11)).unwrap()
+    );
+    assert_ne!(
+        PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(1)).unwrap(),
+        Lit::new_uint(11)
+    );
+    assert_ne!(
+        PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(11)).unwrap(),
+        Lit::new_uint(1)
+    );
 }
 
 #[test]
