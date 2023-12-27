@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::mem::BufferedScanner;
+use {super::AccumlatorStatus, crate::engine::mem::BufferedScanner};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Resume(usize);
@@ -62,13 +62,6 @@ pub(super) unsafe fn resume<'a>(
 */
 
 #[derive(Debug, PartialEq)]
-pub(super) enum LFTIntParseResult {
-    Value(u64),
-    Partial(u64),
-    Error,
-}
-
-#[derive(Debug, PartialEq)]
 pub struct SQuery<'a> {
     q: &'a [u8],
     q_window: usize,
@@ -103,51 +96,6 @@ impl<'a> SQuery<'a> {
 /*
     utils
 */
-
-/// scan an integer:
-/// - if just an LF:
-///     - if disallowed single byte: return an error
-///     - else, return value
-/// - if no LF: return upto limit
-/// - if LF: return value
-pub(super) fn scanint(
-    scanner: &mut BufferedScanner,
-    first_run: bool,
-    prev: u64,
-) -> LFTIntParseResult {
-    let mut current = prev;
-    // guard a case where the buffer might be empty and can potentially have invalid chars
-    let mut okay = !((scanner.rounded_cursor_value() == b'\n') & first_run);
-    while scanner.rounded_cursor_not_eof_matches(|b| b'\n'.ne(b)) & okay {
-        let byte = unsafe { scanner.next_byte() };
-        okay &= byte.is_ascii_digit();
-        match current
-            .checked_mul(10)
-            .map(|new| new.checked_add((byte & 0x0f) as u64))
-        {
-            Some(Some(int)) => {
-                current = int;
-            }
-            _ => {
-                okay = false;
-            }
-        }
-    }
-    let lf = scanner.rounded_cursor_not_eof_equals(b'\n');
-    unsafe {
-        // UNSAFE(@ohsayan): within buffer range
-        scanner.incr_cursor_if(lf);
-    }
-    if lf & okay {
-        LFTIntParseResult::Value(current)
-    } else {
-        if okay {
-            LFTIntParseResult::Partial(current)
-        } else {
-            LFTIntParseResult::Error
-        }
-    }
-}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub(super) enum QExchangeStateInternal {
@@ -225,8 +173,8 @@ impl QExchangeState {
         debug_assert!(scanner.has_left(Self::MIN_READ));
         match self.state {
             QExchangeStateInternal::Initial => self.start_initial(scanner),
-            QExchangeStateInternal::PendingMeta1 => self.resume_at_md1(scanner, false),
-            QExchangeStateInternal::PendingMeta2 => self.resume_at_md2(scanner, false),
+            QExchangeStateInternal::PendingMeta1 => self.resume_at_md1(scanner),
+            QExchangeStateInternal::PendingMeta2 => self.resume_at_md2(scanner),
             QExchangeStateInternal::PendingData => self.resume_data(scanner),
         }
     }
@@ -235,16 +183,12 @@ impl QExchangeState {
             // has to be a simple query!
             return QExchangeResult::Error;
         }
-        self.resume_at_md1(scanner, true)
+        self.resume_at_md1(scanner)
     }
-    fn resume_at_md1<'a>(
-        mut self,
-        scanner: &mut BufferedScanner<'a>,
-        first_run: bool,
-    ) -> QExchangeResult<'a> {
-        let packet_size = match scanint(scanner, first_run, self.md_packet_size) {
-            LFTIntParseResult::Value(v) => v,
-            LFTIntParseResult::Partial(p) => {
+    fn resume_at_md1<'a>(mut self, scanner: &mut BufferedScanner<'a>) -> QExchangeResult<'a> {
+        let packet_size = match super::scan_int(scanner, self.md_packet_size) {
+            Ok(AccumlatorStatus::Completed(v)) => v,
+            Ok(AccumlatorStatus::Pending(p)) => {
                 // if this is the first run, we read 5 bytes and need atleast one more; if this is a resume we read one or more bytes and
                 // need atleast one more
                 self.target += 1;
@@ -252,26 +196,22 @@ impl QExchangeState {
                 self.state = QExchangeStateInternal::PendingMeta1;
                 return QExchangeResult::ChangeState(self);
             }
-            LFTIntParseResult::Error => return QExchangeResult::Error,
+            Err(()) => return QExchangeResult::Error,
         };
         self.md_packet_size = packet_size;
         self.target = scanner.cursor() + packet_size as usize;
         // hand over control to md2
-        self.resume_at_md2(scanner, true)
+        self.resume_at_md2(scanner)
     }
-    fn resume_at_md2<'a>(
-        mut self,
-        scanner: &mut BufferedScanner<'a>,
-        first_run: bool,
-    ) -> QExchangeResult<'a> {
-        let q_window = match scanint(scanner, first_run, self.md_q_window) {
-            LFTIntParseResult::Value(v) => v,
-            LFTIntParseResult::Partial(p) => {
+    fn resume_at_md2<'a>(mut self, scanner: &mut BufferedScanner<'a>) -> QExchangeResult<'a> {
+        let q_window = match super::scan_int(scanner, self.md_q_window) {
+            Ok(AccumlatorStatus::Completed(v)) => v,
+            Ok(AccumlatorStatus::Pending(p)) => {
                 self.md_q_window = p;
                 self.state = QExchangeStateInternal::PendingMeta2;
                 return QExchangeResult::ChangeState(self);
             }
-            LFTIntParseResult::Error => return QExchangeResult::Error,
+            Err(()) => return QExchangeResult::Error,
         };
         self.md_q_window = q_window;
         // hand over control to data

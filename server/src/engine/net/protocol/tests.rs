@@ -28,16 +28,19 @@ use crate::engine::net::protocol::exchange::Resume;
 
 use {
     super::{
-        exchange::{self, scanint, LFTIntParseResult, QExchangeResult, QExchangeState},
+        exchange::{self, QExchangeResult, QExchangeState},
         handshake::ProtocolError,
         SQuery,
     },
     crate::{
         engine::{
             mem::BufferedScanner,
-            net::protocol::handshake::{
-                AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode,
-                HandshakeResult, HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
+            net::protocol::{
+                handshake::{
+                    AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode,
+                    HandshakeResult, HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
+                },
+                scan_int, AccumlatorStatus,
             },
         },
         util::test_utils,
@@ -413,11 +416,21 @@ fn stages_manual() {
 }
 
 #[test]
-fn scanint_impl() {
-    let mut s = BufferedScanner::new(b"\n");
-    assert_eq!(scanint(&mut s, true, 0), LFTIntParseResult::Error);
-    let mut s = BufferedScanner::new(b"12");
-    assert_eq!(scanint(&mut s, true, 0), LFTIntParseResult::Partial(12));
-    let mut s = BufferedScanner::new(b"12\n");
-    assert_eq!(scanint(&mut s, true, 0), LFTIntParseResult::Value(12));
+fn num_accumulate() {
+    let x = [
+        (b"1".as_slice(), Ok(AccumlatorStatus::Pending(1)), 1usize),
+        (b"12", Ok(AccumlatorStatus::Pending(12)), 2),
+        (b"123", Ok(AccumlatorStatus::Pending(123)), 3),
+        (b"123\n", Ok(AccumlatorStatus::Completed(123)), 4),
+        (b"\n", Ok(AccumlatorStatus::Completed(0)), 1),
+        (b"A", Err(()), 1),
+        (b"A\n", Err(()), 2),
+        (b"1A", Err(()), 2),
+        (b"1A\n", Err(()), 3),
+    ];
+    for (buf, res, cursor) in x {
+        let mut bs = BufferedScanner::new(buf);
+        assert_eq!(scan_int(&mut bs, 0), res);
+        assert_eq!(bs.cursor(), cursor);
+    }
 }

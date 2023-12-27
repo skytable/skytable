@@ -88,7 +88,7 @@ impl<'a, T> Scanner<'a, T> {
     }
     /// Returns true if the rounded cursor matches the predicate
     pub fn rounded_cursor_matches(&self, f: impl Fn(&T) -> bool) -> bool {
-        f(&self.d[self.rounded_cursor()])
+        f(&self.d[self.rounded_cursor()]) & !self.eof()
     }
     /// Same as `rounded_cursor_matches`, but with the added guarantee that no rounding was done
     pub fn rounded_cursor_not_eof_matches(&self, f: impl Fn(&T) -> bool) -> bool {
@@ -100,6 +100,12 @@ impl<'a, T> Scanner<'a, T> {
         T: PartialEq,
     {
         self.rounded_cursor_matches(|v| v_t.eq(v)) & !self.eof()
+    }
+    pub fn rounded_eq(&self, v: T) -> bool
+    where
+        T: PartialEq,
+    {
+        v.eq(&self.d[self.rounded_cursor()]) & !self.eof()
     }
 }
 
@@ -160,7 +166,7 @@ impl<'a, T> Scanner<'a, T> {
         *self.cursor_ptr()
     }
     /// Returns the rounded cursor
-    pub fn rounded_cursor(&self) -> usize {
+    fn rounded_cursor(&self) -> usize {
         (self.buffer_len() - 1).min(self.__cursor)
     }
     /// Returns the current cursor value with rounding

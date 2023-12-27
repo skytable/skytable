@@ -24,6 +24,21 @@
  *
 */
 
+/*
+ * Implementation of the Skyhash/2.0 Protocol
+ * ---
+ * This module implements handshake and exchange mode extensions for the Skyhash protocol.
+ *
+ * Notable points:
+ * - [Deprecated] Newline exception: while all integers are to be encoded and postfixed with an LF, a single LF
+ * without any integer payload is equivalent to a zero value. we allow this because it's easier to specify formally
+ * as states
+ * - Handshake parameter versions: We currently only evaluate values for the version "original" (shipped with
+ * Skytable 0.8.0)
+ * - FIXME(@ohsayan) Optimistic retry without timeout: Our current algorithm does not apply a timeout to receive data
+ * and optimistically retries infinitely until the target block size is received
+*/
+
 mod exchange;
 mod handshake;
 #[cfg(test)]
@@ -293,4 +308,43 @@ async fn do_handshake<S: Socket>(
         Err(_) => {}
     };
     Ok(PostHandshake::Error(ProtocolError::RejectAuth))
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum AccumlatorStatus {
+    Pending(u64),
+    Completed(u64),
+}
+
+/// Scan an integer
+///
+/// Allowed sequences:
+/// - < int >\n
+/// - \n ; FIXME(@ohsayan): a LF only sequence is allowed. should it be removed?
+fn scan_int(s: &mut BufferedScanner, acc: u64) -> Result<AccumlatorStatus, ()> {
+    let mut acc = acc;
+    let mut okay = true;
+    let mut end = s.rounded_eq(b'\n');
+    while okay & !end & !s.eof() {
+        let d = unsafe { s.next_byte() };
+        okay &= d.is_ascii_digit();
+        match acc.checked_mul(10).map(|v| v.checked_add((d & 0x0f) as _)) {
+            Some(Some(v)) => acc = v,
+            _ => okay = false,
+        }
+        end = s.rounded_eq(b'\n');
+    }
+    unsafe {
+        // UNSAFE(@ohsayan): if we hit an LF, then we still have space until EOA
+        s.incr_cursor_if(end)
+    }
+    if okay & end {
+        Ok(AccumlatorStatus::Completed(acc))
+    } else {
+        if okay {
+            Ok(AccumlatorStatus::Pending(acc))
+        } else {
+            Err(())
+        }
+    }
 }
