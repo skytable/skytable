@@ -198,7 +198,37 @@ fn scan_hs(hs: impl AsRef<[u8]>, f: impl Fn(HandshakeResult)) {
 }
 
 #[test]
-fn hs_bad_packet() {
+fn hs_bad_packet_illegal_username_length() {
+    scan_hs(b"H\0\0\0\0\0A\n8\nsayanpass1234", |hs_result| {
+        assert_eq!(
+            hs_result,
+            HandshakeResult::Error(ProtocolError::CorruptedHSPacket)
+        )
+    })
+}
+
+#[test]
+fn hs_bad_packet_illegal_password_length() {
+    scan_hs(b"H\0\0\0\0\05\nA\nsayanpass1234", |hs_result| {
+        assert_eq!(
+            hs_result,
+            HandshakeResult::Error(ProtocolError::CorruptedHSPacket)
+        )
+    })
+}
+
+#[test]
+fn hs_bad_packet_illegal_pwd_uname_length() {
+    scan_hs(b"H\0\0\0\0\0A\nA\nsayanpass1234", |hs_result| {
+        assert_eq!(
+            hs_result,
+            HandshakeResult::Error(ProtocolError::CorruptedHSPacket)
+        )
+    })
+}
+
+#[test]
+fn hs_bad_packet_first_byte() {
     scan_hs(HS_BAD_PACKET, |hs_result| {
         assert_eq!(
             hs_result,
@@ -412,6 +442,34 @@ fn stages_manual() {
             assert_eq!(q.params_str(), "sayan");
         }
         e => panic!("expected end, got {e:?}"),
+    }
+}
+
+#[test]
+fn exchange_bad_segment_metadata() {
+    let exchange_packets = [
+        (
+            b"S4A\n32\ndelete from dbs where dbname = ?sillydb".as_slice(),
+            4,
+            "incorrect packet size",
+        ),
+        (
+            b"S42\n3A\ndelete from dbs where dbname = ?sillydb",
+            7,
+            "incorrect q window",
+        ),
+        (
+            b"S4A\n3A\ndelete from dbs where dbname = ?sillydb",
+            4,
+            "incorrect packet size and q window",
+        ),
+    ];
+    for (packet, cursor, description) in exchange_packets {
+        assert_eq!(
+            unsafe { exchange::resume(packet, Resume::test_new(0), Default::default()) },
+            (Resume::test_new(cursor), QExchangeResult::Error),
+            "failed for `{description}`"
+        )
     }
 }
 
