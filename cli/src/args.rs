@@ -169,13 +169,19 @@ fn read_password(prompt: &str) -> Result<String, std::io::Error> {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('c'),
                 modifiers: event::KeyModifiers::CONTROL,
+                kind: event::KeyEventKind::Press,
                 ..
             }) => {
                 terminal::disable_raw_mode()?;
                 println!();
                 exit(0x00)
             }
-            Event::Key(KeyEvent { code, .. }) => match code {
+            Event::Key(KeyEvent {
+                code,
+                modifiers: event::KeyModifiers::NONE,
+                kind: event::KeyEventKind::Press,
+                ..
+            }) => match code {
                 KeyCode::Backspace => {
                     let _ = password.pop();
                 }
