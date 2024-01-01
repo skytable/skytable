@@ -160,10 +160,10 @@ pub fn parse() -> CliResult<Task> {
 }
 
 fn read_password(prompt: &str) -> Result<String, std::io::Error> {
-    terminal::enable_raw_mode()?;
     print!("{prompt}");
     io::stdout().flush()?;
     let mut password = String::new();
+    terminal::enable_raw_mode()?;
     loop {
         match event::read()? {
             Event::Key(KeyEvent {

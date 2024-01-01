@@ -68,36 +68,57 @@ fn main() {
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
     println!("{TEXT}\nSkytable v{VERSION} | {URL}\n");
+    entrypoint()
+}
+
+fn entrypoint() {
     let run = || {
-        engine::set_context_init("locking PID file");
-        let pid_file = util::os::FileLock::new(SKY_PID_FILE)?;
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .thread_name("server")
-            .enable_all()
-            .build()
-            .unwrap();
-        let g = runtime.block_on(async move {
+        let f_rt_start = || {
+            engine::set_context_init("locking PID file");
+            let pid_file = util::os::FileLock::new(SKY_PID_FILE)?;
+            engine::set_context_init("initializing runtime");
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .thread_name("server")
+                .enable_all()
+                .build()?;
+            Ok((pid_file, runtime))
+        };
+        let (pid_file, runtime) = match f_rt_start() {
+            Ok((pf, rt)) => (pf, rt),
+            Err(e) => return (None, None, Err(e)),
+        };
+        let f_glob_init = runtime.block_on(async move {
             engine::set_context_init("binding system signals");
             let signal = util::os::TerminationSignal::init()?;
             let (config, global) = tokio::task::spawn_blocking(|| engine::load_all())
                 .await
                 .unwrap()?;
-            let g = global.global.clone();
-            engine::start(signal, config, global).await?;
-            engine::RuntimeResult::Ok(g)
-        })?;
-        engine::RuntimeResult::Ok((pid_file, g))
+            engine::RuntimeResult::Ok((signal, config, global))
+        });
+        let (signal, config, global) = match f_glob_init {
+            Ok((sig, cfg, g)) => (sig, cfg, g),
+            Err(e) => return (Some(pid_file), None, Err(e)),
+        };
+        let g = global.global.clone();
+        let result_start =
+            runtime.block_on(async move { engine::start(signal, config, global).await });
+        (Some(pid_file), Some(g), result_start)
     };
-    match run() {
-        Ok((_, g)) => {
-            info!("completing cleanup before exit");
-            engine::finish(g);
-            std::fs::remove_file(SKY_PID_FILE).expect("failed to remove PID file");
-            println!("Goodbye!");
+    let (pid_file, global, result) = run();
+    if let Some(g) = global {
+        info!("cleaning up data");
+        engine::finish(g);
+    }
+    if let Some(_) = pid_file {
+        if let Err(e) = std::fs::remove_file(SKY_PID_FILE) {
+            error!("failed to remove PID file: {e}");
         }
+    }
+    match result {
+        Ok(()) => println!("goodbye"),
         Err(e) => {
             error!("{e}");
-            exit_error()
+            exit_error();
         }
     }
 }
