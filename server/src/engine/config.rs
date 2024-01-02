@@ -1034,42 +1034,45 @@ pub(super) fn apply_and_validate<CS: ConfigurationSource>(
 */
 
 #[cfg(test)]
-thread_local! {
-    static CLI_SRC: std::cell::RefCell<Option<Vec<String>>> = std::cell::RefCell::new(None);
-    static ENV_SRC: std::cell::RefCell<Option<HashMap<String, String>>> = std::cell::RefCell::new(None);
-    static FILE_SRC: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+local! {
+    static CLI_SRC: Option<Vec<String>> = None;
+    static ENV_SRC: Option<HashMap<String, String>> = None;
+    static FILE_SRC: Option<String> = None;
 }
+
 #[cfg(test)]
 pub(super) fn set_cli_src(cli: Vec<String>) {
-    CLI_SRC.with(|args| *args.borrow_mut() = Some(cli))
+    local_mut!(CLI_SRC, |args| *args = Some(cli))
 }
+
 #[cfg(test)]
 pub(super) fn set_env_src(variables: Vec<String>) {
-    ENV_SRC.with(|env| {
-        let variables = variables
-            .into_iter()
-            .map(|var| {
-                var.split("=")
-                    .map(ToString::to_string)
-                    .collect::<Vec<String>>()
-            })
-            .map(|mut vars| (vars.remove(0), vars.remove(0)))
-            .collect();
-        *env.borrow_mut() = Some(variables);
-    })
+    local_mut!(ENV_SRC, |env| {
+        *env = Some(
+            variables
+                .into_iter()
+                .map(|var| {
+                    var.split("=")
+                        .map(ToString::to_string)
+                        .collect::<Vec<String>>()
+                })
+                .map(|mut vars| (vars.remove(0), vars.remove(0)))
+                .collect(),
+        );
+    });
 }
+
 #[cfg(test)]
-pub(super) fn set_file_src(src: &str) {
-    FILE_SRC.with(|s| {
-        s.borrow_mut().replace(src.to_string());
-    })
+pub(super) fn set_file_src(new_src: &str) {
+    local_mut!(FILE_SRC, |src| *src = Some(new_src.to_string()))
 }
+
 fn get_file_from_store(filename: &str) -> RuntimeResult<String> {
     let _f = filename;
     let f;
     #[cfg(test)]
     {
-        f = Ok(FILE_SRC.with(|f| f.borrow().clone().unwrap()));
+        f = Ok(local_ref!(FILE_SRC, |f| f.clone().unwrap()));
     }
     #[cfg(not(test))]
     {
@@ -1082,17 +1085,14 @@ fn get_var_from_store(name: &str) -> Result<String, std::env::VarError> {
     let var;
     #[cfg(test)]
     {
-        var = ENV_SRC.with(|venv| {
-            let ret = {
-                match venv.borrow_mut().as_mut() {
-                    None => return Err(std::env::VarError::NotPresent),
-                    Some(env_store) => match env_store.remove(name) {
-                        Some(var) => Ok(var),
-                        None => Err(std::env::VarError::NotPresent),
-                    },
-                }
-            };
-            ret
+        var = local_mut!(ENV_SRC, |venv| {
+            match venv.as_mut() {
+                None => return Err(std::env::VarError::NotPresent),
+                Some(env_store) => match env_store.remove(name) {
+                    Some(var) => Ok(var),
+                    None => Err(std::env::VarError::NotPresent),
+                },
+            }
         });
     }
     #[cfg(not(test))]
@@ -1105,9 +1105,7 @@ fn get_cli_from_store() -> Vec<String> {
     let src;
     #[cfg(test)]
     {
-        src = CLI_SRC
-            .with(|args| args.borrow_mut().take())
-            .unwrap_or(vec![]);
+        src = local_mut!(CLI_SRC, |args| args.take()).unwrap_or_default();
     }
     #[cfg(not(test))]
     {
