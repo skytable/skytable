@@ -62,6 +62,14 @@ macro_rules! direct_from {
     };
 }
 
+#[allow(unused)]
+macro_rules! direct_from_all {
+    ($for:ty => {$($other:ty as $me:ident),*$(,)?}) => {
+        direct_from!($for => { $($other as $me),* });
+        $(impl PartialEq<$other> for $for { fn eq(&self, other: &$other) -> bool { ::core::matches!(self, Self::$me(v) if v == other) } })*
+    }
+}
+
 macro_rules! flags {
     ($(#[$attr:meta])* $vis:vis struct $group:ident: $ty:ty { $($const:ident = $expr:expr),+ $(,)?}) => (
         $(#[$attr])* #[repr(transparent)] $vis struct $group {r#const: $ty}

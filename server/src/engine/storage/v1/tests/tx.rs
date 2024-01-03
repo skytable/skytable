@@ -29,7 +29,10 @@ use {
         engine::{
             error::{RuntimeResult, StorageError},
             storage::v1::{
-                journal::{self, JournalAdapter, JournalWriter},
+                journal::{
+                    self, JournalAdapter, JournalWriter, _JournalEventTrace,
+                    _JournalReaderTraceEvent, _JournalWriterTraceEvent,
+                },
                 spec,
             },
         },
@@ -147,6 +150,16 @@ fn first_boot_second_readonly() {
         log.close()
     };
     x().unwrap();
+    assert_eq!(
+        journal::__unwind_evtrace(),
+        into_array![
+            _JournalEventTrace::InitCreated,
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::CompletedEventAppend,
+            _JournalWriterTraceEvent::CompletedEventAppend,
+            _JournalWriterTraceEvent::Closed,
+        ]
+    );
     // backup original data
     let original_data = db1.copy_data();
     // restore log
@@ -155,8 +168,39 @@ fn first_boot_second_readonly() {
         .unwrap()
         .close()
         .unwrap();
+    assert_eq!(
+        journal::__unwind_evtrace(),
+        into_array![
+            // restore
+            _JournalEventTrace::InitRestored,
+            // initialize
+            _JournalReaderTraceEvent::Initialized,
+            // read events
+            _JournalReaderTraceEvent::BeginEventsScan,
+            // event 1
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            // event 2
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            // journal close
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::HitClose,
+            _JournalReaderTraceEvent::EOF,
+            _JournalReaderTraceEvent::Closed,
+            _JournalReaderTraceEvent::Success,
+            // init writer
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::Reopened,
+            _JournalWriterTraceEvent::Reinitialized,
+            _JournalWriterTraceEvent::Closed,
+        ]
+    );
     assert_eq!(original_data, empty_db2.copy_data());
 }
+
 #[test]
 fn oneboot_mod_twoboot_mod_thirdboot_read() {
     // first boot: set all to 1
@@ -169,26 +213,192 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
         log.close()
     };
     x().unwrap();
+    assert_eq!(
+        journal::__unwind_evtrace(),
+        into_array![
+            _JournalEventTrace::InitCreated,
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::CompletedEventAppend, // 1
+            _JournalWriterTraceEvent::CompletedEventAppend, // 2
+            _JournalWriterTraceEvent::CompletedEventAppend, // 3
+            _JournalWriterTraceEvent::CompletedEventAppend, // 4
+            _JournalWriterTraceEvent::CompletedEventAppend, // 5
+            _JournalWriterTraceEvent::CompletedEventAppend, // 6
+            _JournalWriterTraceEvent::CompletedEventAppend, // 7
+            _JournalWriterTraceEvent::CompletedEventAppend, // 8
+            _JournalWriterTraceEvent::CompletedEventAppend, // 9
+            _JournalWriterTraceEvent::CompletedEventAppend, // 10
+            _JournalWriterTraceEvent::Closed,
+        ]
+    );
     let bkp_db1 = db1.copy_data();
     drop(db1);
     // second boot
     let db2 = Database::new();
     let x = || -> RuntimeResult<()> {
         let mut log = open_log("duatxn.db-tlog", &db2)?;
+        assert_eq!(
+            journal::__unwind_evtrace(),
+            into_array![
+                // restore
+                _JournalEventTrace::InitRestored,
+                // init reader
+                _JournalReaderTraceEvent::Initialized,
+                _JournalReaderTraceEvent::BeginEventsScan,
+                // scan events (10)
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 1
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 2
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 3
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 4
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 5
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 6
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 7
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 8
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 9
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                _JournalReaderTraceEvent::EntryReadRawMetadata, // 10
+                _JournalReaderTraceEvent::EventKindStandard,
+                _JournalReaderTraceEvent::CompletedEvent,
+                // reader: hit close
+                _JournalReaderTraceEvent::EntryReadRawMetadata,
+                _JournalReaderTraceEvent::HitClose,
+                _JournalReaderTraceEvent::EOF,
+                _JournalReaderTraceEvent::Closed,
+                _JournalReaderTraceEvent::Success,
+                // open writer
+                _JournalWriterTraceEvent::Initialized,
+                _JournalWriterTraceEvent::Reopened,
+                _JournalWriterTraceEvent::Reinitialized,
+            ]
+        );
         assert_eq!(bkp_db1, db2.copy_data());
         for i in 0..10 {
             let current_val = db2.data.borrow()[i];
             db2.txn_set(i, current_val + i as u8, &mut log)?;
+            assert_eq!(
+                journal::__unwind_evtrace(),
+                into_array![_JournalWriterTraceEvent::CompletedEventAppend]
+            );
         }
         log.close()
     };
     x().unwrap();
+    assert_eq!(
+        journal::__unwind_evtrace(),
+        into_array![_JournalWriterTraceEvent::Closed]
+    );
     let bkp_db2 = db2.copy_data();
     drop(db2);
     // third boot
     let db3 = Database::new();
     let log = open_log("duatxn.db-tlog", &db3).unwrap();
     log.close().unwrap();
+    assert_eq!(
+        journal::__unwind_evtrace(),
+        into_array![
+            // init journal
+            _JournalEventTrace::InitRestored,
+            // init reader
+            _JournalReaderTraceEvent::Initialized,
+            _JournalReaderTraceEvent::BeginEventsScan,
+            // scan events (10)
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 1
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 2
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 3
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 4
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 5
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 6
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 7
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 8
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 9
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 10
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            // close and reopen journal
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::HitClose,
+            _JournalReaderTraceEvent::IffyReopen,
+            _JournalReaderTraceEvent::ReopenCheck,
+            _JournalReaderTraceEvent::ReopenSuccess,
+            // scan events (10)
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 1
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 2
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 3
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 4
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 5
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 6
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 7
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 8
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 9
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            _JournalReaderTraceEvent::EntryReadRawMetadata, // 10
+            _JournalReaderTraceEvent::EventKindStandard,
+            _JournalReaderTraceEvent::CompletedEvent,
+            // close reader
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::HitClose,
+            _JournalReaderTraceEvent::EOF,
+            _JournalReaderTraceEvent::Closed,
+            _JournalReaderTraceEvent::Success,
+            // open writer
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::Reopened,
+            _JournalWriterTraceEvent::Reinitialized,
+            _JournalWriterTraceEvent::Closed,
+        ]
+    );
     assert_eq!(bkp_db2, db3.copy_data());
     assert_eq!(
         db3.copy_data(),
