@@ -405,11 +405,11 @@ macro_rules! sizeof {
 }
 
 macro_rules! local {
-    ($($vis:vis static$ident:ident:$ty:ty=$expr:expr;)*)=> {::std::thread_local!{$($vis static $ident: ::std::cell::RefCell::<$ty> = ::std::cell::RefCell::new($expr);)*}};
+    ($($(#[$attr:meta])*$vis:vis static$ident:ident:$ty:ty=$expr:expr;)*)=> {::std::thread_local!{$($(#[$attr])*$vis static $ident: ::std::cell::RefCell::<$ty> = ::std::cell::RefCell::new($expr);)*}};
 }
 
 macro_rules! local_mut {
-    ($ident:ident, $call:expr) => {{
+    ($ident:expr, $call:expr) => {{
         #[inline(always)]
         fn _f<T, U>(v: &::std::cell::RefCell<T>, f: impl FnOnce(&mut T) -> U) -> U {
             f(&mut *v.borrow_mut())
@@ -420,7 +420,7 @@ macro_rules! local_mut {
 
 #[cfg(test)]
 macro_rules! local_ref {
-    ($ident:ident, $call:expr) => {{
+    ($ident:expr, $call:expr) => {{
         #[inline(always)]
         fn _f<T, U>(v: &::std::cell::RefCell<T>, f: impl FnOnce(&T) -> U) -> U {
             f(&v.borrow())

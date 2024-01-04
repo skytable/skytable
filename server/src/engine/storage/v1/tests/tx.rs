@@ -30,8 +30,13 @@ use {
             error::{RuntimeResult, StorageError},
             storage::v1::{
                 journal::{
-                    self, JournalAdapter, JournalWriter, _JournalEventTrace,
-                    _JournalReaderTraceEvent, _JournalWriterTraceEvent,
+                    self,
+                    emulation_tracing::{
+                        _EmulateInjection, _JournalEventTrace, _JournalReaderTraceEvent,
+                        _JournalReaderTraceRecovery, _JournalWriterInjectedWith,
+                        _JournalWriterTraceEvent,
+                    },
+                    JournalAdapter, JournalWriter,
                 },
                 spec,
             },
@@ -66,7 +71,7 @@ impl Database {
         txn_writer: &mut JournalWriter<super::VirtualFS, DatabaseTxnAdapter>,
     ) -> RuntimeResult<()> {
         self.set(pos, val);
-        txn_writer.append_event(TxEvent::Set(pos, val))
+        txn_writer.append_event_with_recovery_plugin(TxEvent::Set(pos, val))
     }
 }
 
@@ -87,7 +92,7 @@ direct_from! {
 #[derive(Debug)]
 pub struct DatabaseTxnAdapter;
 impl JournalAdapter for DatabaseTxnAdapter {
-    const RECOVERY_PLUGIN: bool = false;
+    const RECOVERY_PLUGIN: bool = true;
     type Error = TxError;
     type JournalEvent = TxEvent;
     type GlobalState = Database;
@@ -151,7 +156,7 @@ fn first_boot_second_readonly() {
     };
     x().unwrap();
     assert_eq!(
-        journal::__unwind_evtrace(),
+        journal::emulation_tracing::__unwind_evtrace(),
         into_array![
             _JournalEventTrace::InitCreated,
             _JournalWriterTraceEvent::Initialized,
@@ -169,7 +174,7 @@ fn first_boot_second_readonly() {
         .close()
         .unwrap();
     assert_eq!(
-        journal::__unwind_evtrace(),
+        journal::emulation_tracing::__unwind_evtrace(),
         into_array![
             // restore
             _JournalEventTrace::InitRestored,
@@ -189,12 +194,11 @@ fn first_boot_second_readonly() {
             _JournalReaderTraceEvent::EntryReadRawMetadata,
             _JournalReaderTraceEvent::HitClose(2),
             _JournalReaderTraceEvent::EOF,
-            _JournalReaderTraceEvent::Closed,
             _JournalReaderTraceEvent::Success,
             // init writer
             _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::Reinitializing,
             _JournalWriterTraceEvent::Reopened(3),
-            _JournalWriterTraceEvent::Reinitialized,
             _JournalWriterTraceEvent::Closed(4),
         ]
     );
@@ -214,7 +218,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
     };
     x().unwrap();
     assert_eq!(
-        journal::__unwind_evtrace(),
+        journal::emulation_tracing::__unwind_evtrace(),
         into_array![
             _JournalEventTrace::InitCreated,
             _JournalWriterTraceEvent::Initialized,
@@ -238,7 +242,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
     let x = || -> RuntimeResult<()> {
         let mut log = open_log("duatxn.db-tlog", &db2)?;
         assert_eq!(
-            journal::__unwind_evtrace(),
+            journal::emulation_tracing::__unwind_evtrace(),
             into_array![
                 // restore
                 _JournalEventTrace::InitRestored,
@@ -280,12 +284,11 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
                 _JournalReaderTraceEvent::EntryReadRawMetadata,
                 _JournalReaderTraceEvent::HitClose(10),
                 _JournalReaderTraceEvent::EOF,
-                _JournalReaderTraceEvent::Closed,
                 _JournalReaderTraceEvent::Success,
                 // open writer
                 _JournalWriterTraceEvent::Initialized,
+                _JournalWriterTraceEvent::Reinitializing,
                 _JournalWriterTraceEvent::Reopened(11),
-                _JournalWriterTraceEvent::Reinitialized,
             ]
         );
         assert_eq!(bkp_db1, db2.copy_data());
@@ -293,7 +296,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
             let current_val = db2.data.borrow()[i];
             db2.txn_set(i, current_val + i as u8, &mut log)?;
             assert_eq!(
-                journal::__unwind_evtrace(),
+                journal::emulation_tracing::__unwind_evtrace(),
                 into_array![_JournalWriterTraceEvent::CompletedEventAppend(
                     12 + i as u64 // events start at 11 but i starts at 0
                 )]
@@ -303,7 +306,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
     };
     x().unwrap();
     assert_eq!(
-        journal::__unwind_evtrace(),
+        journal::emulation_tracing::__unwind_evtrace(),
         into_array![_JournalWriterTraceEvent::Closed(22)]
     );
     let bkp_db2 = db2.copy_data();
@@ -313,7 +316,7 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
     let log = open_log("duatxn.db-tlog", &db3).unwrap();
     log.close().unwrap();
     assert_eq!(
-        journal::__unwind_evtrace(),
+        journal::emulation_tracing::__unwind_evtrace(),
         into_array![
             // init journal
             _JournalEventTrace::InitRestored,
@@ -392,12 +395,11 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
             _JournalReaderTraceEvent::EntryReadRawMetadata,
             _JournalReaderTraceEvent::HitClose(22),
             _JournalReaderTraceEvent::EOF,
-            _JournalReaderTraceEvent::Closed,
             _JournalReaderTraceEvent::Success,
             // open writer
             _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::Reinitializing,
             _JournalWriterTraceEvent::Reopened(23),
-            _JournalWriterTraceEvent::Reinitialized,
             _JournalWriterTraceEvent::Closed(24),
         ]
     );
@@ -410,4 +412,92 @@ fn oneboot_mod_twoboot_mod_thirdboot_read() {
             .collect::<Box<[u8]>>()
             .as_ref()
     );
+}
+
+#[test]
+fn recovery_single_event_boot3_corrupted_checksum() {
+    journal::emulation_tracing::__emulate_injection(_EmulateInjection::EventChecksumCorrupted);
+    let x = || {
+        let db = Database::new();
+        let mut log = open_log("test_emulate.db-tlog", &db)?;
+        db.txn_set(0, 100, &mut log)?;
+        log.close()
+    };
+    x().unwrap();
+    assert_eq!(
+        journal::emulation_tracing::__unwind_evtrace(),
+        into_array![
+            _JournalEventTrace::InitCreated,
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterInjectedWith::BadChecksum,
+            _JournalWriterTraceEvent::RecoveryEventAdded(1),
+            _JournalWriterTraceEvent::Closed(2)
+        ]
+    );
+    let db = Database::new();
+    open_log("test_emulate.db-tlog", &db)
+        .unwrap()
+        .close()
+        .unwrap();
+    assert_eq!(
+        journal::emulation_tracing::__unwind_evtrace(),
+        into_array![
+            // create
+            _JournalEventTrace::InitRestored,
+            // init reader
+            _JournalReaderTraceEvent::Initialized,
+            _JournalReaderTraceEvent::BeginEventsScan,
+            // read event with bad checksum
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::EventKindStandard(0),
+            _JournalReaderTraceEvent::ErrorChecksumMismatch,
+            // succeed in recovering
+            _JournalReaderTraceRecovery::Success(1),
+            // read close event
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::HitClose(2),
+            _JournalReaderTraceEvent::EOF,
+            _JournalReaderTraceEvent::Success,
+            // now open writer
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::Reinitializing,
+            _JournalWriterTraceEvent::Reopened(3),
+            // close writer
+            _JournalWriterTraceEvent::Closed(4),
+        ]
+    );
+    open_log("test_emulate.db-tlog", &db)
+        .unwrap()
+        .close()
+        .unwrap();
+    assert_eq!(
+        journal::emulation_tracing::__unwind_evtrace(),
+        into_array![
+            _JournalEventTrace::InitRestored,
+            _JournalReaderTraceEvent::Initialized,
+            _JournalReaderTraceEvent::BeginEventsScan,
+            // read event with bad checksum
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::EventKindStandard(0),
+            _JournalReaderTraceEvent::ErrorChecksumMismatch,
+            // succeed in recovering
+            _JournalReaderTraceRecovery::Success(1),
+            // read close event and reopen
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::HitClose(2),
+            _JournalReaderTraceEvent::IffyReopen,
+            _JournalReaderTraceEvent::ReopenCheck,
+            _JournalReaderTraceEvent::ReopenSuccess(3),
+            // read close event
+            _JournalReaderTraceEvent::EntryReadRawMetadata,
+            _JournalReaderTraceEvent::HitClose(4),
+            _JournalReaderTraceEvent::EOF,
+            _JournalReaderTraceEvent::Success,
+            // init wrter
+            _JournalWriterTraceEvent::Initialized,
+            _JournalWriterTraceEvent::Reinitializing,
+            _JournalWriterTraceEvent::Reopened(5),
+            _JournalWriterTraceEvent::Closed(6),
+        ]
+    )
 }

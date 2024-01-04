@@ -56,93 +56,10 @@ use {
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
 /*
-    tracing
+    emulation and tracing
 */
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(not(test), allow(unused))]
-pub enum _JournalReaderTraceEvent {
-    Initialized,
-    BeginEventsScan,
-    ErrorUnclosed,
-    Closed,
-    EOF,
-    EntryReadRawMetadata,
-    IffyEventIDMismatch,
-    EventKindStandard(u128),
-    IffyReopen,
-    ErrorUnexpectedEvent,
-    Success,
-    ErrorExpectedPayloadButEOF,
-    ErrorChecksumMismatch,
-    ErrorFailedToApplyEvent,
-    CompletedEvent,
-    ReopenCheck,
-    ReopenSuccess(u64),
-    ErrorReopenFailedBadBlock,
-    ErrorExpectedReopenGotEOF,
-    HitClose(u128),
-}
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(not(test), allow(unused))]
-pub enum _JournalReaderTraceRecovery {
-    InitialCursorRestoredForRecoveryBlockCheck,
-    ExitWithFailedToReadBlock,
-    Success,
-    ExitWithInvalidBlock,
-}
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(not(test), allow(unused))]
-pub enum _JournalWriterTraceEvent {
-    Initialized,
-    Reopened(u64),
-    Reinitialized,
-    CompletedEventAppend(u64),
-    ErrorAddingNewEvent,
-    RecoveryEventAdded,
-    ErrorRecoveryFailed,
-    Closed(u64),
-}
-
-direct_from! {
-    _JournalEventTrace => {
-        _JournalReaderTraceEvent as Reader,
-        _JournalReaderTraceRecovery as ReaderRecovery,
-        _JournalWriterTraceEvent as Writer,
-    }
-}
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(not(test), allow(unused))]
-pub enum _JournalEventTrace {
-    InitCreated,
-    InitRestored,
-    Reader(_JournalReaderTraceEvent),
-    ReaderRecovery(_JournalReaderTraceRecovery),
-    Writer(_JournalWriterTraceEvent),
-}
-
-#[cfg(test)]
-local! {
-    static _EVTRACE: Vec<_JournalEventTrace> = Vec::new();
-}
-
-#[inline(always)]
-fn __journal_evtrace(_trace: impl Into<_JournalEventTrace>) {
-    #[cfg(test)]
-    {
-        local_mut!(_EVTRACE, |events| events.push(_trace.into()))
-    }
-}
-
-#[cfg(test)]
-pub fn __unwind_evtrace() -> Vec<_JournalEventTrace> {
-    {
-        local_mut!(_EVTRACE, core::mem::take)
-    }
-}
+#[macro_use]
+pub mod emulation_tracing;
 
 #[cfg(test)]
 pub fn open_or_create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
@@ -152,11 +69,15 @@ pub fn open_or_create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::F
     use super::rw::FileOpen;
     let file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<F>(log_file_name)? {
         FileOpen::Created(f) => {
-            __journal_evtrace(_JournalEventTrace::InitCreated);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalEventTrace::InitCreated,
+            );
             return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?));
         }
         FileOpen::Existing((file, _header)) => {
-            __journal_evtrace(_JournalEventTrace::InitRestored);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalEventTrace::InitRestored,
+            );
             file
         }
     };
@@ -170,12 +91,14 @@ pub fn open_or_create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::F
     journal load
 */
 
+/// Create a new journal
 pub fn create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     log_file_name: &str,
 ) -> RuntimeResult<JournalWriter<Fs, TA>> {
     JournalWriter::new(SDSSFileIO::create::<F>(log_file_name)?, 0, true)
 }
 
+/// Attempt to load a journal
 pub fn load_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     log_file_name: &str,
     gs: &TA::GlobalState,
@@ -275,6 +198,7 @@ impl EventSourceMarker {
     const DRIVER_CLOSED: u64 = 0;
     const DRIVER_REOPENED: u64 = 1;
     const RECOVERY_REVERSE_LAST_JOURNAL: u64 = 2;
+    pub const __ILLEGAL: u64 = 0xFFFFFFFFFFFFFFFF;
 }
 
 impl JournalEntryMetadata {
@@ -302,7 +226,9 @@ pub struct JournalReader<TA, Fs: RawFSInterface> {
 impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     pub fn new(log_file: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()? - spec::SDSSStaticHeaderV1Compact::SIZE as u64;
-        __journal_evtrace(_JournalReaderTraceEvent::Initialized);
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalReaderTraceEvent::Initialized,
+        );
         Ok(Self {
             log_file,
             evid: 0,
@@ -316,7 +242,9 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         // read metadata
         let mut en_jrnl_md = [0u8; JournalEntryMetadata::SIZE];
         self.logfile_read_into_buffer(&mut en_jrnl_md)?; // FIXME(@ohsayan): increase tolerance to not just payload
-        __journal_evtrace(_JournalReaderTraceEvent::EntryReadRawMetadata);
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalReaderTraceEvent::EntryReadRawMetadata,
+        );
         let entry_metadata = JournalEntryMetadata::decode(en_jrnl_md);
         /*
             validate metadata:
@@ -326,40 +254,53 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
             - len < alloc cap; FIXME(@ohsayan): more sensitive via alloc?
         */
         if self.evid != entry_metadata.event_id as u64 {
-            __journal_evtrace(_JournalReaderTraceEvent::IffyEventIDMismatch);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::IffyEventIDMismatch(
+                    entry_metadata.event_id,
+                ),
+            );
             // the only case when this happens is when the journal faults at runtime with a write zero (or some other error when no bytes were written)
             self.remaining_bytes += JournalEntryMetadata::SIZE as u64;
             // move back cursor to see if we have a recovery block
             let new_cursor = self.log_file.retrieve_cursor()? - JournalEntryMetadata::SIZE as u64;
             self.log_file.seek_from_start(new_cursor)?;
-            __journal_evtrace(
-                _JournalReaderTraceRecovery::InitialCursorRestoredForRecoveryBlockCheck,
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceRecovery::InitialCursorRestoredForRecoveryBlockCheck,
             );
-            return self.try_recover_journal_strategy_simple_reverse();
+            return self.try_recover_journal_strategy_simple_reverse(true);
         }
         match entry_metadata
             .event_source_marker()
             .ok_or(StorageError::JournalLogEntryCorrupted)?
         {
-            EventSourceMarker::ServerStandard => __journal_evtrace(
-                _JournalReaderTraceEvent::EventKindStandard(entry_metadata.event_id),
+            EventSourceMarker::ServerStandard => emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::EventKindStandard(
+                    entry_metadata.event_id,
+                ),
             ),
             EventSourceMarker::DriverClosed => {
-                __journal_evtrace(_JournalReaderTraceEvent::HitClose(entry_metadata.event_id));
+                emulation_tracing::__journal_evtrace(
+                    emulation_tracing::_JournalReaderTraceEvent::HitClose(entry_metadata.event_id),
+                );
                 self._incr_evid(); // a close is also an event!
                                    // is this a real close?
                 if self.end_of_file() {
-                    __journal_evtrace(_JournalReaderTraceEvent::EOF);
+                    emulation_tracing::__journal_evtrace(
+                        emulation_tracing::_JournalReaderTraceEvent::EOF,
+                    );
                     self.closed = true;
-                    __journal_evtrace(_JournalReaderTraceEvent::Closed);
                     return Ok(());
                 } else {
-                    __journal_evtrace(_JournalReaderTraceEvent::IffyReopen);
+                    emulation_tracing::__journal_evtrace(
+                        emulation_tracing::_JournalReaderTraceEvent::IffyReopen,
+                    );
                     return self.handle_driver_reopen();
                 }
             }
             EventSourceMarker::DriverReopened | EventSourceMarker::RecoveryReverseLastJournal => {
-                __journal_evtrace(_JournalReaderTraceEvent::ErrorUnexpectedEvent);
+                emulation_tracing::__journal_evtrace(
+                    emulation_tracing::_JournalReaderTraceEvent::ErrorUnexpectedEvent,
+                );
                 // these two are only taken in close and error paths (respectively) so we shouldn't see them here; this is bad
                 // two special directives in the middle of nowhere? incredible
                 return Err(StorageError::JournalCorrupted.into());
@@ -367,27 +308,37 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         }
         // read payload
         if compiler::unlikely(!self.has_remaining_bytes(entry_metadata.event_payload_len)) {
-            __journal_evtrace(_JournalReaderTraceEvent::ErrorExpectedPayloadButEOF);
-            return compiler::cold_call(|| self.try_recover_journal_strategy_simple_reverse());
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::ErrorExpectedPayloadButEOF,
+            );
+            return compiler::cold_call(|| self.try_recover_journal_strategy_simple_reverse(true));
         }
         let mut payload = vec![0; entry_metadata.event_payload_len as usize];
         self.logfile_read_into_buffer(&mut payload)?; // exit jump -> we checked if enough data is there, but the read failed so this is not our business
         if compiler::unlikely(CRC.checksum(&payload) != entry_metadata.event_crc) {
-            __journal_evtrace(_JournalReaderTraceEvent::ErrorChecksumMismatch);
-            return compiler::cold_call(|| self.try_recover_journal_strategy_simple_reverse());
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::ErrorChecksumMismatch,
+            );
+            return compiler::cold_call(|| self.try_recover_journal_strategy_simple_reverse(true));
         }
         if compiler::unlikely(TA::decode_and_update_state(&payload, gs).is_err()) {
-            __journal_evtrace(_JournalReaderTraceEvent::ErrorFailedToApplyEvent);
-            return compiler::cold_call(|| self.try_recover_journal_strategy_simple_reverse());
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::ErrorFailedToApplyEvent,
+            );
+            return compiler::cold_call(|| self.try_recover_journal_strategy_simple_reverse(true));
         }
-        __journal_evtrace(_JournalReaderTraceEvent::CompletedEvent);
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalReaderTraceEvent::CompletedEvent,
+        );
         self._incr_evid();
         Ok(())
     }
     /// handle a driver reopen (IMPORTANT: every event is unique so this must be called BEFORE the ID is incremented)
     fn handle_driver_reopen(&mut self) -> RuntimeResult<()> {
         if self.has_remaining_bytes(JournalEntryMetadata::SIZE as _) {
-            __journal_evtrace(_JournalReaderTraceEvent::ReopenCheck);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::ReopenCheck,
+            );
             let mut reopen_block = [0u8; JournalEntryMetadata::SIZE];
             self.logfile_read_into_buffer(&mut reopen_block)?; // exit jump -> not our business since we have checked flen and if it changes due to user intervention, that's a you problem
             let md = JournalEntryMetadata::decode(reopen_block);
@@ -396,16 +347,22 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
                 & (md.event_payload_len == 0)
                 & (md.event_source_md == EventSourceMarker::DRIVER_REOPENED)
             {
-                __journal_evtrace(_JournalReaderTraceEvent::ReopenSuccess(self.evid));
+                emulation_tracing::__journal_evtrace(
+                    emulation_tracing::_JournalReaderTraceEvent::ReopenSuccess(self.evid),
+                );
                 self._incr_evid();
                 Ok(())
             } else {
                 // FIXME(@ohsayan): tolerate loss in this directive too
-                __journal_evtrace(_JournalReaderTraceEvent::ErrorReopenFailedBadBlock);
+                emulation_tracing::__journal_evtrace(
+                    emulation_tracing::_JournalReaderTraceEvent::ErrorReopenFailedBadBlock,
+                );
                 Err(StorageError::JournalCorrupted.into())
             }
         } else {
-            __journal_evtrace(_JournalReaderTraceEvent::ErrorExpectedReopenGotEOF);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::ErrorExpectedReopenGotEOF,
+            );
             Err(StorageError::JournalCorrupted.into())
         }
     }
@@ -414,12 +371,20 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     /// attempt to recover the journal using the reverse directive (simple strategy)
     /// IMPORTANT: every event is unique so this must be called BEFORE the ID is incremented (remember that we only increment
     /// once we **sucessfully** finish processing a normal (aka server event origin) event and not a non-normal branch)
-    fn try_recover_journal_strategy_simple_reverse(&mut self) -> RuntimeResult<()> {
+    fn try_recover_journal_strategy_simple_reverse(
+        &mut self,
+        increment: bool,
+    ) -> RuntimeResult<()> {
         debug_assert!(TA::RECOVERY_PLUGIN, "recovery plugin not enabled");
+        if increment {
+            self._incr_evid();
+        }
         self.__record_read_bytes(JournalEntryMetadata::SIZE); // FIXME(@ohsayan): don't assume read length?
         let mut entry_buf = [0u8; JournalEntryMetadata::SIZE];
         if self.log_file.read_to_buffer(&mut entry_buf).is_err() {
-            __journal_evtrace(_JournalReaderTraceRecovery::ExitWithFailedToReadBlock);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceRecovery::ExitWithFailedToReadBlock,
+            );
             return Err(StorageError::JournalCorrupted.into());
         }
         let entry = JournalEntryMetadata::decode(entry_buf);
@@ -429,10 +394,14 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
             & (entry.event_source_md == EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL);
         self._incr_evid();
         if okay {
-            __journal_evtrace(_JournalReaderTraceRecovery::Success);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceRecovery::Success(entry.event_id as _),
+            );
             return Ok(());
         } else {
-            __journal_evtrace(_JournalReaderTraceRecovery::ExitWithInvalidBlock);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceRecovery::ExitWithInvalidBlock,
+            );
             Err(StorageError::JournalCorrupted.into())
         }
     }
@@ -442,15 +411,21 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         gs: &TA::GlobalState,
     ) -> RuntimeResult<(SDSSFileIO<Fs>, u64)> {
         let mut slf = Self::new(file)?;
-        __journal_evtrace(_JournalReaderTraceEvent::BeginEventsScan);
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalReaderTraceEvent::BeginEventsScan,
+        );
         while !slf.end_of_file() {
             slf.rapply_next_event(gs)?;
         }
         if slf.closed {
-            __journal_evtrace(_JournalReaderTraceEvent::Success);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::Success,
+            );
             Ok((slf.log_file, slf.evid))
         } else {
-            __journal_evtrace(_JournalReaderTraceEvent::ErrorUnclosed);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalReaderTraceEvent::ErrorUnclosed,
+            );
             Err(StorageError::JournalCorrupted.into())
         }
     }
@@ -502,29 +477,76 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
             _m: PhantomData,
             closed: false,
         };
-        __journal_evtrace(_JournalWriterTraceEvent::Initialized);
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalWriterTraceEvent::Initialized,
+        );
         if !new {
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalWriterTraceEvent::Reinitializing,
+            );
             // IMPORTANT: don't forget this; otherwise the journal reader will report a false error!
             slf.append_journal_reopen()?;
-            __journal_evtrace(_JournalWriterTraceEvent::Reinitialized);
         }
         Ok(slf)
     }
     pub fn append_event(&mut self, event: TA::JournalEvent) -> RuntimeResult<()> {
         let encoded = TA::encode(event);
+        let next_id = self._incr_id();
         let md = JournalEntryMetadata::new(
-            self._incr_id() as u128,
-            EventSourceMarker::SERVER_STD,
-            CRC.checksum(&encoded),
-            encoded.len() as u64,
+            /*
+                for all the emulated faults here, an individual section of the metadata is intentionally
+                written to be invalid
+            */
+            __inject_during_test_or!(if let @EventIDCorrupted {
+                emulation_tracing::__journal_evtrace(emulation_tracing::_JournalWriterInjectedWith::BadEventID);
+                (next_id - 1) as u128
+            } else {
+                // REAL
+                next_id as u128
+            }),
+            __inject_during_test_or!(if let @EventSourceCorrupted {
+                emulation_tracing::__journal_evtrace(emulation_tracing::_JournalWriterInjectedWith::BadSource);
+                EventSourceMarker::__ILLEGAL
+            } else {
+                // REAL
+                EventSourceMarker::SERVER_STD
+            }),
+            __inject_during_test_or!(if let @EventChecksumCorrupted {
+                emulation_tracing::__journal_evtrace(emulation_tracing::_JournalWriterInjectedWith::BadChecksum);
+                0
+            } else {
+                // REAL
+                CRC.checksum(&encoded)
+            }),
+            __inject_during_test_or!(if let @EventPayloadLenIsGreaterBy(gt_by) {
+                emulation_tracing::__journal_evtrace(emulation_tracing::_JournalWriterInjectedWith::BadPayloadLen(gt_by + encoded.len() as u64));
+                encoded.len() as u64 + gt_by
+            } else {
+                // REAL
+                encoded.len() as u64
+            }),
         )
         .encoded();
         self.log_file.unfsynced_write(&md)?;
-        self.log_file.unfsynced_write(&encoded)?;
+        __inject_during_test_or!(if let @PayloadMissing {
+            emulation_tracing::__journal_evtrace(emulation_tracing::_JournalWriterInjectedWith::MissingPayload);
+            Ok(())
+        } else {
+            // REAL
+            self.log_file.unfsynced_write(&encoded)
+        })?;
         self.log_file.fsync_all()?;
-        __journal_evtrace(_JournalWriterTraceEvent::CompletedEventAppend(
-            (self.id - 1) as _,
-        ));
+        if emulation_tracing::__is_emulated_fault() {
+            // a fault was emulated, so we should append a recovery block
+            #[cfg(test)]
+            if local_ref!(emulation_tracing::_EMULATE_ALLOW_RECOVER, |v| *v) {
+                // yes, we are allowed to add a recovery block
+                return self.appendrec_journal_reverse_entry();
+            }
+        }
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalWriterTraceEvent::CompletedEventAppend((self.id - 1) as _),
+        );
         Ok(())
     }
     pub fn append_event_with_recovery_plugin(
@@ -535,7 +557,9 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         match self.append_event(event) {
             Ok(()) => Ok(()),
             Err(e) => compiler::cold_call(move || {
-                __journal_evtrace(_JournalWriterTraceEvent::ErrorAddingNewEvent);
+                emulation_tracing::__journal_evtrace(
+                    emulation_tracing::_JournalWriterTraceEvent::ErrorAddingNewEvent,
+                );
                 // IMPORTANT: we still need to return an error so that the caller can retry if deemed appropriate
                 self.appendrec_journal_reverse_entry()?;
                 Err(e)
@@ -550,15 +574,23 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
             JournalEntryMetadata::new(0, EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL, 0, 0);
         entry.event_id = self._incr_id() as u128;
         if self.log_file.fsynced_write(&entry.encoded()).is_ok() {
-            __journal_evtrace(_JournalWriterTraceEvent::RecoveryEventAdded);
+            emulation_tracing::__journal_evtrace(
+                emulation_tracing::_JournalWriterTraceEvent::RecoveryEventAdded(
+                    entry.event_id as _,
+                ),
+            );
             return Ok(());
         }
-        __journal_evtrace(_JournalWriterTraceEvent::ErrorRecoveryFailed);
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalWriterTraceEvent::ErrorRecoveryFailed,
+        );
         Err(StorageError::JournalWRecoveryStageOneFailCritical.into())
     }
     pub fn append_journal_reopen(&mut self) -> RuntimeResult<()> {
         let id = self._incr_id() as u128;
-        __journal_evtrace(_JournalWriterTraceEvent::Reopened(id as _));
+        emulation_tracing::__journal_evtrace(
+            emulation_tracing::_JournalWriterTraceEvent::Reopened(id as _),
+        );
         self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_REOPENED, 0, 0).encoded(),
         )
@@ -569,7 +601,9 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
         self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, 0, 0).encoded(),
         )?;
-        __journal_evtrace(_JournalWriterTraceEvent::Closed(id as u64));
+        emulation_tracing::__journal_evtrace(emulation_tracing::_JournalWriterTraceEvent::Closed(
+            id as u64,
+        ));
         Ok(())
     }
     pub fn close(mut self) -> RuntimeResult<()> {
