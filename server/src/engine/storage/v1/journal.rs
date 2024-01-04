@@ -69,7 +69,7 @@ pub enum _JournalReaderTraceEvent {
     EOF,
     EntryReadRawMetadata,
     IffyEventIDMismatch,
-    EventKindStandard,
+    EventKindStandard(u128),
     IffyReopen,
     ErrorUnexpectedEvent,
     Success,
@@ -78,10 +78,10 @@ pub enum _JournalReaderTraceEvent {
     ErrorFailedToApplyEvent,
     CompletedEvent,
     ReopenCheck,
-    ReopenSuccess,
+    ReopenSuccess(u64),
     ErrorReopenFailedBadBlock,
     ErrorExpectedReopenGotEOF,
-    HitClose,
+    HitClose(u128),
 }
 
 #[derive(Debug, PartialEq)]
@@ -97,13 +97,13 @@ pub enum _JournalReaderTraceRecovery {
 #[cfg_attr(not(test), allow(unused))]
 pub enum _JournalWriterTraceEvent {
     Initialized,
-    Reopened,
+    Reopened(u64),
     Reinitialized,
-    CompletedEventAppend,
+    CompletedEventAppend(u64),
     ErrorAddingNewEvent,
     RecoveryEventAdded,
     ErrorRecoveryFailed,
-    Closed,
+    Closed(u64),
 }
 
 direct_from! {
@@ -341,12 +341,13 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
             .event_source_marker()
             .ok_or(StorageError::JournalLogEntryCorrupted)?
         {
-            EventSourceMarker::ServerStandard => {
-                __journal_evtrace(_JournalReaderTraceEvent::EventKindStandard)
-            }
+            EventSourceMarker::ServerStandard => __journal_evtrace(
+                _JournalReaderTraceEvent::EventKindStandard(entry_metadata.event_id),
+            ),
             EventSourceMarker::DriverClosed => {
-                __journal_evtrace(_JournalReaderTraceEvent::HitClose);
-                // is this a real close?
+                __journal_evtrace(_JournalReaderTraceEvent::HitClose(entry_metadata.event_id));
+                self._incr_evid(); // a close is also an event!
+                                   // is this a real close?
                 if self.end_of_file() {
                     __journal_evtrace(_JournalReaderTraceEvent::EOF);
                     self.closed = true;
@@ -395,8 +396,8 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
                 & (md.event_payload_len == 0)
                 & (md.event_source_md == EventSourceMarker::DRIVER_REOPENED)
             {
+                __journal_evtrace(_JournalReaderTraceEvent::ReopenSuccess(self.evid));
                 self._incr_evid();
-                __journal_evtrace(_JournalReaderTraceEvent::ReopenSuccess);
                 Ok(())
             } else {
                 // FIXME(@ohsayan): tolerate loss in this directive too
@@ -503,7 +504,6 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         };
         __journal_evtrace(_JournalWriterTraceEvent::Initialized);
         if !new {
-            __journal_evtrace(_JournalWriterTraceEvent::Reopened);
             // IMPORTANT: don't forget this; otherwise the journal reader will report a false error!
             slf.append_journal_reopen()?;
             __journal_evtrace(_JournalWriterTraceEvent::Reinitialized);
@@ -522,7 +522,9 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         self.log_file.unfsynced_write(&md)?;
         self.log_file.unfsynced_write(&encoded)?;
         self.log_file.fsync_all()?;
-        __journal_evtrace(_JournalWriterTraceEvent::CompletedEventAppend);
+        __journal_evtrace(_JournalWriterTraceEvent::CompletedEventAppend(
+            (self.id - 1) as _,
+        ));
         Ok(())
     }
     pub fn append_event_with_recovery_plugin(
@@ -556,6 +558,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
     }
     pub fn append_journal_reopen(&mut self) -> RuntimeResult<()> {
         let id = self._incr_id() as u128;
+        __journal_evtrace(_JournalWriterTraceEvent::Reopened(id as _));
         self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_REOPENED, 0, 0).encoded(),
         )
@@ -566,7 +569,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
         self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, 0, 0).encoded(),
         )?;
-        __journal_evtrace(_JournalWriterTraceEvent::Closed);
+        __journal_evtrace(_JournalWriterTraceEvent::Closed(id as u64));
         Ok(())
     }
     pub fn close(mut self) -> RuntimeResult<()> {
