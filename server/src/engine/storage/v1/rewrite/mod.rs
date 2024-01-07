@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Sun Jan 07 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2024, Sayan Nandan <nandansayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,27 +24,4 @@
  *
 */
 
-// tmp
-mod rewrite;
-// impls
-mod batch_jrnl;
-mod journal;
-pub(in crate::engine) mod loader;
-mod rw;
-pub mod spec;
-pub mod sysdb;
-// hl
-pub mod inf;
-// test
-pub mod memfs;
-#[cfg(test)]
-mod tests;
-
-// re-exports
-pub use {
-    journal::{JournalAdapter, JournalWriter},
-    rw::{LocalFS, RawFSInterface, SDSSFileIO},
-};
-pub mod data_batch {
-    pub use super::batch_jrnl::{create, DataBatchPersistDriver};
-}
+mod interface;
