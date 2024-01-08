@@ -65,7 +65,7 @@ Skytable has `SPACE`s instead of `DATABASE`s due to signficant operational diffe
    ```rust
    pub struct MyModel {
     username: String,
-    password: Strin,
+    password: String,
     notes: Vec<String>,
    }
    ```
