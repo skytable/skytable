@@ -55,11 +55,6 @@ use {
     },
 };
 
-/*
-    HACK(@ohsayan): Until https://github.com/rust-lang/rust/issues/76560 is stabilized which is likely to take a while,
-    we need to settle for trait objects.
-*/
-
 #[cfg(debug_assertions)]
 struct CHTMetricsData {
     split: AtomicUsize,
@@ -113,6 +108,36 @@ impl Drop for CHTRuntimeLog {
         let _ = self.data;
     }
 }
+
+/*
+    concurrent index impl
+    ---
+    This implementation borrows ideas from the research by Phil Bagwell on hash trees and concurrency[1][2]. This implementation
+    simplifies some of the features as described in the original paper, with some implementation ideas from contrie[3] but makes
+    several other custom changes for maintenance, performance and custom features tuned to the use-case for Skytable.
+
+    ## Warning: High memory overhead (explanation)
+    This implementation unfortunately is quite bad in terms of memory efficiency because it uses full-sized nodes
+    instead of differentiating the nodes, for performance (reducing indirection). The original paper recommends using
+    differently sized nodes.
+
+    Noting this, expect signficant memory blowup. We'll also remove this implementation down the line.
+
+    This is why, I do NOT recommend its use as a daily data structure.
+
+    ---
+    References:
+    [1]: Aleksandar Prokopec, Nathan Grasso Bronson, Phil Bagwell, and Martin Odersky. 2012.
+    Concurrent tries with efficient non-blocking snapshots. SIGPLAN Not. 47, 8 (August 2012),
+    151–160. https://doi.org/10.1145/2370036.2145836
+    [2]: https://lampwww.epfl.ch/papers/idealhashtrees.pdf
+    [3]: https://github.com/vorner/contrie (distributed under the MIT or Apache-2.0 license)
+    -- Sayan (@ohsayan)
+
+    ---
+    HACK(@ohsayan): Until https://github.com/rust-lang/rust/issues/76560 is stabilized which is likely to take a while,
+    we need to settle for trait objects.
+*/
 
 pub struct Node<C: Config> {
     branch: [Atomic<Self>; <DefConfig as Config>::BRANCH_MX],

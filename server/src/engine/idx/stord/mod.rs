@@ -55,6 +55,11 @@ use {
     Second note, I'm not a big fan of the DLL and will most likely try a different approach in the future; this one
     is the most convenient option for now.
 
+    This work uses some ideas from the archived linked hash map crate which is now unmaintained[1]
+
+    ---
+    [1]: https://github.com/contain-rs/linked-hash-map (distributed under the MIT or Apache-2.0 License)
+
     -- Sayan (@ohsayan) // Jan. 16 '23
 */
 

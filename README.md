@@ -1,5 +1,5 @@
 <br/><p align="center">
-    <img width="150" src="assets/logo.jpg">
+   <a href="https://skytable.io"><img width="150" src="assets/logo.jpg"></a>
 </p>
 <h2 align = "center">
     Skytable — A modern database for building powerful experiences

@@ -24,9 +24,6 @@
  *
 */
 
-#[cfg(test)]
-use std::cell::RefCell;
-
 use {
     crate::{
         engine::{
@@ -237,23 +234,22 @@ const fn opc(opr: TagClass, ope: AssignmentOperator) -> usize {
 }
 
 #[cfg(test)]
-thread_local! {
-    pub(super) static ROUTE_TRACE: RefCell<Vec<&'static str>> = RefCell::new(Vec::new());
+local! {
+    pub(super) static ROUTE_TRACE: Vec<&'static str> = Vec::new();
 }
 
 #[inline(always)]
 fn input_trace(v: &'static str) {
     #[cfg(test)]
     {
-        ROUTE_TRACE.with(|rcv| rcv.borrow_mut().push(v))
+        local_mut!(ROUTE_TRACE, |rtrace| rtrace.push(v))
     }
     let _ = v;
 }
 #[cfg(test)]
 pub fn collect_trace_path() -> Vec<&'static str> {
-    ROUTE_TRACE.with(|v| v.borrow().iter().cloned().collect())
+    local_ref!(ROUTE_TRACE, |rtrace| rtrace.iter().cloned().collect())
 }
-
 pub fn update_resp(
     global: &impl GlobalInstanceLike,
     update: UpdateStatement,

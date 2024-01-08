@@ -24,10 +24,9 @@
  *
 */
 
-#![allow(unused)]
+#![allow(dead_code)]
 
 use core::fmt;
-use std::cell::RefCell;
 
 /// The current engine context
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -191,7 +190,7 @@ impl LocalContext {
         Self::_new(None, None)
     }
     fn _ctx<T>(f: impl FnOnce(&mut Self) -> T) -> T {
-        thread_local! { static CTX: RefCell<LocalContext> = RefCell::new(LocalContext::null()) }
-        CTX.with(|lctx| f(&mut lctx.borrow_mut()))
+        local! { static CTX: LocalContext = LocalContext::null(); }
+        local_mut!(CTX, f)
     }
 }

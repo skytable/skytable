@@ -27,9 +27,6 @@
 pub(super) mod alt;
 pub(in crate::engine) mod delta;
 
-#[cfg(test)]
-use std::cell::RefCell;
-
 use {
     super::index::PrimaryIndex,
     crate::engine::{
@@ -696,26 +693,22 @@ impl Layer {
 }
 
 #[cfg(test)]
-thread_local! {
-    static LAYER_TRACE: RefCell<Vec<Box<str>>> = RefCell::new(Vec::new());
+local! {
+    static LAYER_TRACE: Vec<Box<str>> = Vec::new();
 }
 
 #[inline(always)]
 fn layertrace(_layer: impl ToString) {
     #[cfg(test)]
     {
-        LAYER_TRACE.with(|v| v.borrow_mut().push(_layer.to_string().into()));
+        local_mut!(LAYER_TRACE, |ltrace| ltrace.push(_layer.to_string().into()))
     }
 }
 
 #[cfg(test)]
 /// Obtain a layer trace and clear older traces
 pub(super) fn layer_traces() -> Box<[Box<str>]> {
-    LAYER_TRACE.with(|x| {
-        let ret = x.borrow().iter().cloned().collect();
-        x.borrow_mut().clear();
-        ret
-    })
+    local_mut!(LAYER_TRACE, |ltrace| ltrace.drain(..).collect())
 }
 
 static VTFN: [unsafe fn(Layer, &mut Datacell) -> bool; 8] = [
