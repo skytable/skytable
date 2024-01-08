@@ -137,14 +137,16 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           path: artifacts
-      - name: Install Hub CLI
+      - name: Install GitHub CLI
         run: |
           sudo apt update
-          sudo apt install hub -y
+          sudo apt install gh -y
       - name: Upload release binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ env.VERSION }}
         run: |
-          hub release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$TAG_NAME"
-          hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "$TAG_NAME"
+          gh auth login --with-token <<< $GITHUB_TOKEN
+          for file in $(find ./artifacts/ -type f -name "*.zip" -o -name "*.deb"); do
+            gh release upload "$TAG_NAME" "$file"
+          done

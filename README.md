@@ -14,25 +14,25 @@
 
 ## 💡 What is Skytable?
 
-Skytable is a **modern NoSQL database** that focuses on **performance, flexibility and scalability**. Our goal is to deliver **a rock-solid database** that you can use as the foundation for your next application — **minus the gimmicks**.
+Skytable is a **modern NoSQL database** that focuses on **performance, flexibility and scalability**. Skytable
+is a primarily in-memory, wide-column based database with support for additional data models<sup>*</sup> that 
+uses its own storage engine (structured like n-ary records with optimized delayed-durability transactions) and 
+enables querying with its own query language *BlueQL* that is based on SQL which builds on SQL to improve 
+security and flexibility.
 
-Skytable makes every attempt to **remove the gotchas from SQL-systems**. For example, nonempty `model`s and `space`s cannot be dropped and **BlueQL is designed to greatly deter SQL injection vulnerabilities** with a new **mandatory parameterization** design and several other **secure query language design principles**.
-
-Every component in Skytable has been **engineered from the ground up** to meet our design goals. **Skytable uses BlueQL<sup>TM</sup>** which is our own **new in-house query language** designed from the ground up for a **clean, powerful, modern and secure querying experience** and is **generally more secure than SQL**.
-
-Skytable works with **structured and semi-structured data**. We're currently working on supporting unstructured data.
+Skytable is best-suited for applications that need to store large-scale data, need high-performance and low 
+latencies.
 
 > **You can read more about Skytable's architecture, including information on the clustering and HA implementation that we're currently working on, and limitations [on this page](https://docs.skytable.io/architecture).**
 
 ## 🎨 Features
 
 - **Spaces, models and more**: For flexible data definition
-- **Powerful querying with BlueQL**: A modern query language, designed for the 21<sup>st</sup> century
+- **Powerful querying with BlueQL**: A modern query language based on SQL
 - **Rich data modeling**: Use `model`s to define data with complex types, collections and more
-- **Performant, in and out of the box**: Heavily multithreaded and optimized
-- **Secure, query in and response out**: BlueQL is designed to strongly deter query injection pathways
-- **SQL minus the gotchas**: Ever done a `DROP TABLE users` and lost all data? **That won't happen in Skytable**.
-- **Designed to scale by enforcing best practices**: If you're building with Skytable today, the practices you'll learn here will let you easily take on the job of building large scale systems
+- **Performant**: Heavily multithreaded, optimized write batching and more
+- **Secure**: BlueQL is designed to strongly deter query injection pathways
+- **Enforces best practices**: If you're building with Skytable today, the practices you'll learn here will let you easily take on the job of building performant systems, even outside Skytable
 
 > Learn more about [Skytable's features here](https://docs.skytable.io).
 
