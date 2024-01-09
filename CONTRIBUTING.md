@@ -34,7 +34,9 @@ In other cases, use the C style.
   use serde::{Serialize, Deserialize};
   use crate::something;
   ```
+
   this mode of styling is preferred:
+
   ```rust
   use {
       devtimer::{SimpleTimer, ComplexTimer},
@@ -47,25 +49,27 @@ In other cases, use the C style.
 
 The main parts (ignorning CI scripts, stress test suite, test harness and custom compiler macros) are:
 
-- `cli`: REPL shell
-- `server`: database server
+- `cli`: interactive shell `skysh`
+- `server`: server daemon `skyd`
 - `sky-bench`: benchmark tool
+
+The `pkg` folder contains scripts used to build packages for different targets. The `examples` folder
+contains example configuration files.
 
 ### Branches
 
 The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download sources from the tags.
 
-Pushes are made directly
-to next if they don't change things significantly; for example, changes in documentation comments and general optimizations. If
-however the changes are huge, then they must be created on a separate branch, a pull request opened, the CI suite run and
-finally merged into next.
+Pushes are made directly to next if they don't change things significantly; for example, changes in 
+documentation comments and general optimizations. If however the changes are huge, then they must be created 
+on a separate branch, a pull request opened, the CI suite run and finally merged into next.
 
 ## Pull request guidelines
 
 ### Typo correction or doc updates
 
-The creation of superflous merge requests is generally discouraged. Such examples include the creation of multiple
-PRs to correct single typos, update comments or update docs.
+The creation of superflous merge requests is generally discouraged. Such examples include the creation of 
+multiple PRs to correct single typos, update comments or update docs.
 
 It would be far better if you could fix a considerable subset (if not all) of these issues in one pull request (it's fine to create multiple commits in the same PR).
 This is because we don't want to utilize compute capacity or multiply our git history for changes
@@ -87,6 +91,9 @@ Skytable uses a Makefile for builds and running the test suite along with a numb
 
 1. Install the latest Rust toolchain (stable)
 2. Install a C Compiler, Make, Perl and the libssl-dev package on platforms where they are required
+3. On Windows:
+   - You might need to perform additional steps to add `perl` to our `PATH` variable
+   - You may also need to set up powershell if it isn't set up already as it is used by the test script
 
 **Building**
 
