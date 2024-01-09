@@ -420,9 +420,3 @@ macro_rules! local_ref {
         ::std::thread::LocalKey::with(&$ident, |v| _f(v, $call))
     }};
 }
-
-macro_rules! test_items {
-    ($($i:item)*) => {
-        $(#[cfg(test)]$i)*
-    }
-}

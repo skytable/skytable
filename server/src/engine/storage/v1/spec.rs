@@ -37,7 +37,10 @@ use {
     crate::{
         engine::{
             error::{RuntimeResult, StorageError},
-            storage::versions::{self, DriverVersion, HeaderVersion, ServerVersion},
+            storage::common::{
+                static_meta::{HostArch, HostEndian, HostOS, HostPointerWidth, SDSS_MAGIC_8B},
+                versions::{self, DriverVersion, HeaderVersion, ServerVersion},
+            },
         },
         util::os,
     },
@@ -50,133 +53,6 @@ use {
 /*
     meta
 */
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-/// Host architecture enumeration for common platforms
-pub enum HostArch {
-    X86 = 0,
-    X86_64 = 1,
-    ARM = 2,
-    ARM64 = 3,
-    MIPS = 4,
-    PowerPC = 5,
-}
-
-impl HostArch {
-    pub const fn new() -> Self {
-        if cfg!(target_arch = "x86") {
-            HostArch::X86
-        } else if cfg!(target_arch = "x86_64") {
-            HostArch::X86_64
-        } else if cfg!(target_arch = "arm") {
-            HostArch::ARM
-        } else if cfg!(target_arch = "aarch64") {
-            HostArch::ARM64
-        } else if cfg!(target_arch = "mips") {
-            HostArch::MIPS
-        } else if cfg!(target_arch = "powerpc") {
-            HostArch::PowerPC
-        } else {
-            panic!("Unsupported target architecture")
-        }
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-/// Host OS enumeration for common operating systems
-pub enum HostOS {
-    // T1
-    Linux = 0,
-    Windows = 1,
-    MacOS = 2,
-    // T2
-    Android = 3,
-    AppleiOS = 4,
-    FreeBSD = 5,
-    OpenBSD = 6,
-    NetBSD = 7,
-    WASI = 8,
-    Emscripten = 9,
-    // T3
-    Solaris = 10,
-    Fuchsia = 11,
-    Redox = 12,
-    DragonFly = 13,
-}
-
-impl HostOS {
-    pub const fn new() -> Self {
-        if cfg!(target_os = "linux") {
-            HostOS::Linux
-        } else if cfg!(target_os = "windows") {
-            HostOS::Windows
-        } else if cfg!(target_os = "macos") {
-            HostOS::MacOS
-        } else if cfg!(target_os = "android") {
-            HostOS::Android
-        } else if cfg!(target_os = "ios") {
-            HostOS::AppleiOS
-        } else if cfg!(target_os = "freebsd") {
-            HostOS::FreeBSD
-        } else if cfg!(target_os = "openbsd") {
-            HostOS::OpenBSD
-        } else if cfg!(target_os = "netbsd") {
-            HostOS::NetBSD
-        } else if cfg!(target_os = "dragonfly") {
-            HostOS::DragonFly
-        } else if cfg!(target_os = "redox") {
-            HostOS::Redox
-        } else if cfg!(target_os = "fuchsia") {
-            HostOS::Fuchsia
-        } else if cfg!(target_os = "solaris") {
-            HostOS::Solaris
-        } else if cfg!(target_os = "emscripten") {
-            HostOS::Emscripten
-        } else if cfg!(target_os = "wasi") {
-            HostOS::WASI
-        } else {
-            panic!("unknown os")
-        }
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-/// Host endian enumeration
-pub enum HostEndian {
-    Big = 0,
-    Little = 1,
-}
-
-impl HostEndian {
-    pub const fn new() -> Self {
-        if cfg!(target_endian = "little") {
-            Self::Little
-        } else {
-            Self::Big
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-#[repr(u8)]
-/// Host pointer width enumeration
-pub enum HostPointerWidth {
-    P32 = 0,
-    P64 = 1,
-}
-
-impl HostPointerWidth {
-    pub const fn new() -> Self {
-        match sizeof!(usize) {
-            4 => Self::P32,
-            8 => Self::P64,
-            _ => panic!("unknown pointer width"),
-        }
-    }
-}
 
 /// The file scope
 #[repr(u8)]
@@ -204,8 +80,6 @@ impl FileSpecifierVersion {
         Self(v)
     }
 }
-
-const SDSS_MAGIC: u64 = 0x4F48534159414E21;
 
 /// Specification for a SDSS file
 pub trait FileSpec {
@@ -418,12 +292,12 @@ impl SDSSStaticHeaderV1Compact {
                 $(($expr) &)*true
             }
         }
-        let okay_header_version = raw_header_version == versions::CURRENT_HEADER_VERSION;
-        let okay_server_version = raw_server_version == versions::CURRENT_SERVER_VERSION;
-        let okay_driver_version = raw_driver_version == versions::CURRENT_DRIVER_VERSION;
+        let okay_header_version = raw_header_version == versions::v1::V1_HEADER_VERSION;
+        let okay_server_version = raw_server_version == versions::v1::V1_SERVER_VERSION;
+        let okay_driver_version = raw_driver_version == versions::v1::V1_DRIVER_VERSION;
         let okay = okay!(
             // 1.1 mgblk
-            raw_magic == SDSS_MAGIC,
+            raw_magic == SDSS_MAGIC_8B,
             okay_header_version,
             // 2.1.1
             okay_server_version,
@@ -498,14 +372,14 @@ impl SDSSStaticHeaderV1Compact {
     ) -> [u8; 64] {
         let mut ret = [0; 64];
         // 1. mgblk
-        ret[Self::SEG1_MAGIC].copy_from_slice(&SDSS_MAGIC.to_le_bytes());
+        ret[Self::SEG1_MAGIC].copy_from_slice(&SDSS_MAGIC_8B.to_le_bytes());
         ret[Self::SEG1_HEADER_VERSION]
-            .copy_from_slice(&versions::CURRENT_HEADER_VERSION.little_endian_u64());
+            .copy_from_slice(&versions::v1::V1_HEADER_VERSION.little_endian_u64());
         // 2.1.1
         ret[Self::SEG2_REC1_SERVER_VERSION]
-            .copy_from_slice(&versions::CURRENT_SERVER_VERSION.little_endian());
+            .copy_from_slice(&versions::v1::V1_SERVER_VERSION.little_endian());
         ret[Self::SEG2_REC1_DRIVER_VERSION]
-            .copy_from_slice(&versions::CURRENT_DRIVER_VERSION.little_endian());
+            .copy_from_slice(&versions::v1::V1_DRIVER_VERSION.little_endian());
         // 2.1.2
         ret[Self::SEG2_REC1_HOST_OS] = HostOS::new().value_u8();
         ret[Self::SEG2_REC1_HOST_ARCH] = HostArch::new().value_u8();

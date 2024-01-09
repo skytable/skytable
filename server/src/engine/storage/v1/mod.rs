@@ -24,8 +24,6 @@
  *
 */
 
-// tmp
-mod rewrite;
 // impls
 mod batch_jrnl;
 mod journal;

@@ -24,13 +24,12 @@
  *
 */
 
-//! SDSS Based Storage Engine versions
+//! # Versioning
+//!
+//! Storage engine versioning utility
+//!
 
 pub mod server_version;
-
-pub const CURRENT_SERVER_VERSION: ServerVersion = v1::V1_SERVER_VERSION;
-pub const CURRENT_DRIVER_VERSION: DriverVersion = v1::V1_DRIVER_VERSION;
-pub const CURRENT_HEADER_VERSION: HeaderVersion = v1::V1_HEADER_VERSION;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 /// The header version
@@ -75,8 +74,7 @@ impl DriverVersion {
 
 pub mod v1 {
     //! The first SDSS based storage engine implementation.
-    //! Target tag: 0.8.0
-
+    //! Target tag: 0.8.0 {beta.1, beta.2}
     use super::{DriverVersion, HeaderVersion, ServerVersion};
 
     /// The SDSS header version UID
@@ -86,4 +84,16 @@ pub mod v1 {
         ServerVersion(super::server_version::fetch_id("v0.8.0") as _);
     /// The driver version UID
     pub const V1_DRIVER_VERSION: DriverVersion = DriverVersion(0);
+}
+
+pub mod v2 {
+    //! The second SDSS based storage implementation
+    //!
+    //! Target tag: 0.8.0 (GA)
+    use super::{DriverVersion, HeaderVersion, ServerVersion};
+
+    pub const V2_HEADER_VERSION: HeaderVersion = HeaderVersion(0);
+    pub const V2_SERVER_VERSION: ServerVersion =
+        ServerVersion(super::server_version::fetch_id("v0.8.0") as _);
+    pub const V2_DRIVER_VERSION: DriverVersion = DriverVersion(1);
 }

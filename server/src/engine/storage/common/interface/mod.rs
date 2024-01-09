@@ -24,4 +24,13 @@
  *
 */
 
-mod interface;
+//! # FS abstractions
+//!
+//! This module defines abstractions over file systems (whether physical or virtual) and provides
+//! traits that provide an unified API for all file systems irrespective of their base impl
+//!
+
+pub mod fs;
+pub mod fs_imp;
+#[cfg(test)]
+pub mod fs_test;

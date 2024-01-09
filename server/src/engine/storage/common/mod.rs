@@ -1,5 +1,5 @@
 /*
- * Created on Sun Sep 03 2023
+ * Created on Tue Jan 09 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2024, Sayan Nandan <nandansayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,29 +24,7 @@
  *
 */
 
-use crc::{Crc, Digest, CRC_64_XZ};
-
-/*
-    NOTE(@ohsayan): we're currently using crc's impl. but the reason I decided to make a wrapper is because I have a
-    different impl in mind
-*/
-
-const CRC64: Crc<u64> = Crc::<u64>::new(&CRC_64_XZ);
-
-pub struct SCrc {
-    digest: Digest<'static, u64>,
-}
-
-impl SCrc {
-    pub const fn new() -> Self {
-        Self {
-            digest: CRC64.digest(),
-        }
-    }
-    pub fn recompute_with_new_var_block(&mut self, b: &[u8]) {
-        self.digest.update(b)
-    }
-    pub fn finish(self) -> u64 {
-        self.digest.finalize()
-    }
-}
+pub mod checksum;
+pub mod interface;
+pub mod static_meta;
+pub mod versions;
