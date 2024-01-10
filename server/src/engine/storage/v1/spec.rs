@@ -33,10 +33,10 @@
 */
 
 use {
-    super::rw::{RawFSInterface, SDSSFileIO},
+    super::rw::SDSSFileIO,
     crate::engine::{
         error::{RuntimeResult, StorageError},
-        storage::common::versions::FileSpecifierVersion,
+        storage::common::{interface::fs_traits::FSInterface, versions::FileSpecifierVersion},
     },
 };
 
@@ -145,19 +145,17 @@ pub trait Header: Sized {
     /// Decode verify arguments
     type DecodeVerifyArgs;
     /// Encode the header
-    fn encode<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        args: Self::EncodeArgs,
-    ) -> RuntimeResult<()>;
+    fn encode<Fs: FSInterface>(f: &mut SDSSFileIO<Fs>, args: Self::EncodeArgs)
+        -> RuntimeResult<()>;
     /// Decode the header
-    fn decode<Fs: RawFSInterface>(
+    fn decode<Fs: FSInterface>(
         f: &mut SDSSFileIO<Fs>,
         args: Self::DecodeArgs,
     ) -> RuntimeResult<Self>;
     /// Verify the header
     fn verify(&self, args: Self::DecodeVerifyArgs) -> RuntimeResult<()>;
     /// Decode and verify the header
-    fn decode_verify<Fs: RawFSInterface>(
+    fn decode_verify<Fs: FSInterface>(
         f: &mut SDSSFileIO<Fs>,
         d_args: Self::DecodeArgs,
         v_args: Self::DecodeVerifyArgs,
@@ -176,17 +174,14 @@ impl Header for super::Header {
     type EncodeArgs = (FileScope, FileSpecifier, FileSpecifierVersion);
     type DecodeArgs = ();
     type DecodeVerifyArgs = Self::EncodeArgs;
-    fn encode<Fs: RawFSInterface>(
+    fn encode<Fs: FSInterface>(
         f: &mut SDSSFileIO<Fs>,
         (scope, spec, spec_v): Self::EncodeArgs,
     ) -> RuntimeResult<()> {
         let b = Self::_encode_auto(scope, spec, spec_v);
         f.fsynced_write(&b)
     }
-    fn decode<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        _: Self::DecodeArgs,
-    ) -> RuntimeResult<Self> {
+    fn decode<Fs: FSInterface>(f: &mut SDSSFileIO<Fs>, _: Self::DecodeArgs) -> RuntimeResult<Self> {
         let mut buf = [0u8; 64];
         f.read_to_buffer(&mut buf)?;
         Self::decode(buf).map_err(Into::into)

@@ -33,15 +33,13 @@ pub mod spec;
 pub mod sysdb;
 // hl
 pub mod inf;
-// test
-pub mod memfs;
 #[cfg(test)]
 mod tests;
 
 // re-exports
 pub use {
     journal::{JournalAdapter, JournalWriter},
-    rw::{LocalFS, RawFSInterface, SDSSFileIO},
+    rw::SDSSFileIO,
 };
 pub mod data_batch {
     pub use super::batch_jrnl::{create, DataBatchPersistDriver};
@@ -70,7 +68,7 @@ impl sdss::HeaderV1Enumeration for spec::FileScope {
     }
 }
 impl sdss::HeaderV1Enumeration for spec::FileSpecifier {
-    const MAX: u8 = spec::FileScope::MAX;
+    const MAX: u8 = spec::FileSpecifier::MAX;
     unsafe fn new(x: u8) -> Self {
         core::mem::transmute(x)
     }

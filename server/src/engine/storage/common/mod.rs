@@ -25,7 +25,7 @@
 */
 
 pub mod checksum;
-pub mod sdss;
 pub mod interface;
+pub mod sdss;
 pub mod static_meta;
 pub mod versions;

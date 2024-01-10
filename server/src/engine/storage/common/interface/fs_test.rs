@@ -33,8 +33,8 @@
 
 use {
     super::fs_traits::{
-        FSInterface, FileBufWrite, FileInterface, FileInterfaceExt, FileOpen, FileRead, FileWrite,
-        FileWriteExt,
+        FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt, FileInterfaceRead,
+        FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
     },
     crate::engine::{sync::cell::Lazy, RuntimeResult},
     parking_lot::RwLock,
@@ -434,7 +434,7 @@ impl FileInterface for VFileDescriptor {
     }
 }
 
-impl FileRead for VFileDescriptor {
+impl FileInterfaceRead for VFileDescriptor {
     fn fread_exact(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         VirtualFS::with_file_mut(&self.0, |file| {
             if !file.read {
@@ -453,7 +453,7 @@ impl FileRead for VFileDescriptor {
     }
 }
 
-impl FileWrite for VFileDescriptor {
+impl FileInterfaceWrite for VFileDescriptor {
     fn fwrite(&mut self, bytes: &[u8]) -> RuntimeResult<u64> {
         VirtualFS::with_file_mut(&self.0, |file| {
             if !file.write {
@@ -471,7 +471,7 @@ impl FileWrite for VFileDescriptor {
     }
 }
 
-impl FileWriteExt for VFileDescriptor {
+impl FileInterfaceWriteExt for VFileDescriptor {
     fn fwext_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
         VirtualFS::with_file_mut(&self.0, |file| {
             if !file.write {
@@ -492,14 +492,14 @@ impl FileWriteExt for VFileDescriptor {
     }
 }
 
-impl FileBufWrite for VFileDescriptor {
+impl FileInterfaceBufWrite for VFileDescriptor {
     fn sync_write_cache(&mut self) -> RuntimeResult<()> {
         Ok(())
     }
 }
 
 impl FileInterfaceExt for VFileDescriptor {
-    fn fext_length(&mut self) -> RuntimeResult<u64> {
+    fn fext_length(&self) -> RuntimeResult<u64> {
         VirtualFS::with_file(&self.0, |f| Ok(f.data.len() as u64))
     }
     fn fext_cursor(&mut self) -> RuntimeResult<u64> {
@@ -571,26 +571,26 @@ impl FileInterface for NullFile {
     }
 }
 
-impl FileWrite for NullFile {
+impl FileInterfaceWrite for NullFile {
     fn fwrite(&mut self, buf: &[u8]) -> RuntimeResult<u64> {
         Ok(buf.len() as _)
     }
 }
 
-impl FileWriteExt for NullFile {
+impl FileInterfaceWriteExt for NullFile {
     fn fwext_truncate_to(&mut self, _: u64) -> RuntimeResult<()> {
         Ok(())
     }
 }
 
-impl FileRead for NullFile {
+impl FileInterfaceRead for NullFile {
     fn fread_exact(&mut self, _: &mut [u8]) -> RuntimeResult<()> {
         Ok(())
     }
 }
 
 impl FileInterfaceExt for NullFile {
-    fn fext_length(&mut self) -> RuntimeResult<u64> {
+    fn fext_length(&self) -> RuntimeResult<u64> {
         Ok(0)
     }
     fn fext_cursor(&mut self) -> RuntimeResult<u64> {
@@ -600,7 +600,7 @@ impl FileInterfaceExt for NullFile {
         Ok(())
     }
 }
-impl FileBufWrite for NullFile {
+impl FileInterfaceBufWrite for NullFile {
     fn sync_write_cache(&mut self) -> RuntimeResult<()> {
         Ok(())
     }

@@ -133,7 +133,6 @@ pub struct HeaderV1<H: HeaderV1Spec> {
     genesis_padding_block: [u8; 8],
 }
 
-#[allow(unused)]
 impl<H: HeaderV1Spec> HeaderV1<H> {
     const SEG1_MAGIC: Range<usize> = 0..8;
     const SEG1_HEADER_VERSION: Range<usize> = 8..16;
@@ -163,9 +162,9 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
             .copy_from_slice(&versions::v1::V1_HEADER_VERSION.little_endian_u64());
         // 2.1.1
         ret[Self::SEG2_REC1_SERVER_VERSION]
-            .copy_from_slice(&versions::v1::V1_SERVER_VERSION.little_endian());
+            .copy_from_slice(&H::CURRENT_SERVER_VERSION.little_endian());
         ret[Self::SEG2_REC1_DRIVER_VERSION]
-            .copy_from_slice(&versions::v1::V1_DRIVER_VERSION.little_endian());
+            .copy_from_slice(&H::CURRENT_DRIVER_VERSION.little_endian());
         // 2.1.2
         ret[Self::SEG2_REC1_HOST_OS] = HostOS::new().value_u8();
         ret[Self::SEG2_REC1_HOST_ARCH] = HostArch::new().value_u8();

@@ -46,18 +46,21 @@ use {
             },
             error::{RuntimeResult, StorageError},
             idx::STIndexSeq,
-            storage::v1::rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedWriter},
+            storage::{
+                common::interface::fs_traits::FSInterface,
+                v1::rw::{SDSSFileIO, SDSSFileTrackedWriter},
+            },
         },
         util::EndianQW,
     },
     crossbeam_epoch::pin,
 };
 
-pub struct DataBatchPersistDriver<Fs: RawFSInterface> {
+pub struct DataBatchPersistDriver<Fs: FSInterface> {
     f: SDSSFileTrackedWriter<Fs>,
 }
 
-impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
+impl<Fs: FSInterface> DataBatchPersistDriver<Fs> {
     pub fn new(mut file: SDSSFileIO<Fs>, is_new: bool) -> RuntimeResult<Self> {
         if !is_new {
             file.fsynced_write(&[MARKER_BATCH_REOPEN])?;
@@ -189,7 +192,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     }
 }
 
-impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
+impl<Fs: FSInterface> DataBatchPersistDriver<Fs> {
     /// encode the primary key only. this means NO TAG is encoded.
     fn encode_pk_only(&mut self, pk: &PrimaryIndexKey) -> RuntimeResult<()> {
         let buf = &mut self.f;

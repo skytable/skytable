@@ -28,7 +28,7 @@ use {
     crate::engine::{
         config::{ConfigAuth, ConfigMode},
         error::{QueryError, QueryResult},
-        storage::v1::RawFSInterface,
+        storage::safe_interfaces::FSInterface,
     },
     parking_lot::RwLock,
     std::{
@@ -147,7 +147,7 @@ impl SysHostData {
     }
 }
 
-impl<Fs: RawFSInterface> SystemStore<Fs> {
+impl<Fs: FSInterface> SystemStore<Fs> {
     pub fn _new(syscfg: SysConfig) -> Self {
         Self {
             syscfg,

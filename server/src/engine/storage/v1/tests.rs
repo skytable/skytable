@@ -24,7 +24,7 @@
  *
 */
 
-type VirtualFS = super::memfs::VirtualFS;
+type VirtualFS = crate::engine::storage::common::interface::fs_test::VirtualFS;
 
 mod batch;
 mod rw;

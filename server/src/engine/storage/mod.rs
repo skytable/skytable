@@ -30,3 +30,9 @@ mod common;
 // driver versions
 pub mod v1;
 pub mod v2;
+
+pub mod safe_interfaces {
+    #[cfg(test)]
+    pub use super::common::interface::fs_test::{NullFS, VirtualFS};
+    pub use super::common::interface::{fs_imp::LocalFS, fs_traits::FSInterface};
+}

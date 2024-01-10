@@ -34,10 +34,7 @@ use {
         data::uuid::Uuid,
         storage::{
             self,
-            v1::{
-                memfs::{NullFS, VirtualFS},
-                RawFSInterface,
-            },
+            safe_interfaces::{FSInterface, NullFS, VirtualFS},
         },
         txn::gns::GNSTransactionDriverAnyFS,
     },
@@ -46,7 +43,7 @@ use {
 };
 
 /// A `test` mode global implementation
-pub struct TestGlobal<Fs: RawFSInterface = VirtualFS> {
+pub struct TestGlobal<Fs: FSInterface = VirtualFS> {
     gns: GlobalNS,
     hp_queue: RwLock<Vec<Task<CriticalTask>>>,
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
@@ -57,7 +54,7 @@ pub struct TestGlobal<Fs: RawFSInterface = VirtualFS> {
     sys_cfg: SystemStore<Fs>,
 }
 
-impl<Fs: RawFSInterface> TestGlobal<Fs> {
+impl<Fs: FSInterface> TestGlobal<Fs> {
     fn new(
         gns: GlobalNS,
         max_delta_size: usize,
@@ -75,7 +72,7 @@ impl<Fs: RawFSInterface> TestGlobal<Fs> {
     }
 }
 
-impl<Fs: RawFSInterface> TestGlobal<Fs> {
+impl<Fs: FSInterface> TestGlobal<Fs> {
     pub fn new_with_driver_id(log_name: &str) -> Self {
         let gns = GlobalNS::empty();
         let driver = storage::v1::loader::open_gns_driver(log_name, &gns)
@@ -100,7 +97,7 @@ impl TestGlobal<NullFS> {
     }
 }
 
-impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
+impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     type FileSystem = Fs;
     fn namespace(&self) -> &GlobalNS {
         &self.gns
@@ -162,7 +159,7 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     }
 }
 
-impl<Fs: RawFSInterface> Drop for TestGlobal<Fs> {
+impl<Fs: FSInterface> Drop for TestGlobal<Fs> {
     fn drop(&mut self) {
         let mut txn_driver = self.txn_driver.lock();
         txn_driver.__journal_mut().__close_mut().unwrap();

@@ -38,11 +38,11 @@ use crc::{Crc, Digest, CRC_64_XZ};
 
 const CRC64: Crc<u64> = Crc::<u64>::new(&CRC_64_XZ);
 
-pub struct SCrc {
+pub struct SCrc64 {
     digest: Digest<'static, u64>,
 }
 
-impl SCrc {
+impl SCrc64 {
     pub const fn new() -> Self {
         Self {
             digest: CRC64.digest(),

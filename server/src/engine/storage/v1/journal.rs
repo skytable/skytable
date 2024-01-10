@@ -41,13 +41,15 @@
   - FIXME(@ohsayan): we will probably (naively) need to dynamically reposition the cursor in case the metadata is corrupted as well
 */
 
+#[cfg(test)]
+use crate::engine::storage::common::interface::fs_traits::FileOpen;
 use {
-    super::{
-        rw::{RawFSInterface, SDSSFileIO},
-        spec,
-    },
+    super::{rw::SDSSFileIO, spec},
     crate::{
-        engine::error::{RuntimeResult, StorageError},
+        engine::{
+            error::{RuntimeResult, StorageError},
+            storage::common::interface::fs_traits::FSInterface,
+        },
         util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
     },
     std::marker::PhantomData,
@@ -56,11 +58,10 @@ use {
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
 #[cfg(test)]
-pub fn open_or_create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
+pub fn open_or_create_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::FileSpec>(
     log_file_name: &str,
     gs: &TA::GlobalState,
-) -> RuntimeResult<super::rw::FileOpen<JournalWriter<Fs, TA>>> {
-    use super::rw::FileOpen;
+) -> RuntimeResult<FileOpen<JournalWriter<Fs, TA>>> {
     let file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<F>(log_file_name)? {
         FileOpen::Created(f) => return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?)),
         FileOpen::Existing((file, _header)) => file,
@@ -71,13 +72,13 @@ pub fn open_or_create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::F
     )?))
 }
 
-pub fn create_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
+pub fn create_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::FileSpec>(
     log_file_name: &str,
 ) -> RuntimeResult<JournalWriter<Fs, TA>> {
     JournalWriter::new(SDSSFileIO::create::<F>(log_file_name)?, 0, true)
 }
 
-pub fn load_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
+pub fn load_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::FileSpec>(
     log_file_name: &str,
     gs: &TA::GlobalState,
 ) -> RuntimeResult<JournalWriter<Fs, TA>> {
@@ -192,7 +193,7 @@ impl JournalEntryMetadata {
     }
 }
 
-pub struct JournalReader<TA, Fs: RawFSInterface> {
+pub struct JournalReader<TA, Fs: FSInterface> {
     log_file: SDSSFileIO<Fs>,
     evid: u64,
     closed: bool,
@@ -200,7 +201,7 @@ pub struct JournalReader<TA, Fs: RawFSInterface> {
     _m: PhantomData<TA>,
 }
 
-impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
+impl<TA: JournalAdapter, Fs: FSInterface> JournalReader<TA, Fs> {
     pub fn new(log_file: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()? - super::Header::SIZE as u64;
         Ok(Self {
@@ -329,7 +330,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     }
 }
 
-impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
+impl<TA, Fs: FSInterface> JournalReader<TA, Fs> {
     fn _incr_evid(&mut self) {
         self.evid += 1;
     }
@@ -344,7 +345,7 @@ impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
     }
 }
 
-impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
+impl<TA, Fs: FSInterface> JournalReader<TA, Fs> {
     fn logfile_read_into_buffer(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         if !self.has_remaining_bytes(buf.len() as _) {
             // do this right here to avoid another syscall
@@ -356,7 +357,7 @@ impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
     }
 }
 
-pub struct JournalWriter<Fs: RawFSInterface, TA> {
+pub struct JournalWriter<Fs: FSInterface, TA> {
     /// the txn log file
     log_file: SDSSFileIO<Fs>,
     /// the id of the **next** journal
@@ -365,7 +366,7 @@ pub struct JournalWriter<Fs: RawFSInterface, TA> {
     closed: bool,
 }
 
-impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
+impl<Fs: FSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
     pub fn new(mut log_file: SDSSFileIO<Fs>, last_txn_id: u64, new: bool) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()?;
         log_file.seek_from_start(log_size)?; // avoid jumbling with headers
@@ -411,7 +412,7 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
     }
 }
 
-impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
+impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
     pub fn appendrec_journal_reverse_entry(&mut self) -> RuntimeResult<()> {
         let mut entry =
             JournalEntryMetadata::new(0, EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL, 0, 0);
@@ -440,7 +441,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
     }
 }
 
-impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
+impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
     fn _incr_id(&mut self) -> u64 {
         let current = self.id;
         self.id += 1;
@@ -448,7 +449,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
     }
 }
 
-impl<Fs: RawFSInterface, TA> Drop for JournalWriter<Fs, TA> {
+impl<Fs: FSInterface, TA> Drop for JournalWriter<Fs, TA> {
     fn drop(&mut self) {
         assert!(self.closed, "log not closed");
     }

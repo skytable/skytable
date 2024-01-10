@@ -36,14 +36,16 @@ use {
             },
             data::{cell::Datacell, tag::TagSelector, uuid::Uuid},
             idx::MTIndex,
-            storage::v1::{
-                batch_jrnl::{
-                    DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
-                    DecodedBatchEventKind, NormalBatch,
+            storage::{
+                common::interface::{fs_test::VirtualFS, fs_traits::FileOpen},
+                v1::{
+                    batch_jrnl::{
+                        DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
+                        DecodedBatchEventKind, NormalBatch,
+                    },
+                    rw::SDSSFileIO,
+                    spec,
                 },
-                memfs::VirtualFS,
-                rw::{FileOpen, SDSSFileIO},
-                spec,
             },
         },
         util::test_utils,

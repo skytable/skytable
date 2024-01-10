@@ -26,8 +26,8 @@
 
 use {
     super::fs_traits::{
-        FSInterface, FileBufWrite, FileInterface, FileInterfaceExt, FileOpen, FileRead, FileWrite,
-        FileWriteExt,
+        FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt, FileInterfaceRead,
+        FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
     },
     crate::engine::RuntimeResult,
     std::{
@@ -101,13 +101,13 @@ impl FSInterface for LocalFS {
     common impls for files
 */
 
-impl<R: Read> FileRead for R {
+impl<R: Read> FileInterfaceRead for R {
     fn fread_exact(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         cvt(self.read_exact(buf))
     }
 }
 
-impl<W: Write> FileWrite for W {
+impl<W: Write> FileInterfaceWrite for W {
     fn fwrite(&mut self, buf: &[u8]) -> RuntimeResult<u64> {
         cvt(self.write(buf).map(|v| v as _))
     }
@@ -179,7 +179,7 @@ impl AsLocalFile for BufWriter<File> {
     }
 }
 
-impl FileBufWrite for BufWriter<File> {
+impl FileInterfaceBufWrite for BufWriter<File> {
     fn sync_write_cache(&mut self) -> RuntimeResult<()> {
         // TODO(@ohsayan): maybe we'll want to explicitly handle not syncing this?
         cvt(self.flush())
@@ -187,7 +187,7 @@ impl FileBufWrite for BufWriter<File> {
 }
 
 impl<F: AsLocalFile> FileInterfaceExt for F {
-    fn fext_length(&mut self) -> RuntimeResult<u64> {
+    fn fext_length(&self) -> RuntimeResult<u64> {
         Ok(self.file().metadata()?.len())
     }
     fn fext_cursor(&mut self) -> RuntimeResult<u64> {
@@ -198,7 +198,7 @@ impl<F: AsLocalFile> FileInterfaceExt for F {
     }
 }
 
-impl FileWriteExt for File {
+impl FileInterfaceWriteExt for File {
     fn fwext_truncate_to(&mut self, to: u64) -> RuntimeResult<()> {
         cvt(self.set_len(to))
     }

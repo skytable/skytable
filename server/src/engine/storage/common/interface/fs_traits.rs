@@ -40,6 +40,31 @@ pub enum FileOpen<CF, EF = CF> {
     Existing(EF),
 }
 
+#[cfg(test)]
+impl<CF, EF> FileOpen<CF, EF> {
+    pub fn into_existing(self) -> Option<EF> {
+        match self {
+            Self::Existing(e) => Some(e),
+            Self::Created(_) => None,
+        }
+    }
+    pub fn into_created(self) -> Option<CF> {
+        match self {
+            Self::Existing(_) => None,
+            Self::Created(c) => Some(c),
+        }
+    }
+}
+
+#[cfg(test)]
+impl<CF> FileOpen<CF> {
+    pub fn into_inner(self) -> CF {
+        match self {
+            Self::Created(f) | Self::Existing(f) => f,
+        }
+    }
+}
+
 pub trait FSInterface {
     // settings
     /// set to false if the file system is a special device like `/dev/null`
@@ -73,11 +98,13 @@ pub trait FSInterface {
 }
 
 /// File interface definition
-pub trait FileInterface: FileRead + FileWrite + FileWriteExt + FileInterfaceExt + Sized {
+pub trait FileInterface:
+    FileInterfaceRead + FileInterfaceWrite + FileInterfaceWriteExt + FileInterfaceExt + Sized
+{
     /// A buffered reader implementation
-    type BufReader: FileRead + FileInterfaceExt;
+    type BufReader: FileInterfaceRead + FileInterfaceExt;
     /// A buffered writer implementation
-    type BufWriter: FileBufWrite;
+    type BufWriter: FileInterfaceBufWrite;
     /// Get a buffered reader for this file
     fn upgrade_to_buffered_reader(self) -> RuntimeResult<Self::BufReader>;
     /// Get a buffered writer for this file
@@ -88,12 +115,12 @@ pub trait FileInterface: FileRead + FileWrite + FileWriteExt + FileInterfaceExt 
     fn downgrade_writer(r: Self::BufWriter) -> RuntimeResult<Self>;
 }
 
-pub trait FileBufWrite: FileWrite + FileInterfaceExt {
+pub trait FileInterfaceBufWrite: FileInterfaceWrite + FileInterfaceExt {
     fn sync_write_cache(&mut self) -> RuntimeResult<()>;
 }
 
 /// Readable object
-pub trait FileRead {
+pub trait FileInterfaceRead {
     /// Read in a block of the exact given length
     fn fread_exact_block<const N: usize>(&mut self) -> RuntimeResult<[u8; N]> {
         let mut ret = [0u8; N];
@@ -105,7 +132,7 @@ pub trait FileRead {
 }
 
 /// Writable object
-pub trait FileWrite {
+pub trait FileInterfaceWrite {
     /// Attempt to write the buffer into this object, returning the number of bytes that were
     /// written. It is **NOT GUARANTEED THAT ALL DATA WILL BE WRITTEN**
     fn fwrite(&mut self, buf: &[u8]) -> RuntimeResult<u64>;
@@ -143,7 +170,7 @@ pub trait FileWrite {
 }
 
 /// Advanced write traits
-pub trait FileWriteExt {
+pub trait FileInterfaceWriteExt {
     /// Sync data and metadata for this file
     fn fwext_sync_all(&mut self) -> RuntimeResult<()> {
         Ok(())
@@ -166,7 +193,7 @@ pub trait FileWriteExt {
 /// Advanced file access
 pub trait FileInterfaceExt {
     /// Returns the length of the file
-    fn fext_length(&mut self) -> RuntimeResult<u64>;
+    fn fext_length(&self) -> RuntimeResult<u64>;
     /// Returns the current cursor position of the file
     fn fext_cursor(&mut self) -> RuntimeResult<u64>;
     /// Seek by `from` bytes from the start of the file
