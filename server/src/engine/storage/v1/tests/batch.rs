@@ -57,7 +57,7 @@ fn pkey(v: impl Into<Datacell>) -> PrimaryIndexKey {
 
 fn open_file(
     fpath: &str,
-) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, spec::SDSSStaticHeaderV1Compact)> {
+) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, super::super::Header)> {
     SDSSFileIO::open_or_create_perm_rw::<spec::DataBatchJournalV1>(fpath).unwrap()
 }
 

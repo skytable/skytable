@@ -46,3 +46,35 @@ pub use {
 pub mod data_batch {
     pub use super::batch_jrnl::{create, DataBatchPersistDriver};
 }
+
+use super::common::{
+    sdss,
+    versions::{self, DriverVersion, ServerVersion},
+};
+
+type Header = sdss::HeaderV1<HeaderImpl>;
+struct HeaderImpl;
+impl sdss::HeaderV1Spec for HeaderImpl {
+    type FileClass = spec::FileScope;
+    type FileSpecifier = spec::FileSpecifier;
+    const CURRENT_SERVER_VERSION: ServerVersion = versions::v1::V1_SERVER_VERSION;
+    const CURRENT_DRIVER_VERSION: DriverVersion = versions::v1::V1_DRIVER_VERSION;
+}
+impl sdss::HeaderV1Enumeration for spec::FileScope {
+    const MAX: u8 = spec::FileScope::MAX;
+    unsafe fn new(x: u8) -> Self {
+        core::mem::transmute(x)
+    }
+    fn repr_u8(&self) -> u8 {
+        spec::FileScope::value_u8(self)
+    }
+}
+impl sdss::HeaderV1Enumeration for spec::FileSpecifier {
+    const MAX: u8 = spec::FileScope::MAX;
+    unsafe fn new(x: u8) -> Self {
+        core::mem::transmute(x)
+    }
+    fn repr_u8(&self) -> u8 {
+        self.value_u8()
+    }
+}

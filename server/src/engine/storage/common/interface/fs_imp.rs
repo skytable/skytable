@@ -25,7 +25,7 @@
 */
 
 use {
-    super::fs::{
+    super::fs_traits::{
         FSInterface, FileBufWrite, FileInterface, FileInterfaceExt, FileOpen, FileRead, FileWrite,
         FileWriteExt,
     },
@@ -67,7 +67,7 @@ impl FSInterface for LocalFS {
     fn fs_delete_dir_all(fpath: &str) -> RuntimeResult<()> {
         cvt(fs::remove_dir_all(fpath))
     }
-    fn fs_fopen_or_create_rw(fpath: &str) -> RuntimeResult<super::fs::FileOpen<Self::File>> {
+    fn fs_fopen_or_create_rw(fpath: &str) -> RuntimeResult<super::fs_traits::FileOpen<Self::File>> {
         let r = || -> Result<_, std::io::Error> {
             let f = File::options()
                 .create(true)

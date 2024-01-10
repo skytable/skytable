@@ -202,7 +202,7 @@ pub struct JournalReader<TA, Fs: RawFSInterface> {
 
 impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     pub fn new(log_file: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
-        let log_size = log_file.file_length()? - spec::SDSSStaticHeaderV1Compact::SIZE as u64;
+        let log_size = log_file.file_length()? - super::Header::SIZE as u64;
         Ok(Self {
             log_file,
             evid: 0,

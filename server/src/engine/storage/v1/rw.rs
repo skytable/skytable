@@ -27,7 +27,7 @@
 use {
     super::spec::{FileSpec, Header},
     crate::{
-        engine::{error::RuntimeResult, storage::SCrc},
+        engine::{error::RuntimeResult, storage::common::checksum::SCrc},
         util::os::SysIOError,
     },
     std::{

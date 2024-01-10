@@ -31,6 +31,8 @@
 
 pub mod server_version;
 
+pub const HEADER_V1: HeaderVersion = HeaderVersion(0);
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 /// The header version
 ///
@@ -72,9 +74,22 @@ impl DriverVersion {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+/// The file specifier version
+pub struct FileSpecifierVersion(u16);
+
+impl FileSpecifierVersion {
+    pub const fn __new(v: u16) -> Self {
+        Self(v)
+    }
+    pub const fn little_endian(&self) -> [u8; 2] {
+        self.0.to_le_bytes()
+    }
+}
+
 pub mod v1 {
     //! The first SDSS based storage engine implementation.
-    //! Target tag: 0.8.0 {beta.1, beta.2}
+    //! Target tag: 0.8.0 {beta.1, beta.2, beta.3}
     use super::{DriverVersion, HeaderVersion, ServerVersion};
 
     /// The SDSS header version UID
@@ -86,14 +101,15 @@ pub mod v1 {
     pub const V1_DRIVER_VERSION: DriverVersion = DriverVersion(0);
 }
 
+#[allow(unused)]
 pub mod v2 {
     //! The second SDSS based storage implementation
     //!
     //! Target tag: 0.8.0 (GA)
+    //!
+    //! Same tags as [`super::v1`] but different [`DriverVersion`]
     use super::{DriverVersion, HeaderVersion, ServerVersion};
-
-    pub const V2_HEADER_VERSION: HeaderVersion = HeaderVersion(0);
-    pub const V2_SERVER_VERSION: ServerVersion =
-        ServerVersion(super::server_version::fetch_id("v0.8.0") as _);
+    pub const V2_HEADER_VERSION: HeaderVersion = super::v1::V1_HEADER_VERSION;
+    pub const V2_SERVER_VERSION: ServerVersion = super::v1::V1_SERVER_VERSION;
     pub const V2_DRIVER_VERSION: DriverVersion = DriverVersion(1);
 }

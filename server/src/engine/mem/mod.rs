@@ -54,6 +54,12 @@ pub unsafe fn dealloc_array<T>(ptr: *mut T, l: usize) {
     alloc::dealloc(ptr as *mut u8, Layout::array::<T>(l).unwrap_unchecked())
 }
 
+pub unsafe fn memcpy<const N: usize>(src: &[u8]) -> [u8; N] {
+    let mut dst = [0u8; N];
+    src.as_ptr().copy_to_nonoverlapping(dst.as_mut_ptr(), N);
+    dst
+}
+
 /// Native double pointer width (note, native != arch native, but host native)
 pub struct NativeDword([usize; 2]);
 /// Native triple pointer width (note, native != arch native, but host native)

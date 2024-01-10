@@ -32,7 +32,7 @@
 //!
 
 use {
-    super::fs::{
+    super::fs_traits::{
         FSInterface, FileBufWrite, FileInterface, FileInterfaceExt, FileOpen, FileRead, FileWrite,
         FileWriteExt,
     },

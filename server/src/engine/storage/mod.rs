@@ -27,8 +27,6 @@
 //! Implementations of the Skytable Disk Storage Subsystem (SDSS)
 
 mod common;
-// impls
+// driver versions
 pub mod v1;
 pub mod v2;
-
-pub use common::checksum::SCrc;

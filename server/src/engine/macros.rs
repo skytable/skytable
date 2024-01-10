@@ -420,3 +420,9 @@ macro_rules! local_ref {
         ::std::thread::LocalKey::with(&$ident, |v| _f(v, $call))
     }};
 }
+
+macro_rules! var {
+    (let $($name:ident),* $(,)?) => {
+        $(let $name;)*
+    }
+}
