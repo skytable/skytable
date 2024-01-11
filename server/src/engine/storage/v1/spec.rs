@@ -24,25 +24,38 @@
  *
 */
 
-/*
-    Header specification
-    ---
-    We utilize two different kinds of headers:
-    - Static header - Mostly to avoid data corruption
-    - Variable header - For preserving dynamic information
-*/
-
-use {
-    super::rw::SDSSFileIO,
-    crate::engine::{
-        error::{RuntimeResult, StorageError},
-        storage::common::{interface::fs_traits::FSInterface, versions::FileSpecifierVersion},
-    },
+use crate::engine::storage::common::{
+    sdss,
+    versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
 };
 
-/*
-    meta
-*/
+pub(super) type Header = sdss::HeaderV1<HeaderImplV1>;
+
+pub(super) struct HeaderImplV1;
+impl sdss::HeaderV1Spec for HeaderImplV1 {
+    type FileClass = FileScope;
+    type FileSpecifier = FileSpecifier;
+    const CURRENT_SERVER_VERSION: ServerVersion = versions::v1::V1_SERVER_VERSION;
+    const CURRENT_DRIVER_VERSION: DriverVersion = versions::v1::V1_DRIVER_VERSION;
+}
+impl sdss::HeaderV1Enumeration for FileScope {
+    const MAX: u8 = FileScope::MAX;
+    unsafe fn new(x: u8) -> Self {
+        core::mem::transmute(x)
+    }
+    fn repr_u8(&self) -> u8 {
+        FileScope::value_u8(self)
+    }
+}
+impl sdss::HeaderV1Enumeration for FileSpecifier {
+    const MAX: u8 = FileSpecifier::MAX;
+    unsafe fn new(x: u8) -> Self {
+        core::mem::transmute(x)
+    }
+    fn repr_u8(&self) -> u8 {
+        self.value_u8()
+    }
+}
 
 /// The file scope
 #[repr(u8)]
@@ -63,18 +76,6 @@ pub enum FileSpecifier {
     TestTransactionLog = 0xFF,
 }
 
-/// Specification for a SDSS file
-pub trait FileSpec {
-    /// The header spec for the file
-    type Header: Header;
-    /// Encode data
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs;
-    /// Decode data
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs;
-    /// Verify data
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs;
-}
-
 /*
     file spec impls
 */
@@ -82,118 +83,36 @@ pub trait FileSpec {
 #[cfg(test)]
 pub(super) struct TestFile;
 #[cfg(test)]
-impl FileSpec for TestFile {
-    type Header = super::Header;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::FlatmapData,
-        FileSpecifier::TestTransactionLog,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
+impl sdss::SimpleFileSpecV1 for TestFile {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::FlatmapData;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::TestTransactionLog;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }
 
 /// The file specification for the GNS transaction log (impl v1)
 pub(super) struct GNSTransactionLogV1;
-impl FileSpec for GNSTransactionLogV1 {
-    type Header = super::Header;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::Journal,
-        FileSpecifier::GNSTxnLog,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
+impl sdss::SimpleFileSpecV1 for GNSTransactionLogV1 {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::Journal;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::GNSTxnLog;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }
 
 /// The file specification for a journal batch
 pub(super) struct DataBatchJournalV1;
-impl FileSpec for DataBatchJournalV1 {
-    type Header = super::Header;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::DataBatch,
-        FileSpecifier::TableDataBatch,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
+impl sdss::SimpleFileSpecV1 for DataBatchJournalV1 {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::DataBatch;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::TableDataBatch;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }
 
 /// The file specification for the system db
 pub(super) struct SysDBV1;
-impl FileSpec for SysDBV1 {
-    type Header = super::Header;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::FlatmapData,
-        FileSpecifier::SysDB,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
-}
-
-/*
-    header spec
-*/
-
-/// SDSS Header specification
-pub trait Header: Sized {
-    /// Encode arguments
-    type EncodeArgs;
-    /// Decode arguments
-    type DecodeArgs;
-    /// Decode verify arguments
-    type DecodeVerifyArgs;
-    /// Encode the header
-    fn encode<Fs: FSInterface>(f: &mut SDSSFileIO<Fs>, args: Self::EncodeArgs)
-        -> RuntimeResult<()>;
-    /// Decode the header
-    fn decode<Fs: FSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        args: Self::DecodeArgs,
-    ) -> RuntimeResult<Self>;
-    /// Verify the header
-    fn verify(&self, args: Self::DecodeVerifyArgs) -> RuntimeResult<()>;
-    /// Decode and verify the header
-    fn decode_verify<Fs: FSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        d_args: Self::DecodeArgs,
-        v_args: Self::DecodeVerifyArgs,
-    ) -> RuntimeResult<Self> {
-        let h = Self::decode(f, d_args)?;
-        h.verify(v_args)?;
-        Ok(h)
-    }
-}
-
-/*
-    header impls
-*/
-
-impl Header for super::Header {
-    type EncodeArgs = (FileScope, FileSpecifier, FileSpecifierVersion);
-    type DecodeArgs = ();
-    type DecodeVerifyArgs = Self::EncodeArgs;
-    fn encode<Fs: FSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        (scope, spec, spec_v): Self::EncodeArgs,
-    ) -> RuntimeResult<()> {
-        let b = Self::_encode_auto(scope, spec, spec_v);
-        f.fsynced_write(&b)
-    }
-    fn decode<Fs: FSInterface>(f: &mut SDSSFileIO<Fs>, _: Self::DecodeArgs) -> RuntimeResult<Self> {
-        let mut buf = [0u8; 64];
-        f.read_to_buffer(&mut buf)?;
-        Self::decode(buf).map_err(Into::into)
-    }
-    fn verify(&self, (scope, spec, spec_v): Self::DecodeVerifyArgs) -> RuntimeResult<()> {
-        if (self.file_class() == scope)
-            & (self.file_specifier() == spec)
-            & (self.file_specifier_version() == spec_v)
-        {
-            Ok(())
-        } else {
-            Err(StorageError::HeaderDecodeDataMismatch.into())
-        }
-    }
+impl sdss::SimpleFileSpecV1 for SysDBV1 {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::FlatmapData;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::SysDB;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }

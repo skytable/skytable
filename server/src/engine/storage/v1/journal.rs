@@ -44,11 +44,11 @@
 #[cfg(test)]
 use crate::engine::storage::common::interface::fs_traits::FileOpen;
 use {
-    super::{rw::SDSSFileIO, spec},
+    super::rw::SDSSFileIO,
     crate::{
         engine::{
             error::{RuntimeResult, StorageError},
-            storage::common::interface::fs_traits::FSInterface,
+            storage::common::{interface::fs_traits::FSInterface, sdss},
         },
         util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
     },
@@ -58,7 +58,11 @@ use {
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
 #[cfg(test)]
-pub fn open_or_create_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::FileSpec>(
+pub fn open_or_create_journal<
+    TA: JournalAdapter,
+    Fs: FSInterface,
+    F: sdss::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>,
+>(
     log_file_name: &str,
     gs: &TA::GlobalState,
 ) -> RuntimeResult<FileOpen<JournalWriter<Fs, TA>>> {
@@ -72,13 +76,13 @@ pub fn open_or_create_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::File
     )?))
 }
 
-pub fn create_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::FileSpec>(
+pub fn create_journal<TA: JournalAdapter, Fs: FSInterface, F: sdss::FileSpecV1<EncodeArgs = ()>>(
     log_file_name: &str,
 ) -> RuntimeResult<JournalWriter<Fs, TA>> {
     JournalWriter::new(SDSSFileIO::create::<F>(log_file_name)?, 0, true)
 }
 
-pub fn load_journal<TA: JournalAdapter, Fs: FSInterface, F: spec::FileSpec>(
+pub fn load_journal<TA: JournalAdapter, Fs: FSInterface, F: sdss::FileSpecV1<DecodeArgs = ()>>(
     log_file_name: &str,
     gs: &TA::GlobalState,
 ) -> RuntimeResult<JournalWriter<Fs, TA>> {

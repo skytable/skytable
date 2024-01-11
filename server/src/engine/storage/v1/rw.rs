@@ -25,7 +25,6 @@
 */
 
 use {
-    super::spec::{FileSpec, Header},
     crate::{
         engine::{
             error::RuntimeResult,
@@ -35,6 +34,7 @@ use {
                     FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt,
                     FileInterfaceRead, FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
                 },
+                sdss,
             },
         },
         util::os::SysIOError,
@@ -156,28 +156,30 @@ pub struct SDSSFileIO<Fs: FSInterface, F = <Fs as FSInterface>::File> {
 }
 
 impl<Fs: FSInterface> SDSSFileIO<Fs> {
-    pub fn open<F: FileSpec>(fpath: &str) -> RuntimeResult<(Self, F::Header)> {
+    pub fn open<F: sdss::FileSpecV1<DecodeArgs = ()>>(
+        fpath: &str,
+    ) -> RuntimeResult<(Self, F::Metadata)> {
         let mut f = Self::_new(Fs::fs_fopen_rw(fpath)?);
-        let header = F::Header::decode_verify(&mut f, F::DECODE_DATA, F::VERIFY_DATA)?;
-        Ok((f, header))
+        let v = F::read_metadata(&mut f.f, ())?;
+        Ok((f, v))
     }
-    pub fn create<F: FileSpec>(fpath: &str) -> RuntimeResult<Self> {
+    pub fn create<F: sdss::FileSpecV1<EncodeArgs = ()>>(fpath: &str) -> RuntimeResult<Self> {
         let mut f = Self::_new(Fs::fs_fcreate_rw(fpath)?);
-        F::Header::encode(&mut f, F::ENCODE_DATA)?;
+        F::write_metadata(&mut f.f, ())?;
         Ok(f)
     }
-    pub fn open_or_create_perm_rw<F: FileSpec>(
+    pub fn open_or_create_perm_rw<F: sdss::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>>(
         fpath: &str,
-    ) -> RuntimeResult<FileOpen<Self, (Self, F::Header)>> {
+    ) -> RuntimeResult<FileOpen<Self, (Self, F::Metadata)>> {
         match Fs::fs_fopen_or_create_rw(fpath)? {
             FileOpen::Created(c) => {
                 let mut f = Self::_new(c);
-                F::Header::encode(&mut f, F::ENCODE_DATA)?;
+                F::write_metadata(&mut f.f, ())?;
                 Ok(FileOpen::Created(f))
             }
             FileOpen::Existing(e) => {
                 let mut f = Self::_new(e);
-                let header = F::Header::decode_verify(&mut f, F::DECODE_DATA, F::VERIFY_DATA)?;
+                let header = F::read_metadata(&mut f.f, ())?;
                 Ok(FileOpen::Existing((f, header)))
             }
         }

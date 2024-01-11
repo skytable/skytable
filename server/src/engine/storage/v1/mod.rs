@@ -24,6 +24,10 @@
  *
 */
 
+//! SDSS based storage engine driver v1 ([`versions::v1`])
+//!
+//! Target tags: `0.8.0-beta`, `0.8.0-beta.2`, `0.8.0-beta.3`
+
 // impls
 mod batch_jrnl;
 mod journal;
@@ -37,42 +41,11 @@ pub mod inf;
 mod tests;
 
 // re-exports
+pub(self) use spec::Header;
 pub use {
     journal::{JournalAdapter, JournalWriter},
     rw::SDSSFileIO,
 };
 pub mod data_batch {
     pub use super::batch_jrnl::{create, DataBatchPersistDriver};
-}
-
-use super::common::{
-    sdss,
-    versions::{self, DriverVersion, ServerVersion},
-};
-
-type Header = sdss::HeaderV1<HeaderImplV1>;
-struct HeaderImplV1;
-impl sdss::HeaderV1Spec for HeaderImplV1 {
-    type FileClass = spec::FileScope;
-    type FileSpecifier = spec::FileSpecifier;
-    const CURRENT_SERVER_VERSION: ServerVersion = versions::v1::V1_SERVER_VERSION;
-    const CURRENT_DRIVER_VERSION: DriverVersion = versions::v1::V1_DRIVER_VERSION;
-}
-impl sdss::HeaderV1Enumeration for spec::FileScope {
-    const MAX: u8 = spec::FileScope::MAX;
-    unsafe fn new(x: u8) -> Self {
-        core::mem::transmute(x)
-    }
-    fn repr_u8(&self) -> u8 {
-        spec::FileScope::value_u8(self)
-    }
-}
-impl sdss::HeaderV1Enumeration for spec::FileSpecifier {
-    const MAX: u8 = spec::FileSpecifier::MAX;
-    unsafe fn new(x: u8) -> Self {
-        core::mem::transmute(x)
-    }
-    fn repr_u8(&self) -> u8 {
-        self.value_u8()
-    }
 }

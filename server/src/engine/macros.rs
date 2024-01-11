@@ -426,3 +426,9 @@ macro_rules! var {
         $(let $name;)*
     }
 }
+
+macro_rules! okay {
+    ($($expr:expr),* $(,)?) => {
+        $(($expr) &)*true
+    }
+}

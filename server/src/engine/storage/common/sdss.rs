@@ -31,18 +31,19 @@
 
     The static SDSS header block has a special segment that defines the header version which is static and will
     never change across any versions. While the same isn't warranted for the rest of the header, it's exceedingly
-    unlikely that we'll ever change the static block ever.
+    unlikely that we'll ever change the static block.
 
-    The only header that we currently use is [`CompactHeaderV1`].
+    The only header that we currently use is [`HeaderV1`].
 */
 
 use {
     super::{
+        interface::fs_traits::{FileInterfaceRead, FileInterfaceWrite},
         static_meta::{HostArch, HostEndian, HostOS, HostPointerWidth, SDSS_MAGIC_8B},
         versions::{self, DriverVersion, FileSpecifierVersion, HeaderVersion, ServerVersion},
     },
     crate::{
-        engine::{error::StorageError, mem::memcpy},
+        engine::{error::StorageError, mem::memcpy, RuntimeResult},
         util::os,
     },
     std::{
@@ -50,6 +51,10 @@ use {
         ops::Range,
     },
 };
+
+/*
+    header utils
+*/
 
 pub trait HeaderV1Enumeration {
     /// the maximum value of this enumeration
@@ -60,13 +65,13 @@ pub trait HeaderV1Enumeration {
     fn repr_u8(&self) -> u8;
 }
 
-/// A trait that enables customizing the SDSS header for a specific file type
+/// A trait that enables customizing the SDSS header for a specific version tuple
 pub trait HeaderV1Spec {
     // types
     /// The file class type
-    type FileClass: HeaderV1Enumeration + Copy;
+    type FileClass: HeaderV1Enumeration + Copy + PartialEq;
     /// The file specifier type
-    type FileSpecifier: HeaderV1Enumeration + Copy;
+    type FileSpecifier: HeaderV1Enumeration + Copy + PartialEq;
     // constants
     /// The server version to use during encode
     ///
@@ -201,7 +206,7 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
     /// - Time might be inconsistent; verify
     /// - Compatibility requires additional intervention
     /// - If padding block was not zeroed, handle
-    /// - No file metadata and is verified. Check!
+    /// - No file metadata is verified. Check!
     ///
     pub fn decode(block: [u8; 64]) -> Result<Self, StorageError> {
         var!(let raw_magic, raw_header_version, raw_server_version, raw_driver_version, raw_host_os, raw_host_arch,
@@ -231,11 +236,6 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
             raw_runtime_epoch_time =
                 u128::from_le_bytes(memcpy(&block[Self::SEG2_REC2_RUNTIME_EPOCH_TIME]));
             raw_paddding_block = memcpy::<8>(&block[Self::SEG3_PADDING_BLK]);
-        }
-        macro_rules! okay {
-            ($($expr:expr),* $(,)?) => {
-                $(($expr) &)*true
-            }
         }
         let okay_header_version = raw_header_version == versions::HEADER_V1;
         let okay_server_version = H::check_if_server_version_compatible(raw_server_version);
@@ -331,5 +331,88 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
     }
     pub fn padding_block(&self) -> [u8; 8] {
         self.genesis_padding_block
+    }
+}
+
+pub trait FileSpecV1 {
+    type Metadata;
+    /// the header type
+    type HeaderSpec: HeaderV1Spec;
+    /// the args need to validate the metadata (for example, additional context)
+    type EncodeArgs;
+    type DecodeArgs;
+    /// validate the metadata
+    fn validate_metadata(
+        md: HeaderV1<Self::HeaderSpec>,
+        v_args: Self::DecodeArgs,
+    ) -> RuntimeResult<Self::Metadata>;
+    /// read and validate metadata (only override if you need to)
+    fn write_metadata(f: &mut impl FileInterfaceWrite, args: Self::EncodeArgs)
+        -> RuntimeResult<()>;
+    fn read_metadata(
+        f: &mut impl FileInterfaceRead,
+        v_args: Self::DecodeArgs,
+    ) -> RuntimeResult<Self::Metadata> {
+        let md = HeaderV1::decode(f.fread_exact_block()?)?;
+        Self::validate_metadata(md, v_args)
+    }
+}
+
+/// # Simple SDSS file specification (v1)
+///
+/// ## Decode and verify
+/// A simple SDSS file specification that checks if:
+/// - the file class,
+/// - file specifier and
+/// - file specifier revision
+///
+/// match
+///
+/// ## Version Compatibility
+///
+/// Also, the [`HeaderV1Spec`] is supposed to address compatibility across server and driver versions
+pub trait SimpleFileSpecV1 {
+    type HeaderSpec: HeaderV1Spec;
+    const FILE_CLASS: <Self::HeaderSpec as HeaderV1Spec>::FileClass;
+    const FILE_SPECIFIER: <Self::HeaderSpec as HeaderV1Spec>::FileSpecifier;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion;
+    fn check_if_file_specifier_revision_is_compatible(
+        v: FileSpecifierVersion,
+    ) -> RuntimeResult<()> {
+        if v == Self::FILE_SPECFIER_VERSION {
+            Ok(())
+        } else {
+            Err(StorageError::HeaderDecodeVersionMismatch.into())
+        }
+    }
+}
+
+impl<Sfs: SimpleFileSpecV1> FileSpecV1 for Sfs {
+    type Metadata = HeaderV1<Self::HeaderSpec>;
+    type HeaderSpec = <Self as SimpleFileSpecV1>::HeaderSpec;
+    type DecodeArgs = ();
+    type EncodeArgs = ();
+    fn validate_metadata(
+        md: HeaderV1<Self::HeaderSpec>,
+        _: Self::DecodeArgs,
+    ) -> RuntimeResult<Self::Metadata> {
+        let okay = okay!(
+            md.file_class() == Self::FILE_CLASS,
+            md.file_specifier() == Self::FILE_SPECIFIER,
+        );
+        Self::check_if_file_specifier_revision_is_compatible(md.file_specifier_version())?;
+        if okay {
+            Ok(md)
+        } else {
+            Err(StorageError::HeaderDecodeVersionMismatch.into())
+        }
+    }
+    fn write_metadata(f: &mut impl FileInterfaceWrite, _: Self::EncodeArgs) -> RuntimeResult<()> {
+        let block = HeaderV1::<Self::HeaderSpec>::_encode_auto(
+            Self::FILE_CLASS,
+            Self::FILE_SPECIFIER,
+            Self::FILE_SPECFIER_VERSION,
+        );
+        f.fw_write_all(&block)
     }
 }
