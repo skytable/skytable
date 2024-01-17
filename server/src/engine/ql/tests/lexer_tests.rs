@@ -183,6 +183,43 @@ fn make_safe_query(a: &[u8], b: &[u8]) -> (Vec<u8>, usize) {
 }
 
 #[test]
+fn safe_query_param_empty() {
+    for i in 0..100 {
+        let (query, query_window) = make_safe_query(&b"?".repeat(i), b"");
+        let ret = lex_secure(&query, query_window).unwrap();
+        assert_eq!(
+            ret,
+            (0..i).map(|_| Token![?]).collect::<Vec<Token<'static>>>()
+        );
+    }
+}
+
+#[test]
+fn safe_query_less_param() {
+    for i in 1..=10 {
+        /*
+        test placeholder combinations:
+        - 1PH 1P
+        - 2PH 1P, 2PH 2P
+        - 3PH 1P, 3PH 2P, 3PH 3P
+        */
+        for j in 1..=i {
+            let (query, query_window) =
+                make_safe_query(&b"?".repeat(i), &b"\x065\nsayan".repeat(j));
+            let ret = lex_secure(&query, query_window).unwrap();
+            // check
+            let exp_params = (0..j)
+                .map(|_| Token::Lit(Lit::new_str("sayan")))
+                .collect::<Vec<Token<'static>>>();
+            let exp_placeholders = (0..i - j)
+                .map(|_| Token![?])
+                .collect::<Vec<Token<'static>>>();
+            assert_eq!(ret, [exp_params, exp_placeholders].concat());
+        }
+    }
+}
+
+#[test]
 fn safe_query_all_literals() {
     let (query, query_window) = make_safe_query(
         b"? ? ? ? ? ? ?",

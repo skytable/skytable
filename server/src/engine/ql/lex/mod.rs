@@ -371,7 +371,7 @@ impl<'a> SecureLexer<'a> {
             };
             match b {
                 b if b.is_ascii_alphabetic() | (b == b'_') => self.l.scan_ident_or_keyword(),
-                b'?' => {
+                b'?' if !self.param_buffer.eof() => {
                     // skip the param byte
                     unsafe {
                         // UNSAFE(@ohsayan): loop invariant
