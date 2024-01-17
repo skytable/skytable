@@ -51,7 +51,9 @@ pub use {
 use std::alloc::{self, Layout};
 
 pub unsafe fn dealloc_array<T>(ptr: *mut T, l: usize) {
-    alloc::dealloc(ptr as *mut u8, Layout::array::<T>(l).unwrap_unchecked())
+    if l != 0 {
+        alloc::dealloc(ptr as *mut u8, Layout::array::<T>(l).unwrap_unchecked())
+    }
 }
 
 /// Native double pointer width (note, native != arch native, but host native)

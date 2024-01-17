@@ -35,7 +35,9 @@ use {
             IndexSTSeqDllIterUnordKV, IndexSTSeqDllIterUnordKey, IndexSTSeqDllIterUnordValue,
         },
     },
-    super::{AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexSeq},
+    super::{
+        AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexExt, STIndexSeq,
+    },
     crate::engine::mem::StatelessLen,
     std::{
         alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
@@ -400,6 +402,25 @@ impl<K: AsKey, V: AsValue, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
                 &(e.as_ref()).read_value().v
             })
     }
+    fn _get_entry<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &V)>
+    where
+        K: Borrow<Q>,
+        Q: AsKey,
+    {
+        self.m
+            .get(unsafe {
+                // UNSAFE(@ohsayan): ref with correct bounds
+                IndexSTSeqDllQref::from_ref(k)
+            })
+            .map(|e| unsafe {
+                /*
+                    UNSAFE(@ohsayan): immutable ref so neither key nor value are moving and
+                    aliasing is satisifed
+                */
+                let e = e.as_ref();
+                (&e.k, &e.v)
+            })
+    }
     fn _get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
@@ -704,6 +725,21 @@ where
 
     fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
         self._iter_unord_v()
+    }
+}
+
+impl<K, V, C> STIndexExt<K, V> for IndexSTSeqDll<K, V, C>
+where
+    K: AsKey,
+    V: AsValue,
+    C: Config<K, V>,
+{
+    fn stext_get_key_value<Q>(&self, k: &Q) -> Option<(&K, &V)>
+    where
+        K: AsKey + Borrow<Q>,
+        Q: ?Sized + AsKey,
+    {
+        self._get_entry(k)
     }
 }
 

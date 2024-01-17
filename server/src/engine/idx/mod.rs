@@ -325,6 +325,13 @@ pub trait STIndex<K: ?Sized, V>: IndexBaseSpec {
     fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
 }
 
+pub trait STIndexExt<K, V>: STIndex<K, V> {
+    fn stext_get_key_value<Q>(&self, k: &Q) -> Option<(&K, &V)>
+    where
+        K: AsKey + Borrow<Q>,
+        Q: ?Sized + AsKey;
+}
+
 pub trait STIndexSeq<K, V>: STIndex<K, V> {
     /// An ordered iterator over the keys and values
     type IterOrdKV<'a>: Iterator<Item = (&'a K, &'a V)> + DoubleEndedIterator<Item = (&'a K, &'a V)>

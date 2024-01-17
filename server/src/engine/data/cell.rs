@@ -553,10 +553,20 @@ impl<'a> Clone for VirtualDatacell<'a> {
 }
 
 #[test]
-fn virtual_dc_damn() {
+fn vdc_check() {
     let dc = Lit::new_str("hello, world");
     assert_eq!(
         VirtualDatacell::new(dc, TagUnique::Str),
         Datacell::from("hello, world")
     );
+}
+
+#[test]
+fn empty_slice() {
+    let dc1 = Datacell::from(Lit::new_bin(b""));
+    assert_eq!(dc1, Datacell::new_bin(b"".to_vec().into_boxed_slice()));
+    drop(dc1);
+    let dc2 = Datacell::from(Lit::new_str(""));
+    assert_eq!(dc2, Datacell::new_str("".into()));
+    drop(dc2);
 }

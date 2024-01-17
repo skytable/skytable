@@ -33,7 +33,7 @@ use crate::engine::{
     },
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
-    idx::{IndexBaseSpec, MTIndex, STIndex, STIndexSeq},
+    idx::{IndexBaseSpec, MTIndex, STIndex, STIndexExt, STIndexSeq},
     net::protocol::Response,
     ql::dml::ins::{InsertData, InsertStatement},
     sync::atm::cpin,
@@ -99,20 +99,27 @@ fn prepare_insert(
         }
         InsertData::Map(map) => {
             let mut inserted = 0;
-            let mut iter = fields.st_iter_kv().zip(map.into_iter());
-            while (iter.len() != 0) & (okay) {
-                let ((model_field_key, model_field_spec), (this_field_key, mut this_field_data)) = unsafe {
-                    // UNSAFE(@ohsayan): safe because of loop invariant
-                    iter.next().unwrap_unchecked()
+            let mut map = map.into_iter();
+            while (map.len() != 0) & okay {
+                let (field_id, mut data) = unsafe {
+                    // UNSAFE(@ohsayan): loop precondition
+                    map.next().unwrap_unchecked()
                 };
-                okay &= model_field_spec.vt_data_fpath(&mut this_field_data);
-                okay &= model_field_key.as_str() == this_field_key.as_str();
+                let (spec_field_name, spec_field) =
+                    match fields.stext_get_key_value(field_id.as_str()) {
+                        Some(f) => f,
+                        None => {
+                            okay = false;
+                            break;
+                        }
+                    };
+                okay &= spec_field.vt_data_fpath(&mut data);
                 prepared_data.st_insert(
                     unsafe {
-                        // UNSAFE(@ohsayan): the model is right here. it saves us the work!
-                        model_field_key.clone()
+                        // UNSAFE(@ohsayan): as long as model lives, we're good
+                        spec_field_name.clone()
                     },
-                    this_field_data,
+                    data,
                 );
                 inserted += 1;
             }

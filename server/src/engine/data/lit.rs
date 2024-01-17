@@ -131,8 +131,8 @@ impl<'a> Lit<'a> {
     }
 }
 
-#[allow(unused)]
 impl<'a> Lit<'a> {
+    #[allow(unused)]
     /// Attempt to read a binary value
     pub fn try_bin(&self) -> Option<&'a [u8]> {
         (self.tag.tag_class() == TagClass::Bin).then(|| unsafe {
@@ -140,6 +140,7 @@ impl<'a> Lit<'a> {
             self.bin()
         })
     }
+    #[allow(unused)]
     /// Attempt to read a string value
     pub fn try_str(&self) -> Option<&'a str> {
         (self.tag.tag_class() == TagClass::Str).then(|| unsafe {

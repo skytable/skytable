@@ -379,3 +379,19 @@ fn check_pk_extremes() {
     assert_eq!(d2, Lit::new_uint(u64::MAX));
     assert_eq!(d1.uint().unwrap(), u64::MAX);
 }
+
+#[test]
+fn empty_slice() {
+    // bin
+    let pk1 = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_bin(b""))).unwrap();
+    let pk1_ = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_bin(b""))).unwrap();
+    assert_eq!(pk1, Lit::new_bin(b""));
+    assert_eq!(pk1, pk1_);
+    drop((pk1, pk1_));
+    // str
+    let pk2 = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_str(""))).unwrap();
+    let pk2_ = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_str(""))).unwrap();
+    assert_eq!(pk2, Lit::new_str(""));
+    assert_eq!(pk2, pk2_);
+    drop((pk2, pk2_));
+}
