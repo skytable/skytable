@@ -1,5 +1,5 @@
 /*
- * Created on Fri Jan 12 2024
+ * Created on Wed Jan 10 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,5 +24,16 @@
  *
 */
 
-mod impls;
-pub use impls::v1;
+/*!
+    # SDSS spec
+
+    This module provides traits and types to deal with the SDSS spec, especially headers.
+
+    The static SDSS header block has a special segment that defines the header version which is static and will
+    never change across any versions. While the same isn't warranted for the rest of the header, it's exceedingly
+    unlikely that we'll ever change the static block.
+
+    The only header that we currently use is [`v1::HeaderV1`].
+*/
+
+pub mod v1;

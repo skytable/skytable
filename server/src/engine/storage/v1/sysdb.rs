@@ -181,8 +181,7 @@ impl<Fs: FSInterface> SystemStore<Fs> {
         Ok((slf, state))
     }
     fn _restore(mut f: SDSSFileIO<Fs>, run_mode: ConfigMode) -> RuntimeResult<SysConfig> {
-        let mut sysdb_data =
-            inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.read_full()?)?;
+        let mut sysdb_data = inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.read_full()?)?;
         // get our auth and sys stores
         let mut auth_store = rkey(
             &mut sysdb_data,

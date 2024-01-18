@@ -1,5 +1,5 @@
 /*
- * Created on Wed Jan 10 2024
+ * Created on Thu Jan 18 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,26 +24,20 @@
  *
 */
 
-/*!
-    # SDSS spec
-
-    This module provides traits and types to deal with the SDSS spec, especially headers.
-
-    The static SDSS header block has a special segment that defines the header version which is static and will
-    never change across any versions. While the same isn't warranted for the rest of the header, it's exceedingly
-    unlikely that we'll ever change the static block.
-
-    The only header that we currently use is [`HeaderV1`].
-*/
+//! # SDSS Spec v1
+//!
+//! This is the first spec of SDSS. It is highly unlikely that this will ever change. Different types
+//! and functions are defined here to deal with SDSSv1 files.
+//!
 
 use {
-    super::super::{
+    super::super::super::{
         interface::fs_traits::{FileInterfaceRead, FileInterfaceWrite},
         static_meta::{HostArch, HostEndian, HostOS, HostPointerWidth, SDSS_MAGIC_8B},
         versions::{self, DriverVersion, FileSpecifierVersion, HeaderVersion, ServerVersion},
     },
     crate::{
-        engine::{error::StorageError, mem::memcpy, RuntimeResult},
+        engine::{error::StorageError, mem::unsafe_apis::memcpy, RuntimeResult},
         util::os,
     },
     std::{

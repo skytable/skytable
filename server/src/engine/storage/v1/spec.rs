@@ -29,17 +29,17 @@ use crate::engine::storage::common::{
     versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
 };
 
-pub(super) type Header = sdss::HeaderV1<HeaderImplV1>;
+pub(super) type Header = sdss::v1::HeaderV1<HeaderImplV1>;
 
 #[derive(Debug)]
 pub(super) struct HeaderImplV1;
-impl sdss::HeaderV1Spec for HeaderImplV1 {
+impl sdss::v1::HeaderV1Spec for HeaderImplV1 {
     type FileClass = FileScope;
     type FileSpecifier = FileSpecifier;
     const CURRENT_SERVER_VERSION: ServerVersion = versions::v1::V1_SERVER_VERSION;
     const CURRENT_DRIVER_VERSION: DriverVersion = versions::v1::V1_DRIVER_VERSION;
 }
-impl sdss::HeaderV1Enumeration for FileScope {
+impl sdss::v1::HeaderV1Enumeration for FileScope {
     const MAX: u8 = FileScope::MAX;
     unsafe fn new(x: u8) -> Self {
         core::mem::transmute(x)
@@ -48,7 +48,7 @@ impl sdss::HeaderV1Enumeration for FileScope {
         FileScope::value_u8(self)
     }
 }
-impl sdss::HeaderV1Enumeration for FileSpecifier {
+impl sdss::v1::HeaderV1Enumeration for FileSpecifier {
     const MAX: u8 = FileSpecifier::MAX;
     unsafe fn new(x: u8) -> Self {
         core::mem::transmute(x)
@@ -84,7 +84,7 @@ pub enum FileSpecifier {
 #[cfg(test)]
 pub(super) struct TestFile;
 #[cfg(test)]
-impl sdss::SimpleFileSpecV1 for TestFile {
+impl sdss::v1::SimpleFileSpecV1 for TestFile {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::FlatmapData;
     const FILE_SPECIFIER: FileSpecifier = FileSpecifier::TestTransactionLog;
@@ -93,7 +93,7 @@ impl sdss::SimpleFileSpecV1 for TestFile {
 
 /// The file specification for the GNS transaction log (impl v1)
 pub(super) struct GNSTransactionLogV1;
-impl sdss::SimpleFileSpecV1 for GNSTransactionLogV1 {
+impl sdss::v1::SimpleFileSpecV1 for GNSTransactionLogV1 {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::Journal;
     const FILE_SPECIFIER: FileSpecifier = FileSpecifier::GNSTxnLog;
@@ -102,7 +102,7 @@ impl sdss::SimpleFileSpecV1 for GNSTransactionLogV1 {
 
 /// The file specification for a journal batch
 pub(super) struct DataBatchJournalV1;
-impl sdss::SimpleFileSpecV1 for DataBatchJournalV1 {
+impl sdss::v1::SimpleFileSpecV1 for DataBatchJournalV1 {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::DataBatch;
     const FILE_SPECIFIER: FileSpecifier = FileSpecifier::TableDataBatch;
@@ -111,7 +111,7 @@ impl sdss::SimpleFileSpecV1 for DataBatchJournalV1 {
 
 /// The file specification for the system db
 pub(super) struct SysDBV1;
-impl sdss::SimpleFileSpecV1 for SysDBV1 {
+impl sdss::v1::SimpleFileSpecV1 for SysDBV1 {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::FlatmapData;
     const FILE_SPECIFIER: FileSpecifier = FileSpecifier::SysDB;

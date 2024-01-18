@@ -1,5 +1,5 @@
 /*
- * Created on Fri Jan 12 2024
+ * Created on Thu Jan 18 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,5 +24,30 @@
  *
 */
 
-mod impls;
-pub use impls::v1;
+use std::alloc::{self, Layout};
+
+pub unsafe fn alloc_layout<T>(layout: Layout) -> *mut T {
+    let ptr = alloc::alloc(layout);
+    assert!(!ptr.is_null(), "malloc failed");
+    ptr as _
+}
+
+pub unsafe fn alloc_array<T>(l: usize) -> *mut T {
+    self::alloc_layout(Layout::array::<T>(l).unwrap_unchecked())
+}
+
+pub unsafe fn dealloc_layout(ptr: *mut u8, layout: Layout) {
+    alloc::dealloc(ptr, layout)
+}
+
+pub unsafe fn dealloc_array<T>(ptr: *mut T, l: usize) {
+    if l != 0 {
+        self::dealloc_layout(ptr as *mut u8, Layout::array::<T>(l).unwrap_unchecked())
+    }
+}
+
+pub unsafe fn memcpy<const N: usize>(src: &[u8]) -> [u8; N] {
+    let mut dst = [0u8; N];
+    src.as_ptr().copy_to_nonoverlapping(dst.as_mut_ptr(), N);
+    dst
+}

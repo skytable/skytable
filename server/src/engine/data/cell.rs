@@ -465,7 +465,7 @@ impl Drop for Datacell {
             TagClass::Str | TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let (l, p) = self.load_word();
-                engine::mem::dealloc_array::<u8>(p, l)
+                engine::mem::unsafe_apis::dealloc_array::<u8>(p, l)
             },
             TagClass::List => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class

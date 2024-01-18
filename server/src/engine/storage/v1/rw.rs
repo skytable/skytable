@@ -156,19 +156,19 @@ pub struct SDSSFileIO<Fs: FSInterface, F = <Fs as FSInterface>::File> {
 }
 
 impl<Fs: FSInterface> SDSSFileIO<Fs> {
-    pub fn open<F: sdss::FileSpecV1<DecodeArgs = ()>>(
+    pub fn open<F: sdss::v1::FileSpecV1<DecodeArgs = ()>>(
         fpath: &str,
     ) -> RuntimeResult<(Self, F::Metadata)> {
         let mut f = Self::_new(Fs::fs_fopen_rw(fpath)?);
         let v = F::read_metadata(&mut f.f, ())?;
         Ok((f, v))
     }
-    pub fn create<F: sdss::FileSpecV1<EncodeArgs = ()>>(fpath: &str) -> RuntimeResult<Self> {
+    pub fn create<F: sdss::v1::FileSpecV1<EncodeArgs = ()>>(fpath: &str) -> RuntimeResult<Self> {
         let mut f = Self::_new(Fs::fs_fcreate_rw(fpath)?);
         F::write_metadata(&mut f.f, ())?;
         Ok(f)
     }
-    pub fn open_or_create_perm_rw<F: sdss::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>>(
+    pub fn open_or_create_perm_rw<F: sdss::v1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>>(
         fpath: &str,
     ) -> RuntimeResult<FileOpen<Self, (Self, F::Metadata)>> {
         match Fs::fs_fopen_or_create_rw(fpath)? {
