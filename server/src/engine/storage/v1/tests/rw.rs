@@ -24,9 +24,9 @@
  *
 */
 
-use crate::engine::storage::v1::{
-    rw::{FileOpen, SDSSFileIO},
-    spec,
+use crate::engine::storage::{
+    common::interface::fs_traits::FileOpen,
+    v1::{rw::SDSSFileIO, spec},
 };
 
 #[test]

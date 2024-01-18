@@ -33,7 +33,7 @@ use {
                 EntityIDRef,
             },
             data::uuid::Uuid,
-            storage::v1::LocalFS,
+            storage::safe_interfaces::LocalFS,
         },
         util::os,
     },

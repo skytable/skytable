@@ -31,7 +31,7 @@ use {
         data::uuid::Uuid,
         storage::{
             self,
-            v1::{LocalFS, RawFSInterface},
+            safe_interfaces::{FSInterface, LocalFS},
         },
         txn::gns::GNSTransactionDriverAnyFS,
     },
@@ -105,7 +105,7 @@ pub unsafe fn load_and_enable_all(
 
 /// Something that represents the global state
 pub trait GlobalInstanceLike {
-    type FileSystem: RawFSInterface;
+    type FileSystem: FSInterface;
     const FS_IS_NON_NULL: bool = Self::FileSystem::NOT_NULL;
     // stat
     fn get_max_delta_size(&self) -> usize;

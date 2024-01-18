@@ -46,28 +46,31 @@ use {
             },
             error::{RuntimeResult, StorageError},
             idx::STIndexSeq,
-            storage::v1::rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedWriter},
+            storage::{
+                common::interface::fs_traits::FSInterface,
+                v1::rw::{SDSSFileIO, TrackedWriter},
+            },
         },
         util::EndianQW,
     },
     crossbeam_epoch::pin,
 };
 
-pub struct DataBatchPersistDriver<Fs: RawFSInterface> {
-    f: SDSSFileTrackedWriter<Fs>,
+pub struct DataBatchPersistDriver<Fs: FSInterface> {
+    f: TrackedWriter<Fs>,
 }
 
-impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
+impl<Fs: FSInterface> DataBatchPersistDriver<Fs> {
     pub fn new(mut file: SDSSFileIO<Fs>, is_new: bool) -> RuntimeResult<Self> {
         if !is_new {
             file.fsynced_write(&[MARKER_BATCH_REOPEN])?;
         }
         Ok(Self {
-            f: SDSSFileTrackedWriter::new(file)?,
+            f: TrackedWriter::new(file)?,
         })
     }
     pub fn close(self) -> RuntimeResult<()> {
-        let mut slf = self.f.into_inner_file()?;
+        let mut slf = self.f.sync_into_inner()?;
         if slf.fsynced_write(&[MARKER_BATCH_CLOSED]).is_ok() {
             return Ok(());
         } else {
@@ -151,12 +154,12 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         col_cnt: usize,
     ) -> RuntimeResult<()> {
         self.f
-            .tracked_write_unfsynced(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.value_u8()])?;
+            .tracked_write(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.value_u8()])?;
         let observed_len_bytes = observed_len.u64_bytes_le();
-        self.f.tracked_write_unfsynced(&observed_len_bytes)?;
+        self.f.tracked_write(&observed_len_bytes)?;
         self.f
-            .tracked_write_unfsynced(&schema_version.value_u64().to_le_bytes())?;
-        self.f.tracked_write_unfsynced(&col_cnt.u64_bytes_le())?;
+            .tracked_write(&schema_version.value_u64().to_le_bytes())?;
+        self.f.tracked_write(&col_cnt.u64_bytes_le())?;
         Ok(())
     }
     /// Append a summary of this batch and most importantly, **sync everything to disk**
@@ -166,9 +169,9 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         inconsistent_reads: usize,
     ) -> RuntimeResult<()> {
         // [0xFD][actual_commit][checksum]
-        self.f.tracked_write_unfsynced(&[MARKER_END_OF_BATCH])?;
+        self.f.tracked_write(&[MARKER_END_OF_BATCH])?;
         let actual_commit = (observed_len - inconsistent_reads).u64_bytes_le();
-        self.f.tracked_write_unfsynced(&actual_commit)?;
+        self.f.tracked_write(&actual_commit)?;
         let cs = self.f.reset_and_finish_checksum().to_le_bytes();
         self.f.untracked_write(&cs)?;
         // IMPORTANT: now that all data has been written, we need to actually ensure that the writes pass through the cache
@@ -189,7 +192,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     }
 }
 
-impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
+impl<Fs: FSInterface> DataBatchPersistDriver<Fs> {
     /// encode the primary key only. this means NO TAG is encoded.
     fn encode_pk_only(&mut self, pk: &PrimaryIndexKey) -> RuntimeResult<()> {
         let buf = &mut self.f;
@@ -200,7 +203,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
                     pk.read_uint()
                 }
                 .to_le_bytes();
-                buf.tracked_write_unfsynced(&data)?;
+                buf.tracked_write(&data)?;
             }
             TagUnique::Str | TagUnique::Bin => {
                 let slice = unsafe {
@@ -208,8 +211,8 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
                     pk.read_bin()
                 };
                 let slice_l = slice.len().u64_bytes_le();
-                buf.tracked_write_unfsynced(&slice_l)?;
-                buf.tracked_write_unfsynced(slice)?;
+                buf.tracked_write(&slice_l)?;
+                buf.tracked_write(slice)?;
             }
             TagUnique::Illegal => unsafe {
                 // UNSAFE(@ohsayan): a pk can't be constructed with illegal
@@ -222,7 +225,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     fn encode_cell(&mut self, value: &Datacell) -> RuntimeResult<()> {
         let mut buf = vec![];
         cell::encode(&mut buf, value);
-        self.f.tracked_write_unfsynced(&buf)?;
+        self.f.tracked_write(&buf)?;
         Ok(())
     }
     /// Encode row data
@@ -233,7 +236,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
                     self.encode_cell(cell)?;
                 }
                 None if field_name.as_str() == model.p_key() => {}
-                None => self.f.tracked_write_unfsynced(&[0])?,
+                None => self.f.tracked_write(&[0])?,
             }
         }
         Ok(())
@@ -241,9 +244,9 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
     /// Write the change type and txnid
     fn write_batch_item_common_row_data(&mut self, delta: &DataDelta) -> RuntimeResult<()> {
         let change_type = [delta.change().value_u8()];
-        self.f.tracked_write_unfsynced(&change_type)?;
+        self.f.tracked_write(&change_type)?;
         let txn_id = delta.data_version().value_u64().to_le_bytes();
-        self.f.tracked_write_unfsynced(&txn_id)?;
+        self.f.tracked_write(&txn_id)?;
         Ok(())
     }
 }

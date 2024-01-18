@@ -31,9 +31,12 @@ use {
             data::uuid::Uuid,
             error::{RuntimeResult, TransactionError},
             mem::BufferedScanner,
-            storage::v1::{
-                inf::{self, PersistObject},
-                JournalAdapter, JournalWriter, LocalFS, RawFSInterface,
+            storage::{
+                safe_interfaces::{FSInterface, LocalFS},
+                v1::{
+                    inf::{self, PersistObject},
+                    JournalAdapter, JournalWriter,
+                },
             },
         },
         util::EndianQW,
@@ -57,11 +60,11 @@ pub use {
 };
 
 /// The GNS transaction driver is used to handle DDL transactions
-pub struct GNSTransactionDriverAnyFS<Fs: RawFSInterface = LocalFS> {
+pub struct GNSTransactionDriverAnyFS<Fs: FSInterface = LocalFS> {
     journal: JournalWriter<Fs, GNSAdapter>,
 }
 
-impl<Fs: RawFSInterface> GNSTransactionDriverAnyFS<Fs> {
+impl<Fs: FSInterface> GNSTransactionDriverAnyFS<Fs> {
     pub fn new(journal: JournalWriter<Fs, GNSAdapter>) -> Self {
         Self { journal }
     }

@@ -25,13 +25,15 @@
 */
 
 use {
-    super::rw::FileOpen,
     crate::engine::{
         config::{ConfigAuth, ConfigMode},
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
         error::{RuntimeResult, StorageError},
         fractal::sys_store::{SysAuth, SysAuthUser, SysConfig, SysHostData, SystemStore},
-        storage::v1::{inf, spec, RawFSInterface, SDSSFileIO},
+        storage::{
+            common::interface::fs_traits::{FSInterface, FileOpen},
+            v1::{inf, spec, SDSSFileIO},
+        },
     },
     parking_lot::RwLock,
     std::collections::HashMap,
@@ -68,7 +70,7 @@ fn rkey<T>(
     }
 }
 
-impl<Fs: RawFSInterface> SystemStore<Fs> {
+impl<Fs: FSInterface> SystemStore<Fs> {
     const SYSDB_PATH: &'static str = "sys.db";
     const SYSDB_COW_PATH: &'static str = "sys.db.cow";
     const SYS_KEY_AUTH: &'static str = "auth";
@@ -104,7 +106,7 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
     }
 }
 
-impl<Fs: RawFSInterface> SystemStore<Fs> {
+impl<Fs: FSInterface> SystemStore<Fs> {
     fn _sync(&self, mut f: SDSSFileIO<Fs>, auth: &SysAuth) -> RuntimeResult<()> {
         let cfg = self.system_store();
         // prepare our flat file
@@ -141,7 +143,7 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
     fn _sync_with(&self, target: &str, cow: &str, auth: &SysAuth) -> RuntimeResult<()> {
         let f = SDSSFileIO::create::<spec::SysDBV1>(cow)?;
         self._sync(f, auth)?;
-        Fs::fs_rename_file(cow, target)
+        Fs::fs_rename(cow, target)
     }
     fn restore_and_sync(
         f: SDSSFileIO<Fs>,
@@ -180,7 +182,7 @@ impl<Fs: RawFSInterface> SystemStore<Fs> {
     }
     fn _restore(mut f: SDSSFileIO<Fs>, run_mode: ConfigMode) -> RuntimeResult<SysConfig> {
         let mut sysdb_data =
-            inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.load_remaining_into_buffer()?)?;
+            inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.read_full()?)?;
         // get our auth and sys stores
         let mut auth_store = rkey(
             &mut sysdb_data,

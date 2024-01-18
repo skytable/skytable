@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Tue Jan 09 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2024, Sayan Nandan <nandansayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,15 +24,8 @@
  *
 */
 
-//! Implementations of the Skytable Disk Storage Subsystem (SDSS)
-
-mod common;
-// driver versions
-pub mod v1;
-pub mod v2;
-
-pub mod safe_interfaces {
-    #[cfg(test)]
-    pub use super::common::interface::fs_test::{NullFS, VirtualFS};
-    pub use super::common::interface::{fs_imp::LocalFS, fs_traits::FSInterface};
-}
+pub mod checksum;
+pub mod interface;
+pub mod sdss;
+pub mod static_meta;
+pub mod versions;

@@ -24,157 +24,37 @@
  *
 */
 
-/*
-    Header specification
-    ---
-    We utilize two different kinds of headers:
-    - Static header - Mostly to avoid data corruption
-    - Variable header - For preserving dynamic information
-*/
-
-use {
-    super::rw::{RawFSInterface, SDSSFileIO},
-    crate::{
-        engine::{
-            error::{RuntimeResult, StorageError},
-            storage::versions::{self, DriverVersion, HeaderVersion, ServerVersion},
-        },
-        util::os,
-    },
-    std::{
-        mem::{transmute, ManuallyDrop},
-        ops::Range,
-    },
+use crate::engine::storage::common::{
+    sdss,
+    versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
 };
 
-/*
-    meta
-*/
+pub(super) type Header = sdss::HeaderV1<HeaderImplV1>;
 
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-/// Host architecture enumeration for common platforms
-pub enum HostArch {
-    X86 = 0,
-    X86_64 = 1,
-    ARM = 2,
-    ARM64 = 3,
-    MIPS = 4,
-    PowerPC = 5,
+#[derive(Debug)]
+pub(super) struct HeaderImplV1;
+impl sdss::HeaderV1Spec for HeaderImplV1 {
+    type FileClass = FileScope;
+    type FileSpecifier = FileSpecifier;
+    const CURRENT_SERVER_VERSION: ServerVersion = versions::v1::V1_SERVER_VERSION;
+    const CURRENT_DRIVER_VERSION: DriverVersion = versions::v1::V1_DRIVER_VERSION;
 }
-
-impl HostArch {
-    pub const fn new() -> Self {
-        if cfg!(target_arch = "x86") {
-            HostArch::X86
-        } else if cfg!(target_arch = "x86_64") {
-            HostArch::X86_64
-        } else if cfg!(target_arch = "arm") {
-            HostArch::ARM
-        } else if cfg!(target_arch = "aarch64") {
-            HostArch::ARM64
-        } else if cfg!(target_arch = "mips") {
-            HostArch::MIPS
-        } else if cfg!(target_arch = "powerpc") {
-            HostArch::PowerPC
-        } else {
-            panic!("Unsupported target architecture")
-        }
+impl sdss::HeaderV1Enumeration for FileScope {
+    const MAX: u8 = FileScope::MAX;
+    unsafe fn new(x: u8) -> Self {
+        core::mem::transmute(x)
+    }
+    fn repr_u8(&self) -> u8 {
+        FileScope::value_u8(self)
     }
 }
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-/// Host OS enumeration for common operating systems
-pub enum HostOS {
-    // T1
-    Linux = 0,
-    Windows = 1,
-    MacOS = 2,
-    // T2
-    Android = 3,
-    AppleiOS = 4,
-    FreeBSD = 5,
-    OpenBSD = 6,
-    NetBSD = 7,
-    WASI = 8,
-    Emscripten = 9,
-    // T3
-    Solaris = 10,
-    Fuchsia = 11,
-    Redox = 12,
-    DragonFly = 13,
-}
-
-impl HostOS {
-    pub const fn new() -> Self {
-        if cfg!(target_os = "linux") {
-            HostOS::Linux
-        } else if cfg!(target_os = "windows") {
-            HostOS::Windows
-        } else if cfg!(target_os = "macos") {
-            HostOS::MacOS
-        } else if cfg!(target_os = "android") {
-            HostOS::Android
-        } else if cfg!(target_os = "ios") {
-            HostOS::AppleiOS
-        } else if cfg!(target_os = "freebsd") {
-            HostOS::FreeBSD
-        } else if cfg!(target_os = "openbsd") {
-            HostOS::OpenBSD
-        } else if cfg!(target_os = "netbsd") {
-            HostOS::NetBSD
-        } else if cfg!(target_os = "dragonfly") {
-            HostOS::DragonFly
-        } else if cfg!(target_os = "redox") {
-            HostOS::Redox
-        } else if cfg!(target_os = "fuchsia") {
-            HostOS::Fuchsia
-        } else if cfg!(target_os = "solaris") {
-            HostOS::Solaris
-        } else if cfg!(target_os = "emscripten") {
-            HostOS::Emscripten
-        } else if cfg!(target_os = "wasi") {
-            HostOS::WASI
-        } else {
-            panic!("unknown os")
-        }
+impl sdss::HeaderV1Enumeration for FileSpecifier {
+    const MAX: u8 = FileSpecifier::MAX;
+    unsafe fn new(x: u8) -> Self {
+        core::mem::transmute(x)
     }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-/// Host endian enumeration
-pub enum HostEndian {
-    Big = 0,
-    Little = 1,
-}
-
-impl HostEndian {
-    pub const fn new() -> Self {
-        if cfg!(target_endian = "little") {
-            Self::Little
-        } else {
-            Self::Big
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-#[repr(u8)]
-/// Host pointer width enumeration
-pub enum HostPointerWidth {
-    P32 = 0,
-    P64 = 1,
-}
-
-impl HostPointerWidth {
-    pub const fn new() -> Self {
-        match sizeof!(usize) {
-            4 => Self::P32,
-            8 => Self::P64,
-            _ => panic!("unknown pointer width"),
-        }
+    fn repr_u8(&self) -> u8 {
+        self.value_u8()
     }
 }
 
@@ -197,414 +77,43 @@ pub enum FileSpecifier {
     TestTransactionLog = 0xFF,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FileSpecifierVersion(u16);
-impl FileSpecifierVersion {
-    pub const fn __new(v: u16) -> Self {
-        Self(v)
-    }
-}
-
-const SDSS_MAGIC: u64 = 0x4F48534159414E21;
-
-/// Specification for a SDSS file
-pub trait FileSpec {
-    /// The header spec for the file
-    type Header: Header;
-    /// Encode data
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs;
-    /// Decode data
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs;
-    /// Verify data
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs;
-}
-
 /*
     file spec impls
 */
 
 #[cfg(test)]
-pub struct TestFile;
+pub(super) struct TestFile;
 #[cfg(test)]
-impl FileSpec for TestFile {
-    type Header = SDSSStaticHeaderV1Compact;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::FlatmapData,
-        FileSpecifier::TestTransactionLog,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
+impl sdss::SimpleFileSpecV1 for TestFile {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::FlatmapData;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::TestTransactionLog;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }
 
 /// The file specification for the GNS transaction log (impl v1)
-pub struct GNSTransactionLogV1;
-impl FileSpec for GNSTransactionLogV1 {
-    type Header = SDSSStaticHeaderV1Compact;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::Journal,
-        FileSpecifier::GNSTxnLog,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
+pub(super) struct GNSTransactionLogV1;
+impl sdss::SimpleFileSpecV1 for GNSTransactionLogV1 {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::Journal;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::GNSTxnLog;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }
 
 /// The file specification for a journal batch
-pub struct DataBatchJournalV1;
-impl FileSpec for DataBatchJournalV1 {
-    type Header = SDSSStaticHeaderV1Compact;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::DataBatch,
-        FileSpecifier::TableDataBatch,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
+pub(super) struct DataBatchJournalV1;
+impl sdss::SimpleFileSpecV1 for DataBatchJournalV1 {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::DataBatch;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::TableDataBatch;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }
 
 /// The file specification for the system db
-pub struct SysDBV1;
-impl FileSpec for SysDBV1 {
-    type Header = SDSSStaticHeaderV1Compact;
-    const ENCODE_DATA: <Self::Header as Header>::EncodeArgs = (
-        FileScope::FlatmapData,
-        FileSpecifier::SysDB,
-        FileSpecifierVersion::__new(0),
-    );
-    const DECODE_DATA: <Self::Header as Header>::DecodeArgs = ();
-    const VERIFY_DATA: <Self::Header as Header>::DecodeVerifyArgs = Self::ENCODE_DATA;
-}
-
-/*
-    header spec
-*/
-
-/// SDSS Header specification
-pub trait Header: Sized {
-    /// Encode arguments
-    type EncodeArgs;
-    /// Decode arguments
-    type DecodeArgs;
-    /// Decode verify arguments
-    type DecodeVerifyArgs;
-    /// Encode the header
-    fn encode<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        args: Self::EncodeArgs,
-    ) -> RuntimeResult<()>;
-    /// Decode the header
-    fn decode<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        args: Self::DecodeArgs,
-    ) -> RuntimeResult<Self>;
-    /// Verify the header
-    fn verify(&self, args: Self::DecodeVerifyArgs) -> RuntimeResult<()>;
-    /// Decode and verify the header
-    fn decode_verify<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        d_args: Self::DecodeArgs,
-        v_args: Self::DecodeVerifyArgs,
-    ) -> RuntimeResult<Self> {
-        let h = Self::decode(f, d_args)?;
-        h.verify(v_args)?;
-        Ok(h)
-    }
-}
-
-/*
-    header impls
-*/
-
-unsafe fn memcpy<const N: usize>(src: &[u8]) -> [u8; N] {
-    let mut dst = [0u8; N];
-    src.as_ptr().copy_to_nonoverlapping(dst.as_mut_ptr(), N);
-    dst
-}
-
-macro_rules! var {
-    (let $($name:ident),* $(,)?) => {
-        $(let $name;)*
-    }
-}
-
-/*
-    Compact SDSS Header v1
-    ---
-    - 1: Magic block (16B): magic + header version
-    - 2: Static block (40B):
-        - 2.1: Genesis static record (24B)
-            - 2.1.1: Software information (16B)
-                - Server version (8B)
-                - Driver version (8B)
-            - 2.1.2: Host information (4B):
-                - OS (1B)
-                - Arch (1B)
-                - Pointer width (1B)
-                - Endian (1B)
-            - 2.1.3: File information (4B):
-                - File class (1B)
-                - File specifier (1B)
-                - File specifier version (2B)
-        - 2.2: Genesis runtime record (16B)
-            - Host epoch (16B)
-    - 3: Padding block (8B)
-*/
-
-#[repr(align(8))]
-#[derive(Debug, PartialEq)]
-pub struct SDSSStaticHeaderV1Compact {
-    // 1 magic block
-    magic_header_version: HeaderVersion,
-    // 2.1.1
-    genesis_static_sw_server_version: ServerVersion,
-    genesis_static_sw_driver_version: DriverVersion,
-    // 2.1.2
-    genesis_static_host_os: HostOS,
-    genesis_static_host_arch: HostArch,
-    genesis_static_host_ptr_width: HostPointerWidth,
-    genesis_static_host_endian: HostEndian,
-    // 2.1.3
-    genesis_static_file_class: FileScope,
-    genesis_static_file_specifier: FileSpecifier,
-    genesis_static_file_specifier_version: FileSpecifierVersion,
-    // 2.2
-    genesis_runtime_epoch_time: u128,
-    // 3
-    genesis_padding_block: [u8; 8],
-}
-
-impl SDSSStaticHeaderV1Compact {
-    pub const SIZE: usize = 64;
-    /// Decode and validate the full header block (validate ONLY; you must verify yourself)
-    ///
-    /// Notes:
-    /// - Time might be inconsistent; verify
-    /// - Compatibility requires additional intervention
-    /// - If padding block was not zeroed, handle
-    /// - No file metadata and is verified. Check!
-    ///
-    fn _decode(block: [u8; 64]) -> RuntimeResult<Self> {
-        var!(let raw_magic, raw_header_version, raw_server_version, raw_driver_version, raw_host_os, raw_host_arch,
-            raw_host_ptr_width, raw_host_endian, raw_file_class, raw_file_specifier, raw_file_specifier_version,
-            raw_runtime_epoch_time, raw_paddding_block,
-        );
-        macro_rules! u64 {
-            ($pos:expr) => {
-                u64::from_le_bytes(memcpy(&block[$pos]))
-            };
-        }
-        unsafe {
-            // UNSAFE(@ohsayan): all segments are correctly accessed (aligned to u8)
-            raw_magic = u64!(Self::SEG1_MAGIC);
-            raw_header_version = HeaderVersion::__new(u64!(Self::SEG1_HEADER_VERSION));
-            raw_server_version = ServerVersion::__new(u64!(Self::SEG2_REC1_SERVER_VERSION));
-            raw_driver_version = DriverVersion::__new(u64!(Self::SEG2_REC1_DRIVER_VERSION));
-            raw_host_os = block[Self::SEG2_REC1_HOST_OS];
-            raw_host_arch = block[Self::SEG2_REC1_HOST_ARCH];
-            raw_host_ptr_width = block[Self::SEG2_REC1_HOST_PTR_WIDTH];
-            raw_host_endian = block[Self::SEG2_REC1_HOST_ENDIAN];
-            raw_file_class = block[Self::SEG2_REC1_FILE_CLASS];
-            raw_file_specifier = block[Self::SEG2_REC1_FILE_SPECIFIER];
-            raw_file_specifier_version = FileSpecifierVersion::__new(u16::from_le_bytes(memcpy(
-                &block[Self::SEG2_REC1_FILE_SPECIFIER_VERSION],
-            )));
-            raw_runtime_epoch_time =
-                u128::from_le_bytes(memcpy(&block[Self::SEG2_REC2_RUNTIME_EPOCH_TIME]));
-            raw_paddding_block = memcpy::<8>(&block[Self::SEG3_PADDING_BLK]);
-        }
-        macro_rules! okay {
-            ($($expr:expr),* $(,)?) => {
-                $(($expr) &)*true
-            }
-        }
-        let okay_header_version = raw_header_version == versions::CURRENT_HEADER_VERSION;
-        let okay_server_version = raw_server_version == versions::CURRENT_SERVER_VERSION;
-        let okay_driver_version = raw_driver_version == versions::CURRENT_DRIVER_VERSION;
-        let okay = okay!(
-            // 1.1 mgblk
-            raw_magic == SDSS_MAGIC,
-            okay_header_version,
-            // 2.1.1
-            okay_server_version,
-            okay_driver_version,
-            // 2.1.2
-            raw_host_os <= HostOS::MAX,
-            raw_host_arch <= HostArch::MAX,
-            raw_host_ptr_width <= HostPointerWidth::MAX,
-            raw_host_endian <= HostEndian::MAX,
-            // 2.1.3
-            raw_file_class <= FileScope::MAX,
-            raw_file_specifier <= FileSpecifier::MAX,
-        );
-        if okay {
-            Ok(unsafe {
-                // UNSAFE(@ohsayan): the block ranges are very well defined
-                Self {
-                    // 1.1
-                    magic_header_version: raw_header_version,
-                    // 2.1.1
-                    genesis_static_sw_server_version: raw_server_version,
-                    genesis_static_sw_driver_version: raw_driver_version,
-                    // 2.1.2
-                    genesis_static_host_os: transmute(raw_host_os),
-                    genesis_static_host_arch: transmute(raw_host_arch),
-                    genesis_static_host_ptr_width: transmute(raw_host_ptr_width),
-                    genesis_static_host_endian: transmute(raw_host_endian),
-                    // 2.1.3
-                    genesis_static_file_class: transmute(raw_file_class),
-                    genesis_static_file_specifier: transmute(raw_file_specifier),
-                    genesis_static_file_specifier_version: raw_file_specifier_version,
-                    // 2.2
-                    genesis_runtime_epoch_time: raw_runtime_epoch_time,
-                    // 3
-                    genesis_padding_block: raw_paddding_block,
-                }
-            })
-        } else {
-            let version_okay = okay_header_version & okay_server_version & okay_driver_version;
-            let md = ManuallyDrop::new([
-                StorageError::HeaderDecodeCorruptedHeader,
-                StorageError::HeaderDecodeVersionMismatch,
-            ]);
-            Err(unsafe {
-                // UNSAFE(@ohsayan): while not needed, md for drop safety + correct index
-                md.as_ptr().add(!version_okay as usize).read().into()
-            })
-        }
-    }
-}
-
-impl SDSSStaticHeaderV1Compact {
-    const SEG1_MAGIC: Range<usize> = 0..8;
-    const SEG1_HEADER_VERSION: Range<usize> = 8..16;
-    const SEG2_REC1_SERVER_VERSION: Range<usize> = 16..24;
-    const SEG2_REC1_DRIVER_VERSION: Range<usize> = 24..32;
-    const SEG2_REC1_HOST_OS: usize = 32;
-    const SEG2_REC1_HOST_ARCH: usize = 33;
-    const SEG2_REC1_HOST_PTR_WIDTH: usize = 34;
-    const SEG2_REC1_HOST_ENDIAN: usize = 35;
-    const SEG2_REC1_FILE_CLASS: usize = 36;
-    const SEG2_REC1_FILE_SPECIFIER: usize = 37;
-    const SEG2_REC1_FILE_SPECIFIER_VERSION: Range<usize> = 38..40;
-    const SEG2_REC2_RUNTIME_EPOCH_TIME: Range<usize> = 40..56;
-    const SEG3_PADDING_BLK: Range<usize> = 56..64;
-    fn _encode(
-        file_class: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-        epoch_time: u128,
-        padding_block: [u8; 8],
-    ) -> [u8; 64] {
-        let mut ret = [0; 64];
-        // 1. mgblk
-        ret[Self::SEG1_MAGIC].copy_from_slice(&SDSS_MAGIC.to_le_bytes());
-        ret[Self::SEG1_HEADER_VERSION]
-            .copy_from_slice(&versions::CURRENT_HEADER_VERSION.little_endian_u64());
-        // 2.1.1
-        ret[Self::SEG2_REC1_SERVER_VERSION]
-            .copy_from_slice(&versions::CURRENT_SERVER_VERSION.little_endian());
-        ret[Self::SEG2_REC1_DRIVER_VERSION]
-            .copy_from_slice(&versions::CURRENT_DRIVER_VERSION.little_endian());
-        // 2.1.2
-        ret[Self::SEG2_REC1_HOST_OS] = HostOS::new().value_u8();
-        ret[Self::SEG2_REC1_HOST_ARCH] = HostArch::new().value_u8();
-        ret[Self::SEG2_REC1_HOST_PTR_WIDTH] = HostPointerWidth::new().value_u8();
-        ret[Self::SEG2_REC1_HOST_ENDIAN] = HostEndian::new().value_u8();
-        // 2.1.3
-        ret[Self::SEG2_REC1_FILE_CLASS] = file_class.value_u8();
-        ret[Self::SEG2_REC1_FILE_SPECIFIER] = file_specifier.value_u8();
-        ret[Self::SEG2_REC1_FILE_SPECIFIER_VERSION]
-            .copy_from_slice(&file_specifier_version.0.to_le_bytes());
-        // 2.2
-        ret[Self::SEG2_REC2_RUNTIME_EPOCH_TIME].copy_from_slice(&epoch_time.to_le_bytes());
-        // 3
-        ret[Self::SEG3_PADDING_BLK].copy_from_slice(&padding_block);
-        ret
-    }
-    pub fn _encode_auto(
-        file_class: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-    ) -> [u8; 64] {
-        let epoch_time = os::get_epoch_time();
-        Self::_encode(
-            file_class,
-            file_specifier,
-            file_specifier_version,
-            epoch_time,
-            [0; 8],
-        )
-    }
-}
-
-#[allow(unused)]
-impl SDSSStaticHeaderV1Compact {
-    pub fn header_version(&self) -> HeaderVersion {
-        self.magic_header_version
-    }
-    pub fn server_version(&self) -> ServerVersion {
-        self.genesis_static_sw_server_version
-    }
-    pub fn driver_version(&self) -> DriverVersion {
-        self.genesis_static_sw_driver_version
-    }
-    pub fn host_os(&self) -> HostOS {
-        self.genesis_static_host_os
-    }
-    pub fn host_arch(&self) -> HostArch {
-        self.genesis_static_host_arch
-    }
-    pub fn host_ptr_width(&self) -> HostPointerWidth {
-        self.genesis_static_host_ptr_width
-    }
-    pub fn host_endian(&self) -> HostEndian {
-        self.genesis_static_host_endian
-    }
-    pub fn file_class(&self) -> FileScope {
-        self.genesis_static_file_class
-    }
-    pub fn file_specifier(&self) -> FileSpecifier {
-        self.genesis_static_file_specifier
-    }
-    pub fn file_specifier_version(&self) -> FileSpecifierVersion {
-        self.genesis_static_file_specifier_version
-    }
-    pub fn epoch_time(&self) -> u128 {
-        self.genesis_runtime_epoch_time
-    }
-    pub fn padding_block(&self) -> [u8; 8] {
-        self.genesis_padding_block
-    }
-}
-
-impl Header for SDSSStaticHeaderV1Compact {
-    type EncodeArgs = (FileScope, FileSpecifier, FileSpecifierVersion);
-    type DecodeArgs = ();
-    type DecodeVerifyArgs = Self::EncodeArgs;
-    fn encode<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        (scope, spec, spec_v): Self::EncodeArgs,
-    ) -> RuntimeResult<()> {
-        let b = Self::_encode_auto(scope, spec, spec_v);
-        f.fsynced_write(&b)
-    }
-    fn decode<Fs: RawFSInterface>(
-        f: &mut SDSSFileIO<Fs>,
-        _: Self::DecodeArgs,
-    ) -> RuntimeResult<Self> {
-        let mut buf = [0u8; 64];
-        f.read_to_buffer(&mut buf)?;
-        Self::_decode(buf)
-    }
-    fn verify(&self, (scope, spec, spec_v): Self::DecodeVerifyArgs) -> RuntimeResult<()> {
-        if (self.file_class() == scope)
-            & (self.file_specifier() == spec)
-            & (self.file_specifier_version() == spec_v)
-        {
-            Ok(())
-        } else {
-            Err(StorageError::HeaderDecodeDataMismatch.into())
-        }
-    }
+pub(super) struct SysDBV1;
+impl sdss::SimpleFileSpecV1 for SysDBV1 {
+    type HeaderSpec = HeaderImplV1;
+    const FILE_CLASS: FileScope = FileScope::FlatmapData;
+    const FILE_SPECIFIER: FileSpecifier = FileSpecifier::SysDB;
+    const FILE_SPECFIER_VERSION: FileSpecifierVersion = FileSpecifierVersion::__new(0);
 }

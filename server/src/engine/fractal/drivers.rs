@@ -28,7 +28,7 @@ use {
     super::util,
     crate::engine::{
         error::RuntimeResult,
-        storage::v1::{data_batch::DataBatchPersistDriver, RawFSInterface},
+        storage::{safe_interfaces::FSInterface, v1::data_batch::DataBatchPersistDriver},
         txn::gns::GNSTransactionDriverAnyFS,
     },
     parking_lot::Mutex,
@@ -36,13 +36,13 @@ use {
 };
 
 /// GNS driver
-pub(super) struct FractalGNSDriver<Fs: RawFSInterface> {
+pub(super) struct FractalGNSDriver<Fs: FSInterface> {
     #[allow(unused)]
     status: util::Status,
     pub(super) txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
 }
 
-impl<Fs: RawFSInterface> FractalGNSDriver<Fs> {
+impl<Fs: FSInterface> FractalGNSDriver<Fs> {
     pub(super) fn new(txn_driver: GNSTransactionDriverAnyFS<Fs>) -> Self {
         Self {
             status: util::Status::new_okay(),
@@ -55,13 +55,13 @@ impl<Fs: RawFSInterface> FractalGNSDriver<Fs> {
 }
 
 /// Model driver
-pub struct FractalModelDriver<Fs: RawFSInterface> {
+pub struct FractalModelDriver<Fs: FSInterface> {
     #[allow(unused)]
     hooks: Arc<FractalModelHooks>,
     batch_driver: Mutex<DataBatchPersistDriver<Fs>>,
 }
 
-impl<Fs: RawFSInterface> FractalModelDriver<Fs> {
+impl<Fs: FSInterface> FractalModelDriver<Fs> {
     /// Initialize a model driver with default settings
     pub fn init(batch_driver: DataBatchPersistDriver<Fs>) -> Self {
         Self {

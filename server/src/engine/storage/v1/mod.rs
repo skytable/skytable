@@ -24,6 +24,10 @@
  *
 */
 
+//! SDSS based storage engine driver v1 ([`versions::v1`])
+//!
+//! Target tags: `0.8.0-beta`, `0.8.0-beta.2`, `0.8.0-beta.3`
+
 // impls
 mod batch_jrnl;
 mod journal;
@@ -33,15 +37,15 @@ pub mod spec;
 pub mod sysdb;
 // hl
 pub mod inf;
-// test
-pub mod memfs;
 #[cfg(test)]
 mod tests;
 
 // re-exports
+pub(self) use spec::Header;
+
 pub use {
     journal::{JournalAdapter, JournalWriter},
-    rw::{LocalFS, RawFSInterface, SDSSFileIO},
+    rw::SDSSFileIO,
 };
 pub mod data_batch {
     pub use super::batch_jrnl::{create, DataBatchPersistDriver};

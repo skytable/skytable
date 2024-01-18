@@ -25,9 +25,9 @@
 */
 
 #[cfg(test)]
-use crate::engine::storage::v1::{
-    rw::{FileOpen, RawFSInterface},
-    JournalWriter,
+use crate::engine::storage::{
+    common::interface::fs_traits::{FSInterface, FileOpen},
+    v1::JournalWriter,
 };
 use crate::engine::{
     core::{EntityIDRef, GlobalNS},
@@ -35,7 +35,10 @@ use crate::engine::{
     error::RuntimeResult,
     fractal::error::ErrorContext,
     fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
-    storage::v1::{batch_jrnl, journal, spec, LocalFS},
+    storage::{
+        common::interface::fs_imp::LocalFS,
+        v1::{batch_jrnl, journal, spec},
+    },
     txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
 
@@ -43,14 +46,14 @@ const GNS_FILE_PATH: &str = "gns.db-tlog";
 const DATA_DIR: &str = "data";
 
 pub struct SEInitState {
-    pub txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
+    pub txn_driver: GNSTransactionDriverAnyFS<LocalFS>,
     pub model_drivers: ModelDrivers<LocalFS>,
     pub gns: GlobalNS,
 }
 
 impl SEInitState {
     pub fn new(
-        txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
+        txn_driver: GNSTransactionDriverAnyFS<LocalFS>,
         model_drivers: ModelDrivers<LocalFS>,
         gns: GlobalNS,
     ) -> Self {
@@ -140,7 +143,7 @@ impl SEInitState {
 }
 
 #[cfg(test)]
-pub fn open_gns_driver<Fs: RawFSInterface>(
+pub fn open_gns_driver<Fs: FSInterface>(
     path: &str,
     gns: &GlobalNS,
 ) -> RuntimeResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {

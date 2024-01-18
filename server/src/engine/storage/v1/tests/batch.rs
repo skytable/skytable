@@ -36,14 +36,16 @@ use {
             },
             data::{cell::Datacell, tag::TagSelector, uuid::Uuid},
             idx::MTIndex,
-            storage::v1::{
-                batch_jrnl::{
-                    DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
-                    DecodedBatchEventKind, NormalBatch,
+            storage::{
+                common::interface::{fs_test::VirtualFS, fs_traits::FileOpen},
+                v1::{
+                    batch_jrnl::{
+                        DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
+                        DecodedBatchEventKind, NormalBatch,
+                    },
+                    rw::SDSSFileIO,
+                    spec,
                 },
-                memfs::VirtualFS,
-                rw::{FileOpen, SDSSFileIO},
-                spec,
             },
         },
         util::test_utils,
@@ -57,7 +59,7 @@ fn pkey(v: impl Into<Datacell>) -> PrimaryIndexKey {
 
 fn open_file(
     fpath: &str,
-) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, spec::SDSSStaticHeaderV1Compact)> {
+) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, super::super::Header)> {
     SDSSFileIO::open_or_create_perm_rw::<spec::DataBatchJournalV1>(fpath).unwrap()
 }
 

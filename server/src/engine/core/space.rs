@@ -33,7 +33,7 @@ use {
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::STIndex,
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
-        storage::v1::{loader::SEInitState, RawFSInterface},
+        storage::{safe_interfaces::FSInterface, v1::loader::SEInitState},
         txn::gns as gnstxn,
     },
     std::collections::HashSet,

@@ -51,9 +51,9 @@ use {
             context::{self, Subsystem},
             sys_store::SystemStore,
         },
-        storage::v1::{
-            loader::{self, SEInitState},
-            LocalFS,
+        storage::{
+            safe_interfaces::LocalFS,
+            v1::loader::{self, SEInitState},
         },
     },
     crate::util::os::TerminationSignal,

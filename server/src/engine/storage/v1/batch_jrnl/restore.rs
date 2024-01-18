@@ -42,7 +42,10 @@ use {
         data::{cell::Datacell, tag::TagUnique},
         error::{RuntimeResult, StorageError},
         idx::{MTIndex, STIndex, STIndexSeq},
-        storage::v1::rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedReader},
+        storage::{
+            common::interface::fs_traits::FSInterface,
+            v1::rw::{SDSSFileIO, TrackedReader},
+        },
     },
     std::{
         collections::{hash_map::Entry as HMEntry, HashMap},
@@ -103,14 +106,14 @@ enum Batch {
     BatchClosed,
 }
 
-pub struct DataBatchRestoreDriver<F: RawFSInterface> {
-    f: SDSSFileTrackedReader<F>,
+pub struct DataBatchRestoreDriver<F: FSInterface> {
+    f: TrackedReader<F>,
 }
 
-impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
+impl<F: FSInterface> DataBatchRestoreDriver<F> {
     pub fn new(f: SDSSFileIO<F>) -> RuntimeResult<Self> {
         Ok(Self {
-            f: SDSSFileTrackedReader::new(f)?,
+            f: TrackedReader::new(f)?,
         })
     }
     pub fn into_file(self) -> RuntimeResult<SDSSFileIO<F>> {
@@ -138,7 +141,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
+impl<F: FSInterface> DataBatchRestoreDriver<F> {
     fn read_all_batches_and_for_each(
         &mut self,
         mut f: impl FnMut(NormalBatch) -> RuntimeResult<()>,
@@ -206,7 +209,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
+impl<F: FSInterface> DataBatchRestoreDriver<F> {
     fn apply_batch(
         m: &Model,
         NormalBatch {
@@ -302,7 +305,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
+impl<F: FSInterface> DataBatchRestoreDriver<F> {
     fn read_batch_summary(&mut self, finished_early: bool) -> RuntimeResult<u64> {
         if !finished_early {
             // we must read the batch termination signature
@@ -467,7 +470,7 @@ impl BatchStartBlock {
     }
 }
 
-impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
+impl<F: FSInterface> DataBatchRestoreDriver<F> {
     fn decode_primary_key(&mut self, pk_type: u8) -> RuntimeResult<PrimaryIndexKey> {
         let Some(pk_type) = TagUnique::try_from_raw(pk_type) else {
             return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
@@ -483,7 +486,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
             TagUnique::Str | TagUnique::Bin => {
                 let len = self.f.read_u64_le()?;
                 let mut data = vec![0; len as usize];
-                self.f.read_into_buffer(&mut data)?;
+                self.f.tracked_read(&mut data)?;
                 if pk_type == TagUnique::Str {
                     if core::str::from_utf8(&data).is_err() {
                         return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
@@ -505,7 +508,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         let Some(dscr) = StorageCellTypeID::try_from_raw(self.f.read_byte()?) else {
             return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
         };
-        unsafe { cell::decode_element::<Datacell, SDSSFileTrackedReader<F>>(&mut self.f, dscr) }
+        unsafe { cell::decode_element::<Datacell, TrackedReader<F>>(&mut self.f, dscr) }
             .map_err(|e| e.0)
     }
 }
@@ -521,7 +524,7 @@ impl From<()> for ErrorHack {
         Self(StorageError::DataBatchRestoreCorruptedEntry.into())
     }
 }
-impl<F: RawFSInterface> DataSource for SDSSFileTrackedReader<F> {
+impl<F: FSInterface> DataSource for TrackedReader<F> {
     const RELIABLE_SOURCE: bool = false;
     type Error = ErrorHack;
     fn has_remaining(&self, cnt: usize) -> bool {
@@ -538,7 +541,7 @@ impl<F: RawFSInterface> DataSource for SDSSFileTrackedReader<F> {
     }
     unsafe fn read_next_variable_block(&mut self, size: usize) -> Result<Vec<u8>, Self::Error> {
         let mut buf = vec![0; size];
-        self.read_into_buffer(&mut buf)?;
+        self.tracked_read(&mut buf)?;
         Ok(buf)
     }
 }
