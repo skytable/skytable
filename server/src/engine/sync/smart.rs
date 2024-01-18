@@ -26,15 +26,15 @@
 
 use {
     super::atm::{ORD_ACQ, ORD_REL, ORD_RLX},
+    crate::engine::mem::unsafe_apis,
     std::{
-        alloc::{dealloc, Layout},
         borrow::Borrow,
         fmt,
         hash::{Hash, Hasher},
         mem::{self, ManuallyDrop},
         ops::Deref,
         process,
-        ptr::{self, NonNull},
+        ptr::NonNull,
         slice, str,
         sync::atomic::{self, AtomicUsize},
     },
@@ -141,13 +141,11 @@ impl<T> Drop for SliceRC<T> {
                 // dtor
                 if mem::needs_drop::<T>() {
                     // UNSAFE(@ohsayan): dtor through, the ctor guarantees correct alignment and len
-                    ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr.as_ptr(), self.len));
+                    unsafe_apis::drop_slice_in_place(self.ptr.as_ptr(), self.len)
                 }
                 // dealloc
-                // UNSAFE(@ohsayan): we allocated it
-                let layout = Layout::array::<T>(self.len).unwrap_unchecked();
-                // UNSAFE(@ohsayan): layout structure guaranteed by ctor
-                dealloc(self.ptr.as_ptr() as *mut u8, layout);
+                // UNSAFE(@ohsayan): we allocated it + layout structure guaranteed by ctor
+                unsafe_apis::dealloc_array(self.ptr.as_ptr(), self.len)
             })
         }
     }

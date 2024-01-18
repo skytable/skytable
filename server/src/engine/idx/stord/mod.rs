@@ -38,9 +38,9 @@ use {
     super::{
         AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexExt, STIndexSeq,
     },
-    crate::engine::mem::StatelessLen,
+    crate::engine::mem::{unsafe_apis, StatelessLen},
     std::{
-        alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
+        alloc::Layout,
         borrow::Borrow,
         collections::HashMap as StdMap,
         fmt::{self, Debug},
@@ -163,9 +163,7 @@ impl<K, V> IndexSTSeqDllNode<K, V> {
     fn _alloc_with_garbage() -> *mut Self {
         unsafe {
             // UNSAFE(@ohsayan): aight shut up, it's a malloc
-            let ptr = std_alloc(Self::LAYOUT) as *mut Self;
-            assert!(!ptr.is_null(), "damn the allocator failed");
-            ptr
+            unsafe_apis::alloc_layout(Self::LAYOUT)
         }
     }
     #[inline(always)]
@@ -191,7 +189,7 @@ impl<K, V> IndexSTSeqDllNode<K, V> {
     #[inline(always)]
     /// LEAK: K, V
     unsafe fn dealloc_headless(slf: *mut Self) {
-        std_dealloc(slf as *mut u8, Self::LAYOUT)
+        unsafe_apis::dealloc_layout(slf as *mut u8, Self::LAYOUT)
     }
     #[inline(always)]
     unsafe fn unlink(node: *mut Self) {

@@ -24,13 +24,15 @@
  *
 */
 
-use std::{
-    alloc::{alloc, dealloc, Layout},
-    fmt,
-    iter::FusedIterator,
-    mem::{self, ManuallyDrop, MaybeUninit},
-    ops::{Deref, DerefMut},
-    ptr, slice,
+use {
+    super::unsafe_apis,
+    std::{
+        fmt,
+        iter::FusedIterator,
+        mem::{self, ManuallyDrop, MaybeUninit},
+        ops::{Deref, DerefMut},
+        ptr, slice,
+    },
 };
 
 union VData<const N: usize, T> {
@@ -77,7 +79,7 @@ impl<const N: usize, T> VInline<N, T> {
     pub fn clear(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): as_slice_mut will always give a valid ptr
-            ptr::drop_in_place(self._as_slice_mut());
+            unsafe_apis::drop_slice_in_place_ref(self._as_slice_mut())
         }
         self.l = 0;
     }
@@ -171,19 +173,13 @@ impl<const N: usize, T> VInline<N, T> {
         }
     }
     #[inline(always)]
-    fn layout(cap: usize) -> Layout {
-        Layout::array::<T>(cap).unwrap()
-    }
-    #[inline(always)]
     fn ncap(&self) -> usize {
         self.c * Self::ALLOC_MULTIPLIER
     }
     fn alloc_block(cap: usize) -> *mut T {
         unsafe {
-            // UNSAFE(@ohsayan): malloc bro
-            let p = alloc(Self::layout(cap));
-            assert!(!p.is_null(), "alloc,0");
-            p as *mut T
+            // UNSAFE(@ohsayan): this is a malloc
+            unsafe_apis::alloc_array(cap)
         }
     }
     pub unsafe fn push_unchecked(&mut self, v: T) {
@@ -248,7 +244,7 @@ impl<const N: usize, T> VInline<N, T> {
     }
     #[inline(always)]
     unsafe fn dealloc_heap(&mut self, heap: *mut T) {
-        dealloc(heap as *mut u8, Self::layout(self.capacity()))
+        unsafe_apis::dealloc_array(heap, self.capacity())
     }
 }
 
@@ -275,7 +271,7 @@ impl<const N: usize, T> Drop for VInline<N, T> {
     fn drop(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): correct ptr guaranteed by safe impl of _as_slice_mut()
-            ptr::drop_in_place(self._as_slice_mut());
+            unsafe_apis::drop_slice_in_place_ref(self._as_slice_mut());
             if !self.on_stack() {
                 // UNSAFE(@ohsayan): non-null heap
                 self.dealloc_heap(self.d.h);
@@ -357,10 +353,7 @@ impl<const N: usize, T> Drop for IntoIter<N, T> {
             // sweet
             unsafe {
                 // UNSAFE(@ohsayan): Safe because we maintain the EOA cond; second, the l is the remaining part
-                ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
-                    self.v._as_mut_ptr().add(self.i),
-                    self.l - self.i,
-                ))
+                unsafe_apis::drop_slice_in_place(self.v._as_mut_ptr().add(self.i), self.l - self.i)
             }
         }
     }

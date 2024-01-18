@@ -24,28 +24,54 @@
  *
 */
 
-use std::alloc::{self, Layout};
+/*!
+    # Unsafe APIs
 
+    This module provides abstractions (unsafe, still) over unsafe allocator and related APIs.
+
+*/
+
+use std::{
+    alloc::{self, Layout},
+    ptr,
+};
+
+/// Allocate the given layout. This will panic if the allocator returns an error
 pub unsafe fn alloc_layout<T>(layout: Layout) -> *mut T {
     let ptr = alloc::alloc(layout);
     assert!(!ptr.is_null(), "malloc failed");
     ptr as _
 }
 
+/// Allocate an block with an array layout of type `T` with space for `l` elements
 pub unsafe fn alloc_array<T>(l: usize) -> *mut T {
     self::alloc_layout(Layout::array::<T>(l).unwrap_unchecked())
 }
 
+/// Deallocate the given layout
 pub unsafe fn dealloc_layout(ptr: *mut u8, layout: Layout) {
     alloc::dealloc(ptr, layout)
 }
 
+/// Deallocate an array of type `T` with size `l`. This function will ensure that nonzero calls to the
+/// allocator are made
 pub unsafe fn dealloc_array<T>(ptr: *mut T, l: usize) {
     if l != 0 {
         self::dealloc_layout(ptr as *mut u8, Layout::array::<T>(l).unwrap_unchecked())
     }
 }
 
+/// Run the dtor for the given slice (range)
+pub unsafe fn drop_slice_in_place_ref<T>(ptr: &mut [T]) {
+    ptr::drop_in_place(ptr as *mut [T])
+}
+
+/// Run the dtor for the given slice (defined using ptr and len)
+pub unsafe fn drop_slice_in_place<T>(ptr: *mut T, l: usize) {
+    ptr::drop_in_place(ptr::slice_from_raw_parts_mut(ptr, l))
+}
+
+/// Copy exactly `N` bytes from `src` to a new array of size `N`
 pub unsafe fn memcpy<const N: usize>(src: &[u8]) -> [u8; N] {
     let mut dst = [0u8; N];
     src.as_ptr().copy_to_nonoverlapping(dst.as_mut_ptr(), N);

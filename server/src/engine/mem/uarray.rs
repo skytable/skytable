@@ -24,13 +24,16 @@
  *
 */
 
-use core::{
-    fmt,
-    hash::{Hash, Hasher},
-    iter::FusedIterator,
-    mem::MaybeUninit,
-    ops::{Deref, DerefMut},
-    ptr, slice,
+use {
+    crate::engine::mem::unsafe_apis,
+    core::{
+        fmt,
+        hash::{Hash, Hasher},
+        iter::FusedIterator,
+        mem::MaybeUninit,
+        ops::{Deref, DerefMut},
+        ptr, slice,
+    },
 };
 
 pub struct UArray<const N: usize, T> {
@@ -88,9 +91,8 @@ impl<const N: usize, T> UArray<N, T> {
     }
     pub fn clear(&mut self) {
         unsafe {
-            let ptr = self.as_slice_mut();
             // UNSAFE(@ohsayan): We know this is the initialized length
-            ptr::drop_in_place(ptr);
+            unsafe_apis::drop_slice_in_place_ref(self.as_slice_mut());
             // UNSAFE(@ohsayan): we've destroyed everything, so yeah, all g
             self.set_len(0);
         }
@@ -176,7 +178,7 @@ impl<const N: usize, T> Drop for UArray<N, T> {
         if !self.is_empty() {
             unsafe {
                 // UNSAFE(@ohsayan): as_slice_mut returns a correct offset
-                ptr::drop_in_place(self.as_slice_mut())
+                unsafe_apis::drop_slice_in_place_ref(self.as_slice_mut())
             }
         }
     }
@@ -263,7 +265,7 @@ impl<const N: usize, T> Drop for IntoIter<N, T> {
                 let ptr = self.d.a.as_mut_ptr().add(self.i) as *mut T;
                 let len = self.l - self.i;
                 // UNSAFE(@ohsayan): we know the segment to drop
-                ptr::drop_in_place(ptr::slice_from_raw_parts_mut(ptr, len))
+                unsafe_apis::drop_slice_in_place(ptr, len)
             }
         }
     }
