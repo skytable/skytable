@@ -26,11 +26,14 @@
 
 use {
     crate::engine::storage::common::{
-        sdss,
+        sdss::{self, v1::HeaderV1},
         versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
     },
     std::mem::transmute,
 };
+
+#[allow(unused)]
+pub type Header = HeaderV1<HeaderImplV2>;
 
 /// The file scope
 #[repr(u8)]

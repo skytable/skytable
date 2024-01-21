@@ -187,8 +187,6 @@ enumerate_err! {
         HeaderDecodeVersionMismatch = "header-version-mismatch",
         /// The entire header is corrupted
         HeaderDecodeCorruptedHeader = "header-corrupted",
-        /// Expected header values were not matched with the current header
-        HeaderDecodeDataMismatch = "header-data-mismatch",
         // journal
         /// While attempting to handle a basic failure (such as adding a journal entry), the recovery engine ran into an exceptional
         /// situation where it failed to make a necessary repair the log

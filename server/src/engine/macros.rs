@@ -432,3 +432,11 @@ macro_rules! okay {
         $(($expr) &)*true
     }
 }
+
+#[cfg(test)]
+macro_rules! closure {
+    ($($f:tt)*) => {{
+        let f = || { $($f)* };
+        f()
+    }}
+}

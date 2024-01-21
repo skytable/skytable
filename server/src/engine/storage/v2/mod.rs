@@ -24,4 +24,4 @@
  *
 */
 
-mod spec;
+pub mod spec;

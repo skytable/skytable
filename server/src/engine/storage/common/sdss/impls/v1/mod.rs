@@ -30,6 +30,8 @@
 //! and functions are defined here to deal with SDSSv1 files.
 //!
 
+pub(super) mod rw;
+
 use {
     super::super::super::{
         interface::fs_traits::{FileInterfaceRead, FileInterfaceWrite},
@@ -45,6 +47,8 @@ use {
         ops::Range,
     },
 };
+
+pub const TEST_TIME: u128 = (u64::MAX / sizeof!(u64) as u64) as _;
 
 /*
     header utils
@@ -238,7 +242,11 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
         file_specifier: H::FileSpecifier,
         file_specifier_version: FileSpecifierVersion,
     ) -> (Self, [u8; 64]) {
-        let epoch_time = os::get_epoch_time();
+        let epoch_time = if cfg!(test) {
+            TEST_TIME
+        } else {
+            os::get_epoch_time()
+        };
         let encoded = Self::_encode_auto_raw(
             file_class,
             file_specifier,
@@ -414,6 +422,11 @@ pub trait FileSpecV1 {
         f: &mut impl FileInterfaceWrite,
         args: Self::EncodeArgs,
     ) -> RuntimeResult<Self::Metadata>;
+    fn metadata_to_block(args: Self::EncodeArgs) -> RuntimeResult<Vec<u8>> {
+        let mut v = Vec::new();
+        Self::write_metadata(&mut v, args)?;
+        Ok(v)
+    }
 }
 
 /// # Simple SDSS file specification (v1)

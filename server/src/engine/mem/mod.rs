@@ -25,6 +25,7 @@
 */
 
 mod astr;
+pub mod fixed_vec;
 mod ll;
 mod numbuf;
 mod rawslice;

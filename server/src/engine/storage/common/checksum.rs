@@ -38,6 +38,7 @@ use crc::{Crc, Digest, CRC_64_XZ};
 
 const CRC64: Crc<u64> = Crc::<u64>::new(&CRC_64_XZ);
 
+#[derive(Clone)]
 pub struct SCrc64 {
     digest: Digest<'static, u64>,
 }

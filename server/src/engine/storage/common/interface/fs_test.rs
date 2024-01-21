@@ -188,6 +188,9 @@ mod util {
 */
 
 impl VirtualFS {
+    pub fn fetch_raw_data(file_name: &str) -> RuntimeResult<Vec<u8>> {
+        Self::with_file(file_name, |f| Ok(f.data.clone()))
+    }
     /// Get a handle to the virtual filesystem
     fn handle() -> &'static RwLock<VDir> {
         static VFS: Lazy<RwLock<VDir>, fn() -> RwLock<VDir>> = Lazy::new(|| Default::default());
