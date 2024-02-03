@@ -57,7 +57,7 @@ enum Item {
 }
 
 impl SQParam for Item {
-    fn append_param(self, buf: &mut Vec<u8>) {
+    fn append_param(&self, buf: &mut Vec<u8>) -> usize {
         match self {
             Item::UInt(u) => u.append_param(buf),
             Item::SInt(s) => s.append_param(buf),
