@@ -29,7 +29,10 @@
 //! This module contains utils for handling checksums
 //!
 
-use crc::{Crc, Digest, CRC_64_XZ};
+use {
+    crc::{Crc, Digest, CRC_64_XZ},
+    std::fmt,
+};
 
 /*
     NOTE(@ohsayan): we're currently using crc's impl. but the reason I decided to make a wrapper is because I have a
@@ -43,13 +46,21 @@ pub struct SCrc64 {
     digest: Digest<'static, u64>,
 }
 
+impl fmt::Debug for SCrc64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SCrc64")
+            .field("digest", &self.digest.clone().finalize())
+            .finish()
+    }
+}
+
 impl SCrc64 {
     pub const fn new() -> Self {
         Self {
             digest: CRC64.digest(),
         }
     }
-    pub fn recompute_with_new_var_block(&mut self, b: &[u8]) {
+    pub fn update(&mut self, b: &[u8]) {
         self.digest.update(b)
     }
     pub fn finish(self) -> u64 {

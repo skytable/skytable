@@ -55,8 +55,7 @@ impl<Fs: FSInterface> TrackedWriter<Fs> {
         })
     }
     pub fn tracked_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
-        self.untracked_write(block)
-            .map(|_| self.cs.recompute_with_new_var_block(block))
+        self.untracked_write(block).map(|_| self.cs.update(block))
     }
     pub fn untracked_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
         match self.file.write_buffer(block) {
@@ -108,8 +107,7 @@ impl<Fs: FSInterface> TrackedReader<Fs> {
         self.remaining() >= v
     }
     pub fn tracked_read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
-        self.untracked_read(buf)
-            .map(|_| self.cs.recompute_with_new_var_block(buf))
+        self.untracked_read(buf).map(|_| self.cs.update(buf))
     }
     pub fn read_byte(&mut self) -> RuntimeResult<u8> {
         let mut buf = [0u8; 1];
@@ -156,19 +154,23 @@ pub struct SDSSFileIO<Fs: FSInterface, F = <Fs as FSInterface>::File> {
 }
 
 impl<Fs: FSInterface> SDSSFileIO<Fs> {
-    pub fn open<F: sdss::v1::FileSpecV1<DecodeArgs = ()>>(
+    pub fn open<F: sdss::sdss_r1::FileSpecV1<DecodeArgs = ()>>(
         fpath: &str,
     ) -> RuntimeResult<(Self, F::Metadata)> {
         let mut f = Self::_new(Fs::fs_fopen_rw(fpath)?);
         let v = F::read_metadata(&mut f.f, ())?;
         Ok((f, v))
     }
-    pub fn create<F: sdss::v1::FileSpecV1<EncodeArgs = ()>>(fpath: &str) -> RuntimeResult<Self> {
+    pub fn create<F: sdss::sdss_r1::FileSpecV1<EncodeArgs = ()>>(
+        fpath: &str,
+    ) -> RuntimeResult<Self> {
         let mut f = Self::_new(Fs::fs_fcreate_rw(fpath)?);
         F::write_metadata(&mut f.f, ())?;
         Ok(f)
     }
-    pub fn open_or_create_perm_rw<F: sdss::v1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>>(
+    pub fn open_or_create_perm_rw<
+        F: sdss::sdss_r1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>,
+    >(
         fpath: &str,
     ) -> RuntimeResult<FileOpen<Self, (Self, F::Metadata)>> {
         match Fs::fs_fopen_or_create_rw(fpath)? {

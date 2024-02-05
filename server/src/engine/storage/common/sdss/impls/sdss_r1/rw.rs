@@ -35,7 +35,7 @@ use crate::{
                 FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt,
                 FileInterfaceRead, FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
             },
-            sdss::v1::FileSpecV1,
+            sdss::sdss_r1::FileSpecV1,
         },
         RuntimeResult,
     },
@@ -209,8 +209,13 @@ pub struct TrackedReader<F, S: FileSpecV1> {
 impl<F: FileInterface, S: FileSpecV1> TrackedReader<F, S> {
     /// Create a new [`TrackedReader`]. This needs to retrieve file position and length
     pub fn new(mut f: SdssFile<F, S>) -> RuntimeResult<TrackedReader<F::BufReader, S>> {
+        f.file_cursor().and_then(|c| Self::with_cursor(f, c))
+    }
+    pub fn with_cursor(
+        f: SdssFile<F, S>,
+        cursor: u64,
+    ) -> RuntimeResult<TrackedReader<F::BufReader, S>> {
         let len = f.file_length()?;
-        let cursor = f.file_cursor()?;
         let f = f.into_buffered_reader()?;
         Ok(TrackedReader {
             f,
@@ -224,8 +229,7 @@ impl<F: FileInterface, S: FileSpecV1> TrackedReader<F, S> {
 impl<F: FileInterfaceRead, S: FileSpecV1> TrackedReader<F, S> {
     /// Attempt to fill the buffer. This read is tracked.
     pub fn tracked_read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
-        self.untracked_read(buf)
-            .map(|_| self.cs.recompute_with_new_var_block(buf))
+        self.untracked_read(buf).map(|_| self.cs.update(buf))
     }
     /// Attempt to read a byte. This read is also tracked.
     pub fn read_byte(&mut self) -> RuntimeResult<u8> {
@@ -266,6 +270,15 @@ impl<F: FileInterfaceRead, S: FileSpecV1> TrackedReader<F, S> {
     /// Tracked read of a [`u64`] value
     pub fn read_u64_le(&mut self) -> RuntimeResult<u64> {
         Ok(u64::from_le_bytes(self.read_block()?))
+    }
+    pub fn current_checksum(&self) -> u64 {
+        self.cs.clone().finish()
+    }
+    pub fn checksum(&self) -> SCrc64 {
+        self.cs.clone()
+    }
+    pub fn cursor(&self) -> u64 {
+        self.cursor
     }
 }
 
@@ -336,6 +349,10 @@ impl<
     pub fn cursor_usize(&self) -> usize {
         self.cursor() as _
     }
+    /// Returns true if not all data has been synced
+    pub fn is_dirty(&self) -> bool {
+        !self.buf.is_empty()
+    }
 }
 
 impl<
@@ -380,6 +397,27 @@ impl<
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
     > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
+    /// Don't write to the buffer, instead directly write to the file
+    ///
+    /// NB:
+    /// - If errored, the number of bytes written are still tracked
+    /// - If errored, the checksum is updated to reflect the number of bytes written (unless otherwise configured)
+    pub fn tracked_write_through_buffer(&mut self, buf: &[u8]) -> RuntimeResult<()> {
+        debug_assert!(self.buf.is_empty());
+        match self.f_d.fwrite_all_count(buf) {
+            (cnt, r) => {
+                self.t_cursor += cnt;
+                if r.is_err() {
+                    if CHECKSUM_WRITTEN_IF_BLOCK_ERROR {
+                        self.t_checksum.update(&buf[..cnt as usize]);
+                    }
+                } else {
+                    self.t_checksum.update(buf);
+                }
+                r
+            }
+        }
+    }
     /// Do a tracked write
     ///
     /// On error, if block error checksumming is set then whatever part of the block was written
@@ -388,14 +426,13 @@ impl<
         let cursor_start = self.cursor_usize();
         match self.untracked_write(buf) {
             Ok(()) => {
-                self.t_checksum.recompute_with_new_var_block(buf);
+                self.t_checksum.update(buf);
                 Ok(())
             }
             Err(e) => {
                 if CHECKSUM_WRITTEN_IF_BLOCK_ERROR {
                     let cursor_now = self.cursor_usize();
-                    self.t_checksum
-                        .recompute_with_new_var_block(&buf[..cursor_now - cursor_start]);
+                    self.t_checksum.update(&buf[..cursor_now - cursor_start]);
                 }
                 Err(e)
             }
@@ -490,9 +527,9 @@ fn check_vfs_buffering() {
     let compiled_header = SystemDatabaseV1::metadata_to_block(()).unwrap();
     let expected_checksum = {
         let mut crc = SCrc64::new();
-        crc.recompute_with_new_var_block(&vec![0; 8192]);
-        crc.recompute_with_new_var_block(&[0]);
-        crc.recompute_with_new_var_block(&vec![0xFF; 8192]);
+        crc.update(&vec![0; 8192]);
+        crc.update(&[0]);
+        crc.update(&vec![0xFF; 8192]);
         crc.finish()
     };
     closure! {

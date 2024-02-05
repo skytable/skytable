@@ -397,7 +397,7 @@ macro_rules! sizeof {
 }
 
 macro_rules! local {
-    ($($vis:vis static$ident:ident:$ty:ty=$expr:expr;)*)=> {::std::thread_local!{$($vis static $ident: ::std::cell::RefCell::<$ty> = ::std::cell::RefCell::new($expr);)*}};
+    ($($(#[$attr:meta])*$vis:vis static$ident:ident:$ty:ty=$expr:expr;)*)=> {::std::thread_local!{$($(#[$attr])*$vis static $ident: ::std::cell::RefCell::<$ty> = ::std::cell::RefCell::new($expr);)*}};
 }
 
 macro_rules! local_mut {

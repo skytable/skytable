@@ -47,6 +47,12 @@ pub use {flock::FileLock, free_memory::free_memory_in_bytes};
 /// A wrapper around [`std`]'s I/O [Error](std::io::Error) type for simplicity with equality
 pub struct SysIOError(std::io::Error);
 
+impl SysIOError {
+    pub fn into_inner(self) -> std::io::Error {
+        self.0
+    }
+}
+
 impl From<std::io::Error> for SysIOError {
     fn from(e: std::io::Error) -> Self {
         Self(e)

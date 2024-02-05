@@ -215,5 +215,10 @@ enumerate_err! {
         DataBatchRestoreCorruptedBatchFile = "batch-corrupted-file",
         /// the system database is corrupted
         SysDBCorrupted = "sysdb-corrupted",
+        // raw journal errors
+        RawJournalEventCorruptedMetadata = "journal-event-metadata-corrupted",
+        RawJournalEventCorrupted = "journal-invalid-event",
+        RawJournalCorrupted = "journal-corrupted",
+        RawJournalInvalidEvent = "journal-invalid-event-order",
     }
 }

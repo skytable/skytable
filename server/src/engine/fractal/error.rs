@@ -158,6 +158,11 @@ pub trait ErrorContext<T> {
     fn set_origin(self, origin: Subsystem) -> Result<T, Error>;
     /// set the dmsg (do not inherit parent or local)
     fn set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
+    fn set_dmsg_fn<F, M>(self, d: F) -> Result<T, Error>
+    where
+        F: Fn() -> M,
+        M: Into<Dmsg>,
+        Self: Sized;
     /// set the origin and dmsg (do not inherit)
     fn set_ctx(self, origin: Subsystem, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
     // inherit parent
@@ -196,6 +201,14 @@ where
     }
     fn set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
         self.map_err(|e| e.err_noinherit().add_dmsg(dmsg))
+    }
+    fn set_dmsg_fn<F, M>(self, d: F) -> Result<T, Error>
+    where
+        F: Fn() -> M,
+        M: Into<Dmsg>,
+        Self: Sized,
+    {
+        self.map_err(|e| e.err_noinherit().add_dmsg(d().into()))
     }
     fn set_ctx(self, origin: Subsystem, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
         self.map_err(|e| Error::new(e.err_noinherit().kind, origin, dmsg))

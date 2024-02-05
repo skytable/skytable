@@ -26,7 +26,7 @@
 
 use {
     crate::engine::storage::common::{
-        sdss::{self, v1::HeaderV1},
+        sdss::{self, sdss_r1::HeaderV1},
         versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
     },
     std::mem::transmute,
@@ -50,7 +50,7 @@ pub enum FileSpecifier {
     ModelData = 1,
 }
 
-impl sdss::v1::HeaderV1Enumeration for FileClass {
+impl sdss::sdss_r1::HeaderV1Enumeration for FileClass {
     const MAX: u8 = FileClass::MAX;
     unsafe fn new(x: u8) -> Self {
         transmute(x)
@@ -60,7 +60,7 @@ impl sdss::v1::HeaderV1Enumeration for FileClass {
     }
 }
 
-impl sdss::v1::HeaderV1Enumeration for FileSpecifier {
+impl sdss::sdss_r1::HeaderV1Enumeration for FileSpecifier {
     const MAX: u8 = FileSpecifier::MAX;
     unsafe fn new(x: u8) -> Self {
         transmute(x)
@@ -71,7 +71,7 @@ impl sdss::v1::HeaderV1Enumeration for FileSpecifier {
 }
 
 pub struct HeaderImplV2;
-impl sdss::v1::HeaderV1Spec for HeaderImplV2 {
+impl sdss::sdss_r1::HeaderV1Spec for HeaderImplV2 {
     type FileClass = FileClass;
     type FileSpecifier = FileSpecifier;
     const CURRENT_SERVER_VERSION: ServerVersion = versions::v2::V2_SERVER_VERSION;
@@ -79,7 +79,7 @@ impl sdss::v1::HeaderV1Spec for HeaderImplV2 {
 }
 
 pub struct SystemDatabaseV1;
-impl sdss::v1::SimpleFileSpecV1 for SystemDatabaseV1 {
+impl sdss::sdss_r1::SimpleFileSpecV1 for SystemDatabaseV1 {
     type HeaderSpec = HeaderImplV2;
     const FILE_CLASS: FileClass = FileClass::EventLog;
     const FILE_SPECIFIER: FileSpecifier = FileSpecifier::GlobalNS;
@@ -87,7 +87,7 @@ impl sdss::v1::SimpleFileSpecV1 for SystemDatabaseV1 {
 }
 
 pub struct ModelDataBatchAofV1;
-impl sdss::v1::SimpleFileSpecV1 for ModelDataBatchAofV1 {
+impl sdss::sdss_r1::SimpleFileSpecV1 for ModelDataBatchAofV1 {
     type HeaderSpec = HeaderImplV2;
     const FILE_CLASS: FileClass = FileClass::Batch;
     const FILE_SPECIFIER: FileSpecifier = FileSpecifier::ModelData;

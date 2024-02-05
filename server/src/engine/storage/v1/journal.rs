@@ -61,7 +61,7 @@ const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 pub fn open_or_create_journal<
     TA: JournalAdapter,
     Fs: FSInterface,
-    F: sdss::v1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>,
+    F: sdss::sdss_r1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>,
 >(
     log_file_name: &str,
     gs: &TA::GlobalState,
@@ -79,7 +79,7 @@ pub fn open_or_create_journal<
 pub fn create_journal<
     TA: JournalAdapter,
     Fs: FSInterface,
-    F: sdss::v1::FileSpecV1<EncodeArgs = ()>,
+    F: sdss::sdss_r1::FileSpecV1<EncodeArgs = ()>,
 >(
     log_file_name: &str,
 ) -> RuntimeResult<JournalWriter<Fs, TA>> {
@@ -89,7 +89,7 @@ pub fn create_journal<
 pub fn load_journal<
     TA: JournalAdapter,
     Fs: FSInterface,
-    F: sdss::v1::FileSpecV1<DecodeArgs = ()>,
+    F: sdss::sdss_r1::FileSpecV1<DecodeArgs = ()>,
 >(
     log_file_name: &str,
     gs: &TA::GlobalState,

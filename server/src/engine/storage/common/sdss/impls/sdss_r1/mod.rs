@@ -30,7 +30,7 @@
 //! and functions are defined here to deal with SDSSv1 files.
 //!
 
-pub(super) mod rw;
+pub mod rw;
 
 use {
     super::super::super::{
@@ -398,6 +398,7 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
 }
 
 pub trait FileSpecV1 {
+    const SIZE: usize = HeaderV1::<Self::HeaderSpec>::SIZE;
     type Metadata;
     /// the header type
     type HeaderSpec: HeaderV1Spec;

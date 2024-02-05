@@ -36,4 +36,4 @@
     The only header that we currently use is [`v1::HeaderV1`].
 */
 
-pub mod v1;
+pub mod sdss_r1;

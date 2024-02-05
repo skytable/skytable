@@ -25,4 +25,4 @@
 */
 
 mod impls;
-pub use impls::v1;
+pub use impls::sdss_r1;
