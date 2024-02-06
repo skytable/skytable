@@ -24,24 +24,19 @@
  *
 */
 
-#[cfg(target_os = "windows")]
-extern crate winapi;
-
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 extern crate libc;
 
 pub fn free_memory_in_bytes() -> u64 {
     #[cfg(target_os = "windows")]
     {
-        use winapi::um::sysinfoapi::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-
-        let mut statex: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+        use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        let mut statex = MEMORYSTATUSEX::default();
         statex.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
-
         unsafe {
-            GlobalMemoryStatusEx(&mut statex);
+            // UNSAFE(@ohsayan): correct call to windows API
+            GlobalMemoryStatusEx(&mut statex).unwrap();
         }
-
         // Return free physical memory
         return statex.ullAvailPhys;
     }

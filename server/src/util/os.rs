@@ -371,7 +371,7 @@ mod uptime_impl {
 
     #[cfg(target_os = "windows")]
     pub(super) fn uptime() -> std::io::Result<u128> {
-        Ok(unsafe { winapi::um::sysinfoapi::GetTickCount64() } as u128)
+        Ok(unsafe { windows::Win32::System::SystemInformation::GetTickCount64() as u128 })
     }
 }
 
@@ -424,18 +424,22 @@ mod hostname_impl {
 
     #[cfg(target_family = "windows")]
     fn get_hostname() -> Hostname {
-        use winapi::shared::minwindef::DWORD;
-        use winapi::um::sysinfoapi::{self, GetComputerNameExA};
-
+        use windows::{
+            core::PSTR,
+            Win32::System::SystemInformation::{
+                ComputerNamePhysicalDnsHostname, GetComputerNameExA,
+            },
+        };
         let mut buf: [u8; 256] = [0; 256];
-        let mut size: DWORD = buf.len() as u32;
-
+        let mut size: u32 = buf.len() as u32;
         unsafe {
+            // UNSAFE(@ohsayan): correct call to the windows API
             GetComputerNameExA(
-                sysinfoapi::ComputerNamePhysicalDnsHostname,
-                buf.as_mut_ptr().cast(),
-                &mut size,
-            );
+                ComputerNamePhysicalDnsHostname,
+                PSTR(buf.as_mut_ptr()),
+                &mut size as *mut u32,
+            )
+            .unwrap();
             Hostname::new_from_raw_buf(&buf)
         }
     }
