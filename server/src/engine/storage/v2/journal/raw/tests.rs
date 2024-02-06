@@ -72,6 +72,9 @@ impl SimpleDB {
             data: RefCell::default(),
         }
     }
+    fn data(&self) -> std::cell::Ref<'_, Vec<String>> {
+        self.data.borrow()
+    }
     fn clear(
         &mut self,
         log: &mut RawJournalWriter<SimpleDBJournal, VirtualFS>,
@@ -88,8 +91,9 @@ impl SimpleDB {
     fn push(
         &mut self,
         log: &mut RawJournalWriter<SimpleDBJournal, VirtualFS>,
-        new: String,
+        new: impl ToString,
     ) -> RuntimeResult<()> {
+        let new = new.to_string();
         log.commit_event(DbEvent::NewKey(new.clone()))?;
         self.data.get_mut().push(new);
         Ok(())
@@ -183,9 +187,10 @@ impl RawJournalAdapter for SimpleDBJournal {
 
 #[test]
 fn journal_open_close() {
+    const JOURNAL_NAME: &str = "journal_open_close";
     {
         // new boot
-        let mut j = create_journal::<SimpleDBJournal, VirtualFS>("myjournal").unwrap();
+        let mut j = create_journal::<SimpleDBJournal, VirtualFS>(JOURNAL_NAME).unwrap();
         assert_eq!(
             super::obtain_trace(),
             intovec![JournalWriterTraceEvent::Initialized]
@@ -207,7 +212,7 @@ fn journal_open_close() {
     {
         // second boot
         let mut j =
-            open_journal::<SimpleDBJournal, VirtualFS>("myjournal", &SimpleDB::new()).unwrap();
+            open_journal::<SimpleDBJournal, VirtualFS>(JOURNAL_NAME, &SimpleDB::new()).unwrap();
         assert_eq!(
             super::obtain_trace(),
             intovec![
@@ -247,7 +252,7 @@ fn journal_open_close() {
     {
         // third boot
         let mut j =
-            open_journal::<SimpleDBJournal, VirtualFS>("myjournal", &SimpleDB::new()).unwrap();
+            open_journal::<SimpleDBJournal, VirtualFS>(JOURNAL_NAME, &SimpleDB::new()).unwrap();
         assert_eq!(
             super::obtain_trace(),
             intovec![
@@ -297,11 +302,12 @@ fn journal_open_close() {
 
 #[test]
 fn journal_with_server_single_event() {
+    const JOURNAL_NAME: &str = "journal_with_server_single_event";
     {
         let mut db = SimpleDB::new();
         // new boot
-        let mut j = create_journal::<SimpleDBJournal, VirtualFS>("myjournal").unwrap();
-        db.push(&mut j, "hello world".into()).unwrap();
+        let mut j = create_journal::<SimpleDBJournal, VirtualFS>(JOURNAL_NAME).unwrap();
+        db.push(&mut j, "hello world").unwrap();
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
             super::obtain_trace(),
@@ -324,11 +330,11 @@ fn journal_with_server_single_event() {
     {
         let db = SimpleDB::new();
         // second boot
-        let mut j = open_journal::<SimpleDBJournal, VirtualFS>("myjournal", &db)
+        let mut j = open_journal::<SimpleDBJournal, VirtualFS>(JOURNAL_NAME, &db)
             .set_dmsg_fn(|| format!("{:?}", super::obtain_trace()))
             .unwrap();
-        assert_eq!(db.data.borrow().len(), 1);
-        assert_eq!(db.data.borrow()[0], "hello world");
+        assert_eq!(db.data().len(), 1);
+        assert_eq!(db.data()[0], "hello world");
         assert_eq!(
             super::obtain_trace(),
             intovec![
@@ -374,9 +380,9 @@ fn journal_with_server_single_event() {
     {
         // third boot
         let db = SimpleDB::new();
-        let mut j = open_journal::<SimpleDBJournal, VirtualFS>("myjournal", &db).unwrap();
-        assert_eq!(db.data.borrow().len(), 1);
-        assert_eq!(db.data.borrow()[0], "hello world");
+        let mut j = open_journal::<SimpleDBJournal, VirtualFS>(JOURNAL_NAME, &db).unwrap();
+        assert_eq!(db.data().len(), 1);
+        assert_eq!(db.data()[0], "hello world");
         assert_eq!(
             super::obtain_trace(),
             intovec![
@@ -428,5 +434,31 @@ fn journal_with_server_single_event() {
                 JournalWriterTraceEvent::DriverClosed
             ]
         );
+    }
+}
+
+#[test]
+fn multi_boot() {
+    {
+        let mut j = create_journal::<SimpleDBJournal, VirtualFS>("multiboot").unwrap();
+        let mut db = SimpleDB::new();
+        db.push(&mut j, "key_a").unwrap();
+        db.push(&mut j, "key_b").unwrap();
+        db.pop(&mut j).unwrap();
+        RawJournalWriter::close_driver(&mut j).unwrap();
+    }
+    {
+        let mut db = SimpleDB::new();
+        let mut j = open_journal::<SimpleDBJournal, VirtualFS>("multiboot", &db).unwrap();
+        assert_eq!(db.data().as_ref(), vec!["key_a".to_string()]);
+        db.clear(&mut j).unwrap();
+        db.push(&mut j, "myfinkey").unwrap();
+        RawJournalWriter::close_driver(&mut j).unwrap();
+    }
+    {
+        let db = SimpleDB::new();
+        let mut j = open_journal::<SimpleDBJournal, VirtualFS>("multiboot", &db).unwrap();
+        assert_eq!(db.data().as_ref(), vec!["myfinkey".to_string()]);
+        RawJournalWriter::close_driver(&mut j).unwrap();
     }
 }

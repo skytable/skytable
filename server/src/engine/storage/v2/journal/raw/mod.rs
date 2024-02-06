@@ -291,7 +291,7 @@ struct DriverEvent {
 impl DriverEvent {
     const FULL_EVENT_SIZE: usize = Self::OFFSET_6_LAST_TXN_ID.end - Self::OFFSET_0_TXN_ID.start;
     /// currently fixed to 24B: last checksum + last offset + last txn id
-    const PAYLOAD_LEN: usize = 3;
+    const PAYLOAD_LEN: u64 = 3;
     const OFFSET_0_TXN_ID: Range<usize> = 0..sizeof!(u128);
     const OFFSET_1_EVENT_KIND: Range<usize> =
         Self::OFFSET_0_TXN_ID.end..Self::OFFSET_0_TXN_ID.end + sizeof!(u64);
@@ -648,11 +648,11 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
             last_txn_checksum,
         }
     }
-    fn _update_known_txn(&mut self) {
-        self.last_txn_id = self.txn_id;
-        self.last_txn_checksum = self.tr.current_checksum();
-        self.last_txn_offset = self.tr.cursor();
-        self.txn_id += 1;
+    fn __refresh_known_txn(me: &mut Self) {
+        me.last_txn_id = me.txn_id;
+        me.last_txn_checksum = me.tr.current_checksum();
+        me.last_txn_offset = me.tr.cursor();
+        me.txn_id += 1;
     }
 }
 
@@ -668,82 +668,88 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
             return Err(StorageError::RawJournalEventCorruptedMetadata.into());
         }
         jtrace_reader!(AttemptingEvent(txn_id as u64));
-        {
-            // check for a server event
-            // is this a server event?
-            if meta & SERVER_EV_MASK != 0 {
-                jtrace_reader!(DetectedServerEvent);
-                let meta = meta & !SERVER_EV_MASK;
-                match J::parse_event_meta(meta) {
-                    Some(meta) => {
-                        jtrace_reader!(ServerEventMetadataParsed);
-                        // now parse the actual event
-                        let Self { tr: reader, .. } = self;
-                        let event = J::parse_event::<Fs>(reader, meta)?;
-                        jtrace_reader!(ServerEventParsed);
-                        // we do not consider a parsed event a success signal; so we must actually apply it
-                        match J::apply_event(gs, meta, event) {
-                            Ok(()) => {
-                                jtrace_reader!(ServerEventAppliedSuccess);
-                                self._update_known_txn();
-                                return Ok(false);
-                            }
-                            Err(e) => return Err(e),
+        // check for a server event
+        // is this a server event?
+        if meta & SERVER_EV_MASK != 0 {
+            jtrace_reader!(DetectedServerEvent);
+            let meta = meta & !SERVER_EV_MASK;
+            match J::parse_event_meta(meta) {
+                Some(meta) => {
+                    jtrace_reader!(ServerEventMetadataParsed);
+                    // now parse the actual event
+                    let Self { tr: reader, .. } = self;
+                    let event = J::parse_event::<Fs>(reader, meta)?;
+                    jtrace_reader!(ServerEventParsed);
+                    // we do not consider a parsed event a success signal; so we must actually apply it
+                    match J::apply_event(gs, meta, event) {
+                        Ok(()) => {
+                            jtrace_reader!(ServerEventAppliedSuccess);
+                            Self::__refresh_known_txn(self);
+                            return Ok(false);
                         }
+                        Err(e) => return Err(e),
                     }
-                    None => return Err(StorageError::RawJournalEventCorruptedMetadata.into()),
                 }
+                None => return Err(StorageError::RawJournalEventCorruptedMetadata.into()),
             }
         }
+        return self.handle_close(txn_id, meta);
+    }
+    fn handle_close(
+        &mut self,
+        txn_id: u128,
+        meta: u64,
+    ) -> Result<bool, crate::engine::fractal::error::Error> {
         jtrace_reader!(DriverEventExpectingClose);
-        {
-            // attempt to parse a driver close event
-            let mut block = [0u8; DriverEvent::FULL_EVENT_SIZE];
-            block[DriverEvent::OFFSET_0_TXN_ID].copy_from_slice(&txn_id.to_le_bytes());
-            block[DriverEvent::OFFSET_1_EVENT_KIND].copy_from_slice(&meta.to_le_bytes());
-            // now get remaining block
-            self.tr
-                .tracked_read(&mut block[DriverEvent::OFFSET_2_CHECKSUM.start..])?;
-            jtrace_reader!(DriverEventCompletedBlockRead);
-            // check the driver event
-            let drv_close_event = match DriverEvent::decode(block) {
-                Some(
-                    ev @ DriverEvent {
-                        event: DriverEventKind::Closed,
-                        ..
-                    },
-                ) => ev,
-                Some(DriverEvent {
-                    event: DriverEventKind::Reopened,
+        // attempt to parse a driver close event
+        let mut block = [0u8; DriverEvent::FULL_EVENT_SIZE];
+        block[DriverEvent::OFFSET_0_TXN_ID].copy_from_slice(&txn_id.to_le_bytes());
+        block[DriverEvent::OFFSET_1_EVENT_KIND].copy_from_slice(&meta.to_le_bytes());
+        // now get remaining block
+        self.tr
+            .tracked_read(&mut block[DriverEvent::OFFSET_2_CHECKSUM.start..])?;
+        jtrace_reader!(DriverEventCompletedBlockRead);
+        // check the driver event
+        let drv_close_event = match DriverEvent::decode(block) {
+            Some(
+                ev @ DriverEvent {
+                    event: DriverEventKind::Closed,
                     ..
-                }) => {
-                    jtrace_reader!(ErrExpectedCloseGotReopen);
-                    return Err(StorageError::RawJournalInvalidEvent.into());
-                }
-                None => return Err(StorageError::RawJournalEventCorrupted.into()),
-            };
-            jtrace_reader!(DriverEventExpectedCloseGotClose);
-            // a driver closed event; we've checked integrity, but we must check the field values
-            let valid_meta = okay! {
-                self.last_txn_checksum == drv_close_event.last_checksum,
-                self.last_txn_id == drv_close_event.last_txn_id,
-                self.last_txn_offset == drv_close_event.last_offset,
-            };
-            if !valid_meta {
-                jtrace_reader!(DriverEventInvalidMetadata);
-                // either the block is corrupted or the data we read is corrupted; either way,
-                // we're going to refuse to read this
-                return Err(StorageError::RawJournalCorrupted.into());
+                },
+            ) => ev,
+            Some(DriverEvent {
+                event: DriverEventKind::Reopened,
+                ..
+            }) => {
+                jtrace_reader!(ErrExpectedCloseGotReopen);
+                return Err(StorageError::RawJournalInvalidEvent.into());
             }
-            // update
-            self._update_known_txn();
-            // full metadata validated; this is a valid close event but is it actually a close
-            if self.tr.is_eof() {
-                jtrace_reader!(ClosedAndReachedEof);
-                // yes, we're done
-                return Ok(true);
-            }
+            None => return Err(StorageError::RawJournalEventCorrupted.into()),
+        };
+        jtrace_reader!(DriverEventExpectedCloseGotClose);
+        // a driver closed event; we've checked integrity, but we must check the field values
+        let valid_meta = okay! {
+            self.last_txn_checksum == drv_close_event.last_checksum,
+            self.last_txn_id == drv_close_event.last_txn_id,
+            self.last_txn_offset == drv_close_event.last_offset,
+        };
+        if !valid_meta {
+            jtrace_reader!(DriverEventInvalidMetadata);
+            // either the block is corrupted or the data we read is corrupted; either way,
+            // we're going to refuse to read this
+            return Err(StorageError::RawJournalCorrupted.into());
         }
+        // update
+        Self::__refresh_known_txn(self);
+        // full metadata validated; this is a valid close event but is it actually a close
+        if self.tr.is_eof() {
+            jtrace_reader!(ClosedAndReachedEof);
+            // yes, we're done
+            return Ok(true);
+        }
+        return self.handle_reopen();
+    }
+    fn handle_reopen(&mut self) -> RuntimeResult<bool> {
         jtrace_reader!(AttemptingEvent(self.txn_id as u64));
         jtrace_reader!(DriverEventExpectingReopenBlock);
         // now we must look for a reopen event
@@ -761,7 +767,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
         };
         if valid_meta {
             // valid meta, update all
-            self._update_known_txn();
+            Self::__refresh_known_txn(self);
             jtrace_reader!(ReopenSuccess);
             Ok(false)
         } else {

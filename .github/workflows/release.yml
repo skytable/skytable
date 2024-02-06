@@ -48,7 +48,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ./target
-          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
+          key: ${{ matrix.rust }}-cargocache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
         run: |
@@ -101,7 +101,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ./target
-          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
+          key: ${{ matrix.rust }}-cargocache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install 32-bit tools (Linux)
         run: sudo apt update && sudo apt install gcc-multilib -y
