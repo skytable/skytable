@@ -79,13 +79,13 @@ impl SimpleDB {
         &mut self,
         log: &mut RawJournalWriter<SimpleDBJournal, VirtualFS>,
     ) -> RuntimeResult<()> {
-        log.commit_event(DbEvent::Clear)?;
+        log.commit_event(DbEventEncoded::Clear)?;
         self.data.get_mut().clear();
         Ok(())
     }
     fn pop(&mut self, log: &mut RawJournalWriter<SimpleDBJournal, VirtualFS>) -> RuntimeResult<()> {
         self.data.get_mut().pop().unwrap();
-        log.commit_event(DbEvent::Pop)?;
+        log.commit_event(DbEventEncoded::Pop)?;
         Ok(())
     }
     fn push(
@@ -94,13 +94,18 @@ impl SimpleDB {
         new: impl ToString,
     ) -> RuntimeResult<()> {
         let new = new.to_string();
-        log.commit_event(DbEvent::NewKey(new.clone()))?;
+        log.commit_event(DbEventEncoded::NewKey(&new))?;
         self.data.get_mut().push(new);
         Ok(())
     }
 }
 struct SimpleDBJournal;
-enum DbEvent {
+enum DbEventEncoded<'a> {
+    NewKey(&'a str),
+    Pop,
+    Clear,
+}
+enum DbEventRestored {
     NewKey(String),
     Pop,
     Clear,
@@ -115,8 +120,8 @@ impl RawJournalAdapter for SimpleDBJournal {
     const COMMIT_PREFERENCE: CommitPreference = CommitPreference::Buffered;
     type Spec = SystemDatabaseV1;
     type GlobalState = SimpleDB;
-    type Event = DbEvent;
-    type DecodedEvent<'a> = DbEvent;
+    type Event<'a> = DbEventEncoded<'a>;
+    type DecodedEvent = DbEventRestored;
     type EventMeta = EventMeta;
     fn initialize(_: &JournalInitializer) -> Self {
         Self
@@ -129,15 +134,15 @@ impl RawJournalAdapter for SimpleDBJournal {
             _ => return None,
         })
     }
-    fn get_event_md(&self, event: &Self::Event) -> u64 {
+    fn get_event_md<'a>(&self, event: &Self::Event<'a>) -> u64 {
         match event {
-            DbEvent::NewKey(_) => 0,
-            DbEvent::Pop => 1,
-            DbEvent::Clear => 2,
+            DbEventEncoded::NewKey(_) => 0,
+            DbEventEncoded::Pop => 1,
+            DbEventEncoded::Clear => 2,
         }
     }
-    fn commit_buffered(&mut self, buf: &mut Vec<u8>, event: Self::Event) {
-        if let DbEvent::NewKey(key) = event {
+    fn commit_buffered<'a>(&mut self, buf: &mut Vec<u8>, event: Self::Event<'a>) {
+        if let DbEventEncoded::NewKey(key) = event {
             buf.extend((key.len() as u64).to_le_bytes());
             buf.extend(key.as_bytes());
         }
@@ -148,30 +153,30 @@ impl RawJournalAdapter for SimpleDBJournal {
             Self::Spec,
         >,
         meta: Self::EventMeta,
-    ) -> RuntimeResult<Self::DecodedEvent<'a>> {
+    ) -> RuntimeResult<Self::DecodedEvent> {
         Ok(match meta {
             EventMeta::NewKey => {
                 let key_size = u64::from_le_bytes(file.read_block()?);
                 let mut keybuf = vec![0u8; key_size as usize];
                 file.tracked_read(&mut keybuf)?;
                 match String::from_utf8(keybuf) {
-                    Ok(k) => DbEvent::NewKey(k),
+                    Ok(k) => DbEventRestored::NewKey(k),
                     Err(_) => return Err(StorageError::RawJournalEventCorrupted.into()),
                 }
             }
-            EventMeta::Clear => DbEvent::Clear,
-            EventMeta::Pop => DbEvent::Pop,
+            EventMeta::Clear => DbEventRestored::Clear,
+            EventMeta::Pop => DbEventRestored::Pop,
         })
     }
     fn apply_event<'a>(
         gs: &Self::GlobalState,
         _: Self::EventMeta,
-        event: Self::DecodedEvent<'a>,
+        event: Self::DecodedEvent,
     ) -> RuntimeResult<()> {
         match event {
-            DbEvent::NewKey(k) => gs.data.borrow_mut().push(k),
-            DbEvent::Clear => gs.data.borrow_mut().clear(),
-            DbEvent::Pop => {
+            DbEventRestored::NewKey(k) => gs.data.borrow_mut().push(k),
+            DbEventRestored::Clear => gs.data.borrow_mut().clear(),
+            DbEventRestored::Pop => {
                 if gs.data.borrow_mut().pop().is_none() {
                     return Err(StorageError::RawJournalCorrupted.into());
                 }

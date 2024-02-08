@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod tests;
 
@@ -223,9 +221,9 @@ pub trait RawJournalAdapter {
     /// the global state that is used by this journal
     type GlobalState;
     /// a journal event
-    type Event;
+    type Event<'a>;
     /// the decoded event
-    type DecodedEvent<'a>;
+    type DecodedEvent;
     /// a type representing the event kind
     type EventMeta: Copy;
     /// initialize this adapter
@@ -233,17 +231,17 @@ pub trait RawJournalAdapter {
     /// parse event metadata
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta>;
     /// get event metadata as an [`u64`]
-    fn get_event_md(&self, event: &Self::Event) -> u64;
+    fn get_event_md<'a>(&self, event: &Self::Event<'a>) -> u64;
     /// commit event (direct preference)
-    fn commit_direct<Fs: FSInterface>(
+    fn commit_direct<'a, Fs: FSInterface>(
         &mut self,
         _: &mut TrackedWriter<Fs::File, Self::Spec>,
-        _: Self::Event,
+        _: Self::Event<'a>,
     ) -> RuntimeResult<()> {
         unimplemented!()
     }
     /// commit event (buffered)
-    fn commit_buffered(&mut self, _: &mut Vec<u8>, _: Self::Event) {
+    fn commit_buffered<'a>(&mut self, _: &mut Vec<u8>, _: Self::Event<'a>) {
         unimplemented!()
     }
     /// parse the event
@@ -253,12 +251,12 @@ pub trait RawJournalAdapter {
             Self::Spec,
         >,
         meta: Self::EventMeta,
-    ) -> RuntimeResult<Self::DecodedEvent<'a>>;
+    ) -> RuntimeResult<Self::DecodedEvent>;
     /// apply the event
     fn apply_event<'a>(
         gs: &Self::GlobalState,
         meta: Self::EventMeta,
-        event: Self::DecodedEvent<'a>,
+        event: Self::DecodedEvent,
     ) -> RuntimeResult<()>;
 }
 
@@ -485,7 +483,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
     ///
     /// This will auto-flush the buffer and sync metadata as soon as the [`RawJournalAdapter::commit`] method returns,
     /// unless otherwise configured
-    pub fn commit_event(&mut self, event: J::Event) -> RuntimeResult<()> {
+    pub fn commit_event<'a>(&mut self, event: J::Event<'a>) -> RuntimeResult<()> {
         self.txn_context(|me, txn_id| {
             let ev_md = me.j.get_event_md(&event);
             jtrace_writer!(CommitAttemptForEvent(txn_id as u64));
@@ -517,11 +515,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
             jtrace_writer!(CommitServerEventAdapterCompleted);
             if J::AUTO_SYNC_ON_EVENT_COMMIT {
                 // should fsync after event
-                if let CommitPreference::Direct = J::COMMIT_PREFERENCE {
-                    me.log_file.flush_sync()?;
-                } else {
-                    me.log_file.fsync()?;
-                }
+                log_file.flush_sync()?;
                 jtrace_writer!(CommitCommitServerEventSyncCompleted);
             }
             Ok(())
@@ -561,16 +555,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
             if !J::AUTO_SYNC_ON_EVENT_COMMIT {
                 // the log might still not be fully flushed, so flush it now; NB: flush does not affect checksum state;
                 // this is guaranteed by the impl of the tracked writer
-                match J::COMMIT_PREFERENCE {
-                    CommitPreference::Buffered => {
-                        // in this case, we know that every write is already synced
-                        debug_assert!(!me.log_file.is_dirty());
-                    }
-                    CommitPreference::Direct => {
-                        jtrace_writer!(DriverEventPresyncCompleted);
-                        me.log_file.flush_sync()?;
-                    }
-                }
+                me.log_file.flush_sync()?;
             }
             me.log_file.tracked_write_through_buffer(&block)?;
             jtrace_writer!(DriverEventCompleted);
