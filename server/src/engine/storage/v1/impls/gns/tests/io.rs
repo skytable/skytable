@@ -26,23 +26,24 @@
 
 use {
     super::super::{
-        model::{self, ModelIDRef, ModelIDRes},
+        model::{self, ModelIDRes},
         space, SpaceIDRef, SpaceIDRes,
     },
     crate::engine::{
         core::{model::Model, space::Space},
         storage::v1::inf::{dec, enc},
+        txn::ModelIDRef,
     },
 };
 
 mod space_tests {
-    use super::{
-        dec, enc,
-        space::{
-            AlterSpaceTxn, AlterSpaceTxnRestorePL, CreateSpaceTxn, CreateSpaceTxnRestorePL,
-            DropSpaceTxn,
+    use {
+        super::{
+            dec, enc,
+            space::{AlterSpaceTxnRestorePL, CreateSpaceTxnRestorePL},
+            Space, SpaceIDRef,
         },
-        Space, SpaceIDRef,
+        crate::engine::txn::gns::space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
     };
     #[test]
     fn create() {
@@ -91,15 +92,18 @@ mod model_tests {
     use {
         super::{
             model::{
-                AlterModelAddTxn, AlterModelAddTxnRestorePL, AlterModelRemoveTxn,
-                AlterModelRemoveTxnRestorePL, AlterModelUpdateTxn, AlterModelUpdateTxnRestorePL,
-                CreateModelTxn, CreateModelTxnRestorePL, DropModelTxn,
+                AlterModelAddTxnRestorePL, AlterModelRemoveTxnRestorePL,
+                AlterModelUpdateTxnRestorePL, CreateModelTxnRestorePL,
             },
             Model, Space,
         },
         crate::engine::{
             core::model::{Field, Layer},
             data::{tag::TagSelector, uuid::Uuid},
+            txn::gns::model::{
+                AlterModelAddTxn, AlterModelRemoveTxn, AlterModelUpdateTxn, CreateModelTxn,
+                DropModelTxn,
+            },
         },
     };
     fn default_space_model() -> (Space, Model) {

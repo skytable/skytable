@@ -43,8 +43,9 @@
 
 #[cfg(test)]
 use crate::engine::storage::common::interface::fs_traits::FileOpen;
+
 use {
-    super::rw::SDSSFileIO,
+    super::{rw::SDSSFileIO, spec::Header},
     crate::{
         engine::{
             error::{RuntimeResult, StorageError},
@@ -215,7 +216,7 @@ pub struct JournalReader<TA, Fs: FSInterface> {
 
 impl<TA: JournalAdapter, Fs: FSInterface> JournalReader<TA, Fs> {
     pub fn new(log_file: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
-        let log_size = log_file.file_length()? - super::Header::SIZE as u64;
+        let log_size = log_file.file_length()? - Header::SIZE as u64;
         Ok(Self {
             log_file,
             evid: 0,

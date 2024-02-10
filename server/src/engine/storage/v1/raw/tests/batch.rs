@@ -38,13 +38,13 @@ use {
             idx::MTIndex,
             storage::{
                 common::interface::{fs_test::VirtualFS, fs_traits::FileOpen},
-                v1::{
+                v1::raw::{
                     batch_jrnl::{
                         DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
                         DecodedBatchEventKind, NormalBatch,
                     },
                     rw::SDSSFileIO,
-                    spec,
+                    spec::{self, Header},
                 },
             },
         },
@@ -57,9 +57,7 @@ fn pkey(v: impl Into<Datacell>) -> PrimaryIndexKey {
     PrimaryIndexKey::try_from_dc(v.into()).unwrap()
 }
 
-fn open_file(
-    fpath: &str,
-) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, super::super::Header)> {
+fn open_file(fpath: &str) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, Header)> {
     SDSSFileIO::open_or_create_perm_rw::<spec::DataBatchJournalV1>(fpath).unwrap()
 }
 

@@ -1,5 +1,5 @@
 /*
- * Created on Sun Aug 20 2023
+ * Created on Mon May 15 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -23,8 +23,12 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-pub mod gns;
-mod shared;
 
-// re-export
-pub use shared::{ModelIDRef, SpaceIDRef};
+// impls
+pub(super) mod batch_jrnl;
+pub(super) mod journal;
+pub(super) mod rw;
+pub mod spec;
+pub mod sysdb;
+#[cfg(test)]
+mod tests;

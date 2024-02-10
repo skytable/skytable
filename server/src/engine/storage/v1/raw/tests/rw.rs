@@ -26,7 +26,7 @@
 
 use crate::engine::storage::{
     common::interface::fs_traits::FileOpen,
-    v1::{rw::SDSSFileIO, spec},
+    v1::raw::{rw::SDSSFileIO, spec},
 };
 
 #[test]

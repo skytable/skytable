@@ -43,7 +43,7 @@ use {
                 },
                 lex::Ident,
             },
-            txn::gns as gnstxn,
+            txn::{gns, ModelIDRef},
         },
         util,
     },
@@ -268,13 +268,8 @@ impl Model {
                         // TODO(@ohsayan): this impacts lockdown duration; fix it
                         if G::FS_IS_NON_NULL {
                             // prepare txn
-                            let txn = gnstxn::AlterModelAddTxn::new(
-                                gnstxn::ModelIDRef::new_ref(
-                                    &space_name,
-                                    &space,
-                                    &model_name,
-                                    model,
-                                ),
+                            let txn = gns::model::AlterModelAddTxn::new(
+                                ModelIDRef::new_ref(&space_name, &space, &model_name, model),
                                 &new_fields,
                             );
                             // commit txn
@@ -291,8 +286,8 @@ impl Model {
                     AlterAction::Remove(removed) => {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
-                            let txn = gnstxn::AlterModelRemoveTxn::new(
-                                gnstxn::ModelIDRef::new_ref(&space_name, space, &model_name, model),
+                            let txn = gns::model::AlterModelRemoveTxn::new(
+                                ModelIDRef::new_ref(&space_name, space, &model_name, model),
                                 &removed,
                             );
                             // commit txn
@@ -306,8 +301,8 @@ impl Model {
                     AlterAction::Update(updated) => {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
-                            let txn = gnstxn::AlterModelUpdateTxn::new(
-                                gnstxn::ModelIDRef::new_ref(&space_name, space, &model_name, model),
+                            let txn = gns::model::AlterModelUpdateTxn::new(
+                                ModelIDRef::new_ref(&space_name, space, &model_name, model),
                                 &updated,
                             );
                             // commit txn

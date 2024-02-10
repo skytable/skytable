@@ -48,22 +48,41 @@ use {
     std::marker::PhantomData,
 };
 
+/*
+    Event log adapter
+*/
+
+/// A journal based on an [`EventLog`]
 pub type EventLogJournal<E, Fs> = raw::RawJournalWriter<EventLog<E>, Fs>;
 
+/// An [`EventLog`] is a standard, append-only, sequential journal with per-event and per-cycle integrity protection
 pub struct EventLog<E: EventLogAdapter>(PhantomData<E>);
 
+/// An adapter that provides the specification for an event log
 pub trait EventLogAdapter {
+    /// the SDSS file spec
     type SdssSpec: FileSpecV1;
+    /// global state
     type GlobalState;
+    /// the event type
     type Event<'a>;
+    /// the decoded event type
     type DecodedEvent;
+    /// event metadata
     type EventMeta: Copy;
+    /// the error type
     type Error: Into<fractal::error::Error>;
+    /// the maximum value for the event discriminant
     const EV_MAX: u8;
+    /// get metadata from the raw value
     unsafe fn meta_from_raw(m: u64) -> Self::EventMeta;
+    /// get metadata from the event
     fn event_md<'a>(event: &Self::Event<'a>) -> u64;
+    /// encode an event
     fn encode<'a>(event: Self::Event<'a>) -> Box<[u8]>;
+    /// decode an event
     fn decode(block: Vec<u8>, kind: Self::EventMeta) -> Result<Self::DecodedEvent, Self::Error>;
+    /// apply the event
     fn apply_event(g: &Self::GlobalState, ev: Self::DecodedEvent) -> Result<(), Self::Error>;
 }
 
@@ -71,11 +90,17 @@ impl<E: EventLogAdapter> RawJournalAdapter for EventLog<E> {
     const COMMIT_PREFERENCE: CommitPreference = CommitPreference::Direct;
     type Spec = <E as EventLogAdapter>::SdssSpec;
     type GlobalState = <E as EventLogAdapter>::GlobalState;
+    type Context<'a> = () where Self: 'a;
     type Event<'a> = <E as EventLogAdapter>::Event<'a>;
     type DecodedEvent = <E as EventLogAdapter>::DecodedEvent;
     type EventMeta = <E as EventLogAdapter>::EventMeta;
     fn initialize(_: &JournalInitializer) -> Self {
         Self(PhantomData)
+    }
+    fn enter_context<'a, Fs: FSInterface>(
+        _: &'a mut raw::RawJournalWriter<Self, Fs>,
+    ) -> Self::Context<'a> {
+        ()
     }
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
         if meta > <E as EventLogAdapter>::EV_MAX as u64 {

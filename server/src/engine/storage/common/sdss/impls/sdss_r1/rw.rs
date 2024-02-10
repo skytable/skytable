@@ -519,7 +519,7 @@ impl<
 fn check_vfs_buffering() {
     use crate::engine::storage::{
         common::interface::fs_test::{VFileDescriptor, VirtualFS},
-        v2::spec::{Header, SystemDatabaseV1},
+        v2::raw::spec::{Header, SystemDatabaseV1},
     };
     fn rawfile() -> Vec<u8> {
         VirtualFS::fetch_raw_data("myfile").unwrap()

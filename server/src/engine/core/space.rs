@@ -34,7 +34,7 @@ use {
         idx::STIndex,
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
         storage::{safe_interfaces::FSInterface, v1::loader::SEInitState},
-        txn::gns as gnstxn,
+        txn::{self, SpaceIDRef},
     },
     std::collections::HashSet,
 };
@@ -167,7 +167,7 @@ impl Space {
             // commit txn
             if G::FS_IS_NON_NULL {
                 // prepare txn
-                let txn = gnstxn::CreateSpaceTxn::new(space.props(), &space_name, &space);
+                let txn = txn::gns::space::CreateSpaceTxn::new(space.props(), &space_name, &space);
                 // try to create space for...the space
                 G::FileSystem::fs_create_dir_all(&SEInitState::space_dir(
                     &space_name,
@@ -216,8 +216,10 @@ impl Space {
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
-                let txn =
-                    gnstxn::AlterSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space), &patch);
+                let txn = txn::gns::space::AlterSpaceTxn::new(
+                    SpaceIDRef::new(&space_name, space),
+                    &patch,
+                );
                 // commit
                 global.namespace_txn_driver().lock().try_commit(txn)?;
             }
@@ -252,7 +254,7 @@ impl Space {
                 if G::FS_IS_NON_NULL {
                     // prepare txn
                     let txn =
-                        gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
+                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
                     global.namespace_txn_driver().lock().try_commit(txn)?;
                     // request cleanup
@@ -299,7 +301,7 @@ impl Space {
                 if G::FS_IS_NON_NULL {
                     // prepare txn
                     let txn =
-                        gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
+                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
                     global.namespace_txn_driver().lock().try_commit(txn)?;
                     // request cleanup

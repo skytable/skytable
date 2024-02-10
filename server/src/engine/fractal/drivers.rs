@@ -28,8 +28,10 @@ use {
     super::util,
     crate::engine::{
         error::RuntimeResult,
-        storage::{safe_interfaces::FSInterface, v1::data_batch::DataBatchPersistDriver},
-        txn::gns::GNSTransactionDriverAnyFS,
+        storage::{
+            safe_interfaces::FSInterface,
+            v1::{DataBatchPersistDriver, GNSTransactionDriverAnyFS},
+        },
     },
     parking_lot::Mutex,
     std::sync::Arc,

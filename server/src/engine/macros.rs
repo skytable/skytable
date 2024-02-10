@@ -444,7 +444,7 @@ macro_rules! closure {
 #[cfg(test)]
 macro_rules! array {
     ($($(#[$attr:meta])* $vis:vis const $name:ident: [$ty:ty] = [$($expr:expr),* $(,)?]);* $(;)?) => {
-        $(#[allow(non_snake_case)] mod $name {pub(super) const LEN: usize = { let mut i = 0;$(let _ = $expr; i += 1;)*i += 0; i};}
-        $(#[$attr])* $vis const $name: [$ty; $name::LEN] = [$($expr),*];)*
+        $(#[allow(non_snake_case)]mod$name{pub(super)const LEN:usize={let mut i=0;$(let _=$expr;i+=1;)*i+=0;i};}
+        $(#[$attr])*$vis const$name:[$ty;$name::LEN]=[$($expr),*];)*
     }
 }

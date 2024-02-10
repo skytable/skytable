@@ -29,10 +29,10 @@ use crate::engine::storage::common::{
     versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
 };
 
-pub(super) type Header = sdss::sdss_r1::HeaderV1<HeaderImplV1>;
+pub type Header = sdss::sdss_r1::HeaderV1<HeaderImplV1>;
 
 #[derive(Debug)]
-pub(super) struct HeaderImplV1;
+pub struct HeaderImplV1;
 impl sdss::sdss_r1::HeaderV1Spec for HeaderImplV1 {
     type FileClass = FileScope;
     type FileSpecifier = FileSpecifier;
@@ -82,7 +82,7 @@ pub enum FileSpecifier {
 */
 
 #[cfg(test)]
-pub(super) struct TestFile;
+pub struct TestFile;
 #[cfg(test)]
 impl sdss::sdss_r1::SimpleFileSpecV1 for TestFile {
     type HeaderSpec = HeaderImplV1;
@@ -92,7 +92,7 @@ impl sdss::sdss_r1::SimpleFileSpecV1 for TestFile {
 }
 
 /// The file specification for the GNS transaction log (impl v1)
-pub(super) struct GNSTransactionLogV1;
+pub struct GNSTransactionLogV1;
 impl sdss::sdss_r1::SimpleFileSpecV1 for GNSTransactionLogV1 {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::Journal;
@@ -101,7 +101,7 @@ impl sdss::sdss_r1::SimpleFileSpecV1 for GNSTransactionLogV1 {
 }
 
 /// The file specification for a journal batch
-pub(super) struct DataBatchJournalV1;
+pub struct DataBatchJournalV1;
 impl sdss::sdss_r1::SimpleFileSpecV1 for DataBatchJournalV1 {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::DataBatch;
@@ -110,7 +110,7 @@ impl sdss::sdss_r1::SimpleFileSpecV1 for DataBatchJournalV1 {
 }
 
 /// The file specification for the system db
-pub(super) struct SysDBV1;
+pub struct SysDBV1;
 impl sdss::sdss_r1::SimpleFileSpecV1 for SysDBV1 {
     type HeaderSpec = HeaderImplV1;
     const FILE_CLASS: FileScope = FileScope::FlatmapData;

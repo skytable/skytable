@@ -40,7 +40,7 @@ use {
                 },
                 sdss::sdss_r1::rw::TrackedReader,
             },
-            v2::{
+            v2::raw::{
                 journal::raw::{JournalReaderTraceEvent, JournalWriterTraceEvent},
                 spec::SystemDatabaseV1,
             },
@@ -123,8 +123,14 @@ impl RawJournalAdapter for SimpleDBJournal {
     type Event<'a> = DbEventEncoded<'a>;
     type DecodedEvent = DbEventRestored;
     type EventMeta = EventMeta;
+    type Context<'a> = () where Self: 'a;
     fn initialize(_: &JournalInitializer) -> Self {
         Self
+    }
+    fn enter_context<'a, Fs: FSInterface>(
+        _: &'a mut RawJournalWriter<Self, Fs>,
+    ) -> Self::Context<'a> {
+        ()
     }
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
         Some(match meta {

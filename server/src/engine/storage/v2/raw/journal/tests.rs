@@ -36,7 +36,7 @@ use {
         mem::unsafe_apis,
         storage::{
             common::interface::fs_test::VirtualFS,
-            v2::{journal::raw::open_journal, spec::SystemDatabaseV1},
+            v2::raw::{journal::raw::open_journal, spec::SystemDatabaseV1},
         },
         RuntimeResult,
     },

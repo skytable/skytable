@@ -32,8 +32,8 @@ use {
         storage::{
             self,
             safe_interfaces::{FSInterface, LocalFS},
+            v1::GNSTransactionDriverAnyFS,
         },
-        txn::gns::GNSTransactionDriverAnyFS,
     },
     crate::engine::error::RuntimeResult,
     parking_lot::{Mutex, RwLock},
@@ -215,7 +215,7 @@ impl GlobalInstanceLike for Global {
         ))?;
         // init driver
         let driver =
-            storage::v1::data_batch::create(&storage::v1::loader::SEInitState::model_path(
+            storage::v1::create_batch_journal(&storage::v1::loader::SEInitState::model_path(
                 space_name, space_uuid, model_name, model_uuid,
             ))?;
         self.get_state().mdl_driver.write().insert(

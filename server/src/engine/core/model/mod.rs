@@ -44,7 +44,7 @@ use {
             drop::DropModel,
             syn::{FieldSpec, LayerSpec},
         },
-        txn::gns::{self as gnstxn, SpaceIDRef},
+        txn::{gns, ModelIDRef, SpaceIDRef},
     },
     std::collections::hash_map::{Entry, HashMap},
 };
@@ -281,7 +281,7 @@ impl Model {
             if G::FS_IS_NON_NULL {
                 let mut txn_driver = global.namespace_txn_driver().lock();
                 // prepare txn
-                let txn = gnstxn::CreateModelTxn::new(
+                let txn = gns::model::CreateModelTxn::new(
                     SpaceIDRef::new(&space_name, &space),
                     &model_name,
                     &model,
@@ -351,7 +351,7 @@ impl Model {
             // okay this is looking good for us
             if G::FS_IS_NON_NULL {
                 // prepare txn
-                let txn = gnstxn::DropModelTxn::new(gnstxn::ModelIDRef::new(
+                let txn = gns::model::DropModelTxn::new(ModelIDRef::new(
                     SpaceIDRef::new(&space_name, &space),
                     &model_name,
                     model.get_uuid(),

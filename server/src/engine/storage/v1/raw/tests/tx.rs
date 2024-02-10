@@ -28,7 +28,7 @@ use {
     crate::{
         engine::{
             error::{RuntimeResult, StorageError},
-            storage::v1::{
+            storage::v1::raw::{
                 journal::{self, JournalAdapter, JournalWriter},
                 spec,
             },

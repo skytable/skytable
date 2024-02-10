@@ -24,5 +24,4 @@
  *
 */
 
-pub mod journal;
-pub mod spec;
+pub(in crate::engine::storage) mod raw;

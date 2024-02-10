@@ -209,7 +209,7 @@ macro_rules! jtrace_reader {
 */
 
 /// An adapter defining the low-level structure of a log file
-pub trait RawJournalAdapter {
+pub trait RawJournalAdapter: Sized {
     /// event size buffer
     const EVENT_SIZE_BUFFER: usize = 128;
     /// Set to true if the journal writer should automatically flush the buffer and fsync after writing an event
@@ -220,6 +220,10 @@ pub trait RawJournalAdapter {
     type Spec: FileSpecV1;
     /// the global state that is used by this journal
     type GlobalState;
+    /// Writer context
+    type Context<'a>
+    where
+        Self: 'a;
     /// a journal event
     type Event<'a>;
     /// the decoded event
@@ -228,6 +232,10 @@ pub trait RawJournalAdapter {
     type EventMeta: Copy;
     /// initialize this adapter
     fn initialize(j_: &JournalInitializer) -> Self;
+    /// get a write context
+    fn enter_context<'a, Fs: FSInterface>(
+        adapter: &'a mut RawJournalWriter<Self, Fs>,
+    ) -> Self::Context<'a>;
     /// parse event metadata
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta>;
     /// get event metadata as an [`u64`]
@@ -478,6 +486,9 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
             jtrace_writer!(ReinitializeComplete);
         }
         Ok(me)
+    }
+    pub fn context(&mut self) -> J::Context<'_> {
+        J::enter_context(self)
     }
     /// Commit a new event to the journal
     ///

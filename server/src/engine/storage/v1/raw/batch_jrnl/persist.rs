@@ -24,8 +24,6 @@
  *
 */
 
-use crate::engine::storage::v1::inf::obj::cell;
-
 use {
     super::{
         MARKER_ACTUAL_BATCH_EVENT, MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN, MARKER_END_OF_BATCH,
@@ -48,7 +46,10 @@ use {
             idx::STIndexSeq,
             storage::{
                 common::interface::fs_traits::FSInterface,
-                v1::rw::{SDSSFileIO, TrackedWriter},
+                v1::{
+                    inf::obj::cell,
+                    raw::rw::{SDSSFileIO, TrackedWriter},
+                },
             },
         },
         util::EndianQW,

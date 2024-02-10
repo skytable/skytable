@@ -32,7 +32,10 @@ use {
         fractal::sys_store::{SysAuth, SysAuthUser, SysConfig, SysHostData, SystemStore},
         storage::{
             common::interface::fs_traits::{FSInterface, FileOpen},
-            v1::{inf, spec, SDSSFileIO},
+            v1::{
+                inf,
+                raw::{rw::SDSSFileIO, spec},
+            },
         },
     },
     parking_lot::RwLock,
@@ -137,7 +140,7 @@ impl<Fs: FSInterface> SystemStore<Fs> {
             ),
         );
         // write
-        let buf = super::inf::enc::enc_dict_full::<super::inf::map::GenericDictSpec>(&map);
+        let buf = inf::enc::enc_dict_full::<inf::map::GenericDictSpec>(&map);
         f.fsynced_write(&buf)
     }
     fn _sync_with(&self, target: &str, cow: &str, auth: &SysAuth) -> RuntimeResult<()> {

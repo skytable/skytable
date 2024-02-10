@@ -27,7 +27,7 @@
 #[cfg(test)]
 use crate::engine::storage::{
     common::interface::fs_traits::{FSInterface, FileOpen},
-    v1::JournalWriter,
+    v1::raw::journal::JournalWriter,
 };
 use crate::engine::{
     core::{EntityIDRef, GlobalNS},
@@ -37,9 +37,11 @@ use crate::engine::{
     fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
     storage::{
         common::interface::fs_imp::LocalFS,
-        v1::{batch_jrnl, journal, spec},
+        v1::{
+            impls::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
+            raw::{batch_jrnl, journal, spec},
+        },
     },
-    txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
 
 const GNS_FILE_PATH: &str = "gns.db-tlog";
