@@ -37,7 +37,7 @@ use {
             error::{RuntimeResult, StorageError, TransactionError},
             idx::{IndexSTSeqCns, STIndex, STIndexSeq},
             mem::BufferedScanner,
-            storage::v1::inf::{self, map, obj, PersistObject},
+            storage::common_encoding::r1::{self, map, obj, PersistObject},
             txn::{
                 gns::model::{
                     AlterModelAddTxn, AlterModelRemoveTxn, AlterModelUpdateTxn, CreateModelTxn,
@@ -117,7 +117,7 @@ impl<'a> PersistObject for ModelID<'a> {
     ) -> RuntimeResult<Self::OutputType> {
         Ok(ModelIDRes {
             space_id: <super::SpaceID as PersistObject>::obj_dec(s, md.space_id)?,
-            model_name: inf::dec::utils::decode_string(s, md.model_name_l as usize)?
+            model_name: r1::dec::utils::decode_string(s, md.model_name_l as usize)?
                 .into_boxed_str(),
             model_uuid: md.model_uuid,
             model_version: md.model_version,
@@ -241,7 +241,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
     ) -> RuntimeResult<Self::OutputType> {
         let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let model_name =
-            inf::dec::utils::decode_string(s, md.model_name_l as usize)?.into_boxed_str();
+            r1::dec::utils::decode_string(s, md.model_name_l as usize)?.into_boxed_str();
         let model = <obj::ModelLayoutRef as PersistObject>::obj_dec(s, md.model_meta)?;
         Ok(CreateModelTxnRestorePL {
             space_id,
@@ -427,7 +427,7 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
             if !s.has_left(len) {
                 break;
             }
-            removed_fields.push(inf::dec::utils::decode_string(s, len)?.into_boxed_str());
+            removed_fields.push(r1::dec::utils::decode_string(s, len)?.into_boxed_str());
         }
         if removed_fields.len() as u64 != md.remove_field_c {
             return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());

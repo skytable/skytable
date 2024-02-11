@@ -39,7 +39,6 @@ use {
             error::{RuntimeResult, StorageError},
             idx::{IndexSTSeqCns, STIndexSeq},
             mem::{BufferedScanner, StatelessLen},
-            storage::v1::inf,
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
@@ -214,7 +213,7 @@ impl MapStorageSpec for GenericDictSpec {
         s: &mut BufferedScanner,
         md: &Self::EntryMetadata,
     ) -> Option<Self::RestoredKey> {
-        inf::dec::utils::decode_string(s, md.klen as usize)
+        super::dec::utils::decode_string(s, md.klen as usize)
             .map(|s| s.into_boxed_str())
             .ok()
     }
@@ -366,7 +365,7 @@ impl<FM: FieldMapAny> MapStorageSpec for FieldMapSpec<FM> {
         scanner: &mut BufferedScanner,
         md: &Self::EntryMetadata,
     ) -> Option<Self::RestoredKey> {
-        inf::dec::utils::decode_string(scanner, md.field_id_l as usize)
+        super::dec::utils::decode_string(scanner, md.field_id_l as usize)
             .map(|s| s.into_boxed_str())
             .ok()
     }

@@ -33,8 +33,8 @@ use {
             error::{RuntimeResult, TransactionError},
             mem::BufferedScanner,
             storage::{
+                common_encoding::r1::{self, PersistObject},
                 safe_interfaces::{FSInterface, LocalFS},
-                v1::inf::{self, PersistObject},
             },
             txn::{gns, SpaceIDRef},
         },
@@ -149,7 +149,7 @@ where
     type RestoreType;
     /// Encodes the event into the given buffer
     fn encode_super_event(commit: Self, buf: &mut Vec<u8>) {
-        inf::enc::enc_full_into_buffer::<Self>(buf, commit)
+        r1::enc::enc_full_into_buffer::<Self>(buf, commit)
     }
     fn decode_and_update_global_state(
         scanner: &mut BufferedScanner,
@@ -159,7 +159,7 @@ where
     }
     /// Attempts to decode the event using the given scanner
     fn decode(scanner: &mut BufferedScanner) -> RuntimeResult<Self::RestoreType> {
-        inf::dec::dec_full_from_scanner::<Self>(scanner).map_err(|e| e.into())
+        r1::dec::dec_full_from_scanner::<Self>(scanner).map_err(|e| e.into())
     }
     /// Update the global state from the restored event
     fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> RuntimeResult<()>;
@@ -208,7 +208,7 @@ impl<'a> PersistObject for SpaceID<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let str = inf::dec::utils::decode_string(s, md.space_name_l as usize)?;
+        let str = r1::dec::utils::decode_string(s, md.space_name_l as usize)?;
         Ok(SpaceIDRes {
             uuid: md.uuid,
             name: str.into_boxed_str(),

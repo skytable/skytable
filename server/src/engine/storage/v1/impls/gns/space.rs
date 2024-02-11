@@ -33,7 +33,7 @@ use {
             error::{RuntimeResult, TransactionError},
             idx::STIndex,
             mem::BufferedScanner,
-            storage::v1::inf::{self, map, obj, PersistObject},
+            storage::common_encoding::r1::{dec, map, obj, PersistObject},
             txn::gns::space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
         },
         util::EndianQW,
@@ -91,8 +91,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let space_name =
-            inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
+        let space_name = dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
         let space = <obj::SpaceLayoutRef as PersistObject>::obj_dec(s, md.space_meta)?;
         Ok(CreateSpaceTxnRestorePL { space_name, space })
     }

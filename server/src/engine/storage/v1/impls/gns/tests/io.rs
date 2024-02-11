@@ -31,7 +31,7 @@ use {
     },
     crate::engine::{
         core::{model::Model, space::Space},
-        storage::v1::inf::{dec, enc},
+        storage::common_encoding::r1::{dec, enc},
         txn::ModelIDRef,
     },
 };

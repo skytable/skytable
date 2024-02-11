@@ -1,5 +1,5 @@
 /*
- * Created on Sat Feb 10 2024
+ * Created on Sun Feb 11 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,15 +24,4 @@
  *
 */
 
-//! SDSS based storage engine driver v1 ([`versions::v1`])
-//!
-//! Target tags: `0.8.0-beta`, `0.8.0-beta.2`, `0.8.0-beta.3`
-
-mod impls;
-pub mod loader;
-pub mod raw;
-
-pub use self::{
-    impls::gns::GNSTransactionDriverAnyFS, raw::batch_jrnl::create as create_batch_journal,
-    raw::batch_jrnl::DataBatchPersistDriver,
-};
+pub mod r1;

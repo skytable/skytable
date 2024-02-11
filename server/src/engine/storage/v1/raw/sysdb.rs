@@ -32,10 +32,8 @@ use {
         fractal::sys_store::{SysAuth, SysAuthUser, SysConfig, SysHostData, SystemStore},
         storage::{
             common::interface::fs_traits::{FSInterface, FileOpen},
-            v1::{
-                inf,
-                raw::{rw::SDSSFileIO, spec},
-            },
+            common_encoding::r1,
+            v1::raw::{rw::SDSSFileIO, spec},
         },
     },
     parking_lot::RwLock,
@@ -140,7 +138,7 @@ impl<Fs: FSInterface> SystemStore<Fs> {
             ),
         );
         // write
-        let buf = inf::enc::enc_dict_full::<inf::map::GenericDictSpec>(&map);
+        let buf = r1::enc::enc_dict_full::<r1::map::GenericDictSpec>(&map);
         f.fsynced_write(&buf)
     }
     fn _sync_with(&self, target: &str, cow: &str, auth: &SysAuth) -> RuntimeResult<()> {
@@ -184,7 +182,7 @@ impl<Fs: FSInterface> SystemStore<Fs> {
         Ok((slf, state))
     }
     fn _restore(mut f: SDSSFileIO<Fs>, run_mode: ConfigMode) -> RuntimeResult<SysConfig> {
-        let mut sysdb_data = inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.read_full()?)?;
+        let mut sysdb_data = r1::dec::dec_dict_full::<r1::map::GenericDictSpec>(&f.read_full()?)?;
         // get our auth and sys stores
         let mut auth_store = rkey(
             &mut sysdb_data,

@@ -39,13 +39,11 @@ use {
         idx::{MTIndex, STIndex, STIndexSeq},
         storage::{
             common::interface::fs_traits::FSInterface,
-            v1::{
-                inf::{
-                    obj::cell::{self, StorageCellTypeID},
-                    DataSource,
-                },
-                raw::rw::{SDSSFileIO, TrackedReader},
+            common_encoding::r1::{
+                obj::cell::{self, StorageCellTypeID},
+                DataSource,
             },
+            v1::raw::rw::{SDSSFileIO, TrackedReader},
         },
     },
     std::{

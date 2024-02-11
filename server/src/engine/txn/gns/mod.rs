@@ -24,5 +24,5 @@
  *
 */
 
-pub mod space;
 pub mod model;
+pub mod space;

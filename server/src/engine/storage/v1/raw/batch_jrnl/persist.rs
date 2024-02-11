@@ -46,10 +46,8 @@ use {
             idx::STIndexSeq,
             storage::{
                 common::interface::fs_traits::FSInterface,
-                v1::{
-                    inf::obj::cell,
-                    raw::rw::{SDSSFileIO, TrackedWriter},
-                },
+                common_encoding::r1,
+                v1::raw::rw::{SDSSFileIO, TrackedWriter},
             },
         },
         util::EndianQW,
@@ -225,7 +223,7 @@ impl<Fs: FSInterface> DataBatchPersistDriver<Fs> {
     /// Encode a single cell
     fn encode_cell(&mut self, value: &Datacell) -> RuntimeResult<()> {
         let mut buf = vec![];
-        cell::encode(&mut buf, value);
+        r1::obj::cell::encode(&mut buf, value);
         self.f.tracked_write(&buf)?;
         Ok(())
     }

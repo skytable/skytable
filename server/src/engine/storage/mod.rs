@@ -27,6 +27,7 @@
 //! Implementations of the Skytable Disk Storage Subsystem (SDSS)
 
 mod common;
+mod common_encoding;
 // driver versions
 pub mod v1;
 pub mod v2;

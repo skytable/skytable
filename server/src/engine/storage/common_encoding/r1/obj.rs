@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{PersistObject, VecU8},
+    super::{dec, PersistObject, VecU8},
     crate::{
         engine::{
             core::{
@@ -40,7 +40,6 @@ use {
             error::{RuntimeResult, StorageError},
             idx::IndexSTSeqCns,
             mem::{BufferedScanner, VInline},
-            storage::v1::inf,
         },
         util::EndianQW,
     },
@@ -51,17 +50,16 @@ use {
 */
 
 pub mod cell {
-    use crate::{
-        engine::{
-            data::{
+    use {
+        super::super::{DataSource, VecU8},
+        crate::{
+            engine::data::{
                 cell::Datacell,
                 tag::{DataTag, TagClass, TagSelector},
             },
-            storage::v1::inf::{DataSource, VecU8},
+            util::EndianQW,
         },
-        util::EndianQW,
     };
-
     #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, sky_macros::EnumMethods)]
     #[repr(u8)]
     #[allow(dead_code)]
@@ -446,7 +444,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let key = inf::dec::utils::decode_string(scanner, md.p_key_len as usize)?;
+        let key = dec::utils::decode_string(scanner, md.p_key_len as usize)?;
         let fieldmap = <super::map::PersistMapImpl<
             super::map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>,
         > as PersistObject>::obj_dec(

@@ -24,7 +24,10 @@
  *
 */
 
-//! High level interfaces
+//! High level interfaces (r1)
+//!
+//! This is revision 1 of high-level interface encoding.
+//!
 
 pub mod map;
 pub mod obj;
