@@ -29,7 +29,7 @@ use {
         engine::{
             error::{RuntimeResult, StorageError},
             storage::v1::raw::{
-                journal::{self, JournalAdapter, JournalWriter},
+                journal::raw::{self, JournalAdapter, JournalWriter},
                 spec,
             },
         },
@@ -130,7 +130,7 @@ fn open_log(
     log_name: &str,
     db: &Database,
 ) -> RuntimeResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
-    journal::open_or_create_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(
+    raw::open_or_create_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(
         log_name, db,
     )
     .map(|v| v.into_inner())

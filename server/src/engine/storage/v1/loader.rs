@@ -27,19 +27,19 @@
 #[cfg(test)]
 use crate::engine::storage::{
     common::interface::fs_traits::{FSInterface, FileOpen},
-    v1::raw::journal::JournalWriter,
+    v1::raw::journal::raw::JournalWriter,
 };
 use crate::engine::{
     core::{EntityIDRef, GlobalNS},
     data::uuid::Uuid,
     error::RuntimeResult,
-    fractal::error::ErrorContext,
-    fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
+    fractal::{error::ErrorContext, FractalModelDriver, ModelDrivers, ModelUniqueID},
     storage::{
         common::interface::fs_imp::LocalFS,
-        v1::{
-            impls::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
-            raw::{batch_jrnl, journal, spec},
+        v1::raw::{
+            batch_jrnl,
+            journal::{raw as raw_journal, GNSAdapter, GNSTransactionDriverAnyFS},
+            spec,
         },
     },
 };
@@ -68,9 +68,11 @@ impl SEInitState {
     pub fn try_init(is_new: bool) -> RuntimeResult<Self> {
         let gns = GlobalNS::empty();
         let gns_txn_driver = if is_new {
-            journal::create_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(GNS_FILE_PATH)
+            raw_journal::create_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(
+                GNS_FILE_PATH,
+            )
         } else {
-            journal::load_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(
+            raw_journal::load_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(
                 GNS_FILE_PATH,
                 &gns,
             )
@@ -149,5 +151,5 @@ pub fn open_gns_driver<Fs: FSInterface>(
     path: &str,
     gns: &GlobalNS,
 ) -> RuntimeResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {
-    journal::open_or_create_journal::<GNSAdapter, Fs, spec::GNSTransactionLogV1>(path, gns)
+    raw_journal::open_or_create_journal::<GNSAdapter, Fs, spec::GNSTransactionLogV1>(path, gns)
 }

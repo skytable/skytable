@@ -28,11 +28,10 @@
 //!
 //! Target tags: `0.8.0-beta`, `0.8.0-beta.2`, `0.8.0-beta.3`
 
-mod impls;
 pub mod loader;
 pub mod raw;
 
 pub use self::{
-    impls::gns::GNSTransactionDriverAnyFS, raw::batch_jrnl::create as create_batch_journal,
-    raw::batch_jrnl::DataBatchPersistDriver,
+    raw::batch_jrnl::create as create_batch_journal, raw::batch_jrnl::DataBatchPersistDriver,
+    raw::journal::GNSTransactionDriverAnyFS,
 };

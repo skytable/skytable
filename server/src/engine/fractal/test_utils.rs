@@ -26,6 +26,7 @@
 
 use {
     super::{
+        drivers::FractalGNSDriver,
         sys_store::{SysConfig, SystemStore},
         CriticalTask, FractalModelDriver, GenericTask, GlobalInstanceLike, ModelUniqueID, Task,
     },
@@ -49,7 +50,7 @@ pub struct TestGlobal<Fs: FSInterface = VirtualFS> {
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
     #[allow(unused)]
     max_delta_size: usize,
-    txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
+    txn_driver: Mutex<FractalGNSDriver<Fs>>,
     model_drivers: RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>>,
     sys_cfg: SystemStore<Fs>,
 }
@@ -65,7 +66,7 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
             hp_queue: RwLock::default(),
             lp_queue: RwLock::default(),
             max_delta_size,
-            txn_driver: Mutex::new(txn_driver),
+            txn_driver: Mutex::new(FractalGNSDriver::new(txn_driver)),
             model_drivers: RwLock::default(),
             sys_cfg: SystemStore::_new(SysConfig::test_default()),
         }
@@ -102,7 +103,7 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     fn namespace(&self) -> &GlobalNS {
         &self.gns
     }
-    fn namespace_txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Self::FileSystem>> {
+    fn gns_driver(&self) -> &Mutex<FractalGNSDriver<Self::FileSystem>> {
         &self.txn_driver
     }
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
@@ -162,6 +163,10 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
 impl<Fs: FSInterface> Drop for TestGlobal<Fs> {
     fn drop(&mut self) {
         let mut txn_driver = self.txn_driver.lock();
-        txn_driver.__journal_mut().__close_mut().unwrap();
+        txn_driver
+            .gns_driver()
+            .__journal_mut()
+            .__close_mut()
+            .unwrap();
     }
 }

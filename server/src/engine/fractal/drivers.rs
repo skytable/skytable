@@ -38,21 +38,21 @@ use {
 };
 
 /// GNS driver
-pub(super) struct FractalGNSDriver<Fs: FSInterface> {
+pub struct FractalGNSDriver<Fs: FSInterface> {
     #[allow(unused)]
     status: util::Status,
-    pub(super) txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
+    pub(super) txn_driver: GNSTransactionDriverAnyFS<Fs>,
 }
 
 impl<Fs: FSInterface> FractalGNSDriver<Fs> {
     pub(super) fn new(txn_driver: GNSTransactionDriverAnyFS<Fs>) -> Self {
         Self {
             status: util::Status::new_okay(),
-            txn_driver: Mutex::new(txn_driver),
+            txn_driver: txn_driver,
         }
     }
-    pub fn txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Fs>> {
-        &self.txn_driver
+    pub fn gns_driver(&mut self) -> &mut GNSTransactionDriverAnyFS<Fs> {
+        &mut self.txn_driver
     }
 }
 

@@ -29,6 +29,7 @@
 //! This is revision 1 of high-level interface encoding.
 //!
 
+pub mod impls;
 pub mod map;
 pub mod obj;
 // tests

@@ -111,7 +111,7 @@ pub trait GlobalInstanceLike {
     fn get_max_delta_size(&self) -> usize;
     // global namespace
     fn namespace(&self) -> &GlobalNS;
-    fn namespace_txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Self::FileSystem>>;
+    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver<Self::FileSystem>>;
     // model drivers
     fn initialize_model_driver(
         &self,
@@ -163,8 +163,8 @@ impl GlobalInstanceLike for Global {
     fn namespace(&self) -> &GlobalNS {
         self._namespace()
     }
-    fn namespace_txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Self::FileSystem>> {
-        self.get_state().gns_driver.txn_driver()
+    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver<Self::FileSystem>> {
+        &self.get_state().gns_driver
     }
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
@@ -274,7 +274,7 @@ impl Global {
             mdl_driver,
             ..
         } = Self::__gref_raw().assume_init_read();
-        let gns_driver = gns_driver.txn_driver.into_inner().into_inner();
+        let gns_driver = gns_driver.into_inner().txn_driver.into_inner();
         let mdl_drivers = mdl_driver.into_inner();
         gns_driver.close().unwrap();
         for (_, driver) in mdl_drivers {
@@ -290,7 +290,7 @@ impl Global {
 /// The global state
 struct GlobalState {
     gns: GlobalNS,
-    gns_driver: drivers::FractalGNSDriver<LocalFS>,
+    gns_driver: Mutex<drivers::FractalGNSDriver<LocalFS>>,
     mdl_driver: RwLock<ModelDrivers<LocalFS>>,
     task_mgr: mgr::FractalMgr,
     config: SystemStore<LocalFS>,
@@ -306,7 +306,7 @@ impl GlobalState {
     ) -> Self {
         Self {
             gns,
-            gns_driver,
+            gns_driver: Mutex::new(gns_driver),
             mdl_driver,
             task_mgr,
             config,

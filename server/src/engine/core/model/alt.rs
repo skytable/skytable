@@ -273,7 +273,7 @@ impl Model {
                                 &new_fields,
                             );
                             // commit txn
-                            global.namespace_txn_driver().lock().try_commit(txn)?;
+                            global.gns_driver().lock().gns_driver().try_commit(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         new_fields
@@ -291,7 +291,7 @@ impl Model {
                                 &removed,
                             );
                             // commit txn
-                            global.namespace_txn_driver().lock().try_commit(txn)?;
+                            global.gns_driver().lock().gns_driver().try_commit(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
@@ -306,7 +306,7 @@ impl Model {
                                 &updated,
                             );
                             // commit txn
-                            global.namespace_txn_driver().lock().try_commit(txn)?;
+                            global.gns_driver().lock().gns_driver().try_commit(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {

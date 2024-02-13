@@ -174,7 +174,7 @@ impl Space {
                     space.get_uuid(),
                 ))?;
                 // commit txn
-                match global.namespace_txn_driver().lock().try_commit(txn) {
+                match global.gns_driver().lock().gns_driver().try_commit(txn) {
                     Ok(()) => {}
                     Err(e) => {
                         // tell fractal to clean it up sometime
@@ -221,7 +221,7 @@ impl Space {
                     &patch,
                 );
                 // commit
-                global.namespace_txn_driver().lock().try_commit(txn)?;
+                global.gns_driver().lock().gns_driver().try_commit(txn)?;
             }
             // merge
             dict::rmerge_data_with_patch(space.props_mut(), patch);
@@ -256,7 +256,7 @@ impl Space {
                     let txn =
                         txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global.namespace_txn_driver().lock().try_commit(txn)?;
+                    global.gns_driver().lock().gns_driver().try_commit(txn)?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
@@ -303,7 +303,7 @@ impl Space {
                     let txn =
                         txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global.namespace_txn_driver().lock().try_commit(txn)?;
+                    global.gns_driver().lock().gns_driver().try_commit(txn)?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
