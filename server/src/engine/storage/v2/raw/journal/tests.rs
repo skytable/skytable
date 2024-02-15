@@ -29,146 +29,188 @@
 */
 
 use {
-    super::{raw::create_journal, EventLog, EventLogAdapter, EventLogJournal},
-    crate::engine::{
-        error::StorageError,
-        fractal,
-        mem::unsafe_apis,
-        storage::{
-            common::interface::fs_test::VirtualFS,
-            v2::raw::{journal::raw::open_journal, spec::SystemDatabaseV1},
+    super::{raw::RawJournalAdapterEvent, DispatchFn, EventLog, EventLogAdapter, EventLogDriver},
+    crate::{
+        engine::{
+            error::StorageError,
+            mem::unsafe_apis,
+            storage::{
+                common::interface::fs_test::VirtualFS,
+                v2::raw::{
+                    journal::raw::{create_journal, open_journal},
+                    spec::SystemDatabaseV1,
+                },
+            },
+            RuntimeResult,
         },
-        RuntimeResult,
+        util::compiler::TaggedEnum,
     },
+    sky_macros::TaggedEnum,
     std::cell::{Ref, RefCell, RefMut},
 };
 
-#[derive(Default)]
-pub struct SimpleDB {
-    values: RefCell<Vec<String>>,
+// event definitions
+
+#[derive(TaggedEnum, Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum TestEvent {
+    Push = 0,
+    Pop = 1,
+    Clear = 2,
 }
 
-impl SimpleDB {
-    fn as_mut(&self) -> RefMut<Vec<String>> {
-        self.values.borrow_mut()
+pub trait IsTestEvent {
+    const EVCODE: TestEvent;
+    fn encode(self, _: &mut Vec<u8>);
+}
+
+macro_rules! impl_test_event {
+    ($($ty:ty as $code:expr $(=> $expr:expr)?),* $(,)?) => {
+        $(impl IsTestEvent for $ty {
+            const EVCODE: TestEvent = $code;
+            fn encode(self, buf: &mut Vec<u8>) { let _ = buf; fn do_it(s: $ty, b: &mut Vec<u8>, f: impl Fn($ty, &mut Vec<u8>)) { f(s, b) } $(do_it(self, buf, $expr))? }
+        })*
     }
-    fn as_ref(&self) -> Ref<Vec<String>> {
-        self.values.borrow()
+}
+
+pub struct EventPush<'a>(&'a str);
+pub struct EventPop;
+pub struct EventClear;
+
+impl_test_event!(
+    EventPush<'_> as TestEvent::Push => |me, buf| {
+        buf.extend(&(me.0.len() as u64).to_le_bytes());
+        buf.extend(me.0.as_bytes())
+    },
+    EventPop as TestEvent::Pop,
+    EventClear as TestEvent::Clear,
+);
+
+impl<TE: IsTestEvent> RawJournalAdapterEvent<EventLog<TestDBAdapter>> for TE {
+    fn md(&self) -> u64 {
+        Self::EVCODE.dscr_u64()
+    }
+    fn write_buffered(self, buf: &mut Vec<u8>) {
+        TE::encode(self, buf)
+    }
+}
+
+// adapter
+
+pub struct TestDBAdapter;
+impl EventLogAdapter for TestDBAdapter {
+    type Spec = SystemDatabaseV1;
+    type GlobalState = TestDB;
+    type EventMeta = TestEvent;
+    type DecodeDispatch = [DispatchFn<TestDB>; 3];
+    const DECODE_DISPATCH: Self::DecodeDispatch = [
+        |db, payload| {
+            if payload.len() < sizeof!(u64) {
+                Err(StorageError::RawJournalCorrupted.into())
+            } else {
+                let length =
+                    u64::from_le_bytes(unsafe { unsafe_apis::memcpy(&payload[..sizeof!(u64)]) });
+                let payload = &payload[sizeof!(u64)..];
+                if payload.len() as u64 != length {
+                    Err(StorageError::RawJournalCorrupted.into())
+                } else {
+                    let string = String::from_utf8(payload.to_owned()).unwrap();
+                    db._mut().push(string);
+                    Ok(())
+                }
+            }
+        },
+        |db, _| {
+            let _ = db._mut().pop();
+            Ok(())
+        },
+        |db, _| {
+            db._mut().clear();
+            Ok(())
+        },
+    ];
+}
+
+#[derive(Default)]
+pub struct TestDB {
+    data: RefCell<Vec<String>>,
+}
+
+impl TestDB {
+    fn _mut(&self) -> RefMut<Vec<String>> {
+        self.data.borrow_mut()
+    }
+    fn _ref(&self) -> Ref<Vec<String>> {
+        self.data.borrow()
     }
     fn push(
         &self,
-        log: &mut EventLogJournal<SimpleDBAdapter, VirtualFS>,
+        log: &mut EventLogDriver<TestDBAdapter, VirtualFS>,
         key: &str,
     ) -> RuntimeResult<()> {
-        log.commit_event(DbEvent::Push(key))?;
-        self.as_mut().push(key.into());
+        log.commit_event(EventPush(key))?;
+        self._mut().push(key.into());
         Ok(())
     }
-    fn pop(&self, log: &mut EventLogJournal<SimpleDBAdapter, VirtualFS>) -> RuntimeResult<()> {
-        log.commit_event(DbEvent::Pop)?;
-        self.as_mut().pop().unwrap();
+    fn pop(&self, log: &mut EventLogDriver<TestDBAdapter, VirtualFS>) -> RuntimeResult<()> {
+        assert!(!self._ref().is_empty());
+        log.commit_event(EventPop)?;
+        self._mut().pop().unwrap();
         Ok(())
     }
-    fn clear(&self, log: &mut EventLogJournal<SimpleDBAdapter, VirtualFS>) -> RuntimeResult<()> {
-        log.commit_event(DbEvent::Clear)?;
-        self.as_mut().clear();
+    fn clear(&self, log: &mut EventLogDriver<TestDBAdapter, VirtualFS>) -> RuntimeResult<()> {
+        log.commit_event(EventClear)?;
+        self._mut().clear();
         Ok(())
     }
 }
 
-enum DbEvent<'a> {
-    Push(&'a str),
-    Pop,
-    Clear,
-}
-
-enum DbEventDecoded {
-    Push(String),
-    Pop,
-    Clear,
-}
-
-struct SimpleDBAdapter;
-
-impl EventLogAdapter for SimpleDBAdapter {
-    type SdssSpec = SystemDatabaseV1;
-    type GlobalState = SimpleDB;
-    type Event<'a> = DbEvent<'a>;
-    type DecodedEvent = DbEventDecoded;
-    type EventMeta = u64;
-    type Error = fractal::error::Error;
-    const EV_MAX: u8 = 2;
-    unsafe fn meta_from_raw(m: u64) -> Self::EventMeta {
-        m
-    }
-    fn event_md<'a>(event: &Self::Event<'a>) -> u64 {
-        match event {
-            DbEvent::Push(_) => 0,
-            DbEvent::Pop => 1,
-            DbEvent::Clear => 2,
-        }
-    }
-    fn encode<'a>(event: Self::Event<'a>) -> Box<[u8]> {
-        if let DbEvent::Push(k) = event {
-            let mut buf = Vec::new();
-            buf.extend(&(k.len() as u64).to_le_bytes());
-            buf.extend(k.as_bytes());
-            buf.into_boxed_slice()
-        } else {
-            Default::default()
-        }
-    }
-    fn decode(block: Vec<u8>, m: u64) -> Result<Self::DecodedEvent, Self::Error> {
-        Ok(match m {
-            0 => {
-                if block.len() < sizeof!(u64) {
-                    return Err(StorageError::RawJournalCorrupted.into());
-                }
-                let len =
-                    u64::from_le_bytes(unsafe { unsafe_apis::memcpy(&block[..sizeof!(u64)]) });
-                let block = &block[sizeof!(u64)..];
-                if block.len() as u64 != len {
-                    return Err(StorageError::RawJournalCorrupted.into());
-                }
-                DbEventDecoded::Push(String::from_utf8_lossy(block).into())
-            }
-            1 => DbEventDecoded::Pop,
-            2 => DbEventDecoded::Clear,
-            _ => panic!(),
-        })
-    }
-    fn apply_event(g: &Self::GlobalState, ev: Self::DecodedEvent) -> Result<(), Self::Error> {
-        match ev {
-            DbEventDecoded::Push(new) => g.as_mut().push(new),
-            DbEventDecoded::Pop => {
-                let _ = g.as_mut().pop();
-            }
-            DbEventDecoded::Clear => g.as_mut().clear(),
-        }
-        Ok(())
-    }
+fn open_log() -> (
+    TestDB,
+    super::raw::RawJournalWriter<EventLog<TestDBAdapter>, VirtualFS>,
+) {
+    let db = TestDB::default();
+    let log = open_journal("jrnl", &db).unwrap();
+    (db, log)
 }
 
 #[test]
-fn event_log_basic_events() {
-    array!(const VALUES: [&str] = ["key1", "key2", "key3", "fancykey", "done"]);
+fn test_this_data() {
+    array!(
+        const DATA1: [&str] = ["acai berry", "billberry", "cranberry"];
+        const DATA2: [&str] = ["acai berry", "billberry", "cranberry", "bradbury"];
+        const DATA3: [&str] = ["acai berry", "billberry", "cranberry"];
+        const DATA4: [&str] = ["acai berry", "billberry", "cranberry", "dewberry"];
+    );
     {
-        let mut log = create_journal::<EventLog<SimpleDBAdapter>, _>("jrnl1").unwrap();
-        let db = SimpleDB::default();
-        for value in VALUES {
-            db.push(&mut log, value).unwrap();
+        let db = TestDB::default();
+        let mut log = create_journal("jrnl").unwrap();
+        for key in DATA1 {
+            db.push(&mut log, key).unwrap();
         }
-        db.pop(&mut log).unwrap();
-        EventLogJournal::close_driver(&mut log).unwrap();
+        EventLog::close(&mut log).unwrap();
     }
     {
-        let db = SimpleDB::default();
-        let mut log = open_journal::<EventLog<SimpleDBAdapter>, VirtualFS>("jrnl1", &db).unwrap();
-        EventLogJournal::close_driver(&mut log).unwrap();
-        assert_eq!(
-            db.as_ref().as_slice().last().unwrap(),
-            VALUES[VALUES.len() - 2]
-        );
-        assert_eq!(db.as_ref().as_slice(), &VALUES[..VALUES.len() - 1]);
+        let (db, mut log) = open_log();
+        assert_eq!(db._ref().as_slice(), DATA1);
+        db.push(&mut log, DATA2[3]).unwrap();
+        EventLog::close(&mut log).unwrap();
+    }
+    {
+        let (db, mut log) = open_log();
+        assert_eq!(db._ref().as_slice(), DATA2);
+        db.pop(&mut log).unwrap();
+        EventLog::close(&mut log).unwrap();
+    }
+    {
+        let (db, mut log) = open_log();
+        assert_eq!(db._ref().as_slice(), DATA3);
+        db.push(&mut log, DATA4[3]).unwrap();
+        EventLog::close(&mut log).unwrap();
+    }
+    {
+        let (db, mut log) = open_log();
+        assert_eq!(db._ref().as_slice(), DATA4);
+        EventLog::close(&mut log).unwrap();
     }
 }

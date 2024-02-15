@@ -27,7 +27,7 @@
 use {
     super::{
         create_journal, open_journal, CommitPreference, DriverEvent, DriverEventKind,
-        JournalInitializer, RawJournalAdapter, RawJournalWriter,
+        JournalInitializer, RawJournalAdapter, RawJournalAdapterEvent, RawJournalWriter,
     },
     crate::engine::{
         error::StorageError,
@@ -63,7 +63,7 @@ fn encode_decode_meta() {
 */
 
 #[derive(Debug, Clone, PartialEq)]
-struct SimpleDB {
+pub struct SimpleDB {
     data: RefCell<Vec<String>>,
 }
 impl SimpleDB {
@@ -79,13 +79,13 @@ impl SimpleDB {
         &mut self,
         log: &mut RawJournalWriter<SimpleDBJournal, VirtualFS>,
     ) -> RuntimeResult<()> {
-        log.commit_event(DbEventEncoded::Clear)?;
+        log.commit_event(DbEventClear)?;
         self.data.get_mut().clear();
         Ok(())
     }
     fn pop(&mut self, log: &mut RawJournalWriter<SimpleDBJournal, VirtualFS>) -> RuntimeResult<()> {
         self.data.get_mut().pop().unwrap();
-        log.commit_event(DbEventEncoded::Pop)?;
+        log.commit_event(DbEventPop)?;
         Ok(())
     }
     fn push(
@@ -94,24 +94,58 @@ impl SimpleDB {
         new: impl ToString,
     ) -> RuntimeResult<()> {
         let new = new.to_string();
-        log.commit_event(DbEventEncoded::NewKey(&new))?;
+        log.commit_event(DbEventPush(&new))?;
         self.data.get_mut().push(new);
         Ok(())
     }
 }
-struct SimpleDBJournal;
-enum DbEventEncoded<'a> {
-    NewKey(&'a str),
-    Pop,
-    Clear,
+
+/*
+    event impls
+*/
+
+pub struct SimpleDBJournal;
+struct DbEventPush<'a>(&'a str);
+struct DbEventPop;
+struct DbEventClear;
+trait SimpleDBEvent: Sized {
+    const OPC: u8;
+    fn write_buffered(self, _: &mut Vec<u8>);
 }
-enum DbEventRestored {
+macro_rules! impl_db_event {
+    ($($ty:ty as $code:expr $(=> $expr:expr)?),*) => {
+        $(impl SimpleDBEvent for $ty {
+            const OPC: u8 = $code;
+            fn write_buffered(self, buf: &mut Vec<u8>) { let _ = buf; fn do_it(s: $ty, b: &mut Vec<u8>, f: impl Fn($ty, &mut Vec<u8>)) { f(s, b) } $(do_it(self, buf, $expr))? }
+        })*
+    }
+}
+
+impl_db_event!(
+    DbEventPush<'_> as 0 => |me, buf| {
+        buf.extend(&(me.0.len() as u64).to_le_bytes());
+        buf.extend(me.0.as_bytes());
+    },
+    DbEventPop as 1,
+    DbEventClear as 2
+);
+
+impl<T: SimpleDBEvent> RawJournalAdapterEvent<SimpleDBJournal> for T {
+    fn md(&self) -> u64 {
+        T::OPC as _
+    }
+    fn write_buffered(self, buf: &mut Vec<u8>) {
+        T::write_buffered(self, buf)
+    }
+}
+
+pub enum DbEventRestored {
     NewKey(String),
     Pop,
     Clear,
 }
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum EventMeta {
+pub enum EventMeta {
     NewKey,
     Pop,
     Clear,
@@ -120,8 +154,6 @@ impl RawJournalAdapter for SimpleDBJournal {
     const COMMIT_PREFERENCE: CommitPreference = CommitPreference::Buffered;
     type Spec = SystemDatabaseV1;
     type GlobalState = SimpleDB;
-    type Event<'a> = DbEventEncoded<'a>;
-    type DecodedEvent = DbEventRestored;
     type EventMeta = EventMeta;
     type Context<'a> = () where Self: 'a;
     fn initialize(_: &JournalInitializer) -> Self {
@@ -140,52 +172,34 @@ impl RawJournalAdapter for SimpleDBJournal {
             _ => return None,
         })
     }
-    fn get_event_md<'a>(&self, event: &Self::Event<'a>) -> u64 {
-        match event {
-            DbEventEncoded::NewKey(_) => 0,
-            DbEventEncoded::Pop => 1,
-            DbEventEncoded::Clear => 2,
-        }
+    fn commit_buffered<'a, E: RawJournalAdapterEvent<Self>>(
+        &mut self,
+        buf: &mut Vec<u8>,
+        event: E,
+    ) {
+        event.write_buffered(buf)
     }
-    fn commit_buffered<'a>(&mut self, buf: &mut Vec<u8>, event: Self::Event<'a>) {
-        if let DbEventEncoded::NewKey(key) = event {
-            buf.extend((key.len() as u64).to_le_bytes());
-            buf.extend(key.as_bytes());
-        }
-    }
-    fn parse_event<'a, Fs: FSInterface>(
+    fn decode_apply<'a, Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        meta: Self::EventMeta,
         file: &mut TrackedReader<
             <<Fs as FSInterface>::File as FileInterface>::BufReader,
             Self::Spec,
         >,
-        meta: Self::EventMeta,
-    ) -> RuntimeResult<Self::DecodedEvent> {
-        Ok(match meta {
+    ) -> RuntimeResult<()> {
+        match meta {
             EventMeta::NewKey => {
                 let key_size = u64::from_le_bytes(file.read_block()?);
                 let mut keybuf = vec![0u8; key_size as usize];
                 file.tracked_read(&mut keybuf)?;
                 match String::from_utf8(keybuf) {
-                    Ok(k) => DbEventRestored::NewKey(k),
+                    Ok(k) => gs.data.borrow_mut().push(k),
                     Err(_) => return Err(StorageError::RawJournalEventCorrupted.into()),
                 }
             }
-            EventMeta::Clear => DbEventRestored::Clear,
-            EventMeta::Pop => DbEventRestored::Pop,
-        })
-    }
-    fn apply_event<'a>(
-        gs: &Self::GlobalState,
-        _: Self::EventMeta,
-        event: Self::DecodedEvent,
-    ) -> RuntimeResult<()> {
-        match event {
-            DbEventRestored::NewKey(k) => gs.data.borrow_mut().push(k),
-            DbEventRestored::Clear => gs.data.borrow_mut().clear(),
-            DbEventRestored::Pop => {
-                if gs.data.borrow_mut().pop().is_none() {
-                    return Err(StorageError::RawJournalCorrupted.into());
-                }
+            EventMeta::Clear => gs.data.borrow_mut().clear(),
+            EventMeta::Pop => {
+                let _ = gs.data.borrow_mut().pop().unwrap();
             }
         }
         Ok(())
@@ -354,7 +368,6 @@ fn journal_with_server_single_event() {
                 JournalReaderTraceEvent::AttemptingEvent(0),
                 JournalReaderTraceEvent::DetectedServerEvent,
                 JournalReaderTraceEvent::ServerEventMetadataParsed,
-                JournalReaderTraceEvent::ServerEventParsed,
                 JournalReaderTraceEvent::ServerEventAppliedSuccess,
                 // now read close event
                 JournalReaderTraceEvent::AttemptingEvent(1),
@@ -402,7 +415,6 @@ fn journal_with_server_single_event() {
                 JournalReaderTraceEvent::AttemptingEvent(0),
                 JournalReaderTraceEvent::DetectedServerEvent,
                 JournalReaderTraceEvent::ServerEventMetadataParsed,
-                JournalReaderTraceEvent::ServerEventParsed,
                 JournalReaderTraceEvent::ServerEventAppliedSuccess,
                 // now read close event
                 JournalReaderTraceEvent::AttemptingEvent(1),

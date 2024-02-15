@@ -70,3 +70,26 @@ pub const fn hot<T>(v: T) -> T {
 pub fn cold_rerr<T, E>(e: E) -> Result<T, E> {
     Err(e)
 }
+
+/*
+    pure enumerations
+*/
+
+pub trait TaggedEnum: Sized {
+    type Dscr: PartialOrd;
+    const MAX_DSCR: Self::Dscr;
+    const VARIANT_COUNT: usize;
+    fn dscr(&self) -> Self::Dscr;
+    fn dscr_u64(&self) -> u64;
+    unsafe fn from_raw(d: Self::Dscr) -> Self;
+    fn try_from_raw(d: Self::Dscr) -> Option<Self> {
+        if d > Self::MAX_DSCR {
+            None
+        } else {
+            Some(unsafe {
+                // UNSAFE(@ohsayan): just verified the dscr
+                <Self as TaggedEnum>::from_raw(d)
+            })
+        }
+    }
+}

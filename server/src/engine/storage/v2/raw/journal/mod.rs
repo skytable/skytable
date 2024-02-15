@@ -26,100 +26,81 @@
 
 #![allow(dead_code)]
 
+use {
+    self::raw::{CommitPreference, RawJournalAdapter, RawJournalAdapterEvent, RawJournalWriter},
+    crate::{
+        engine::{
+            error::StorageError,
+            storage::common::{
+                checksum::SCrc64,
+                interface::fs_traits::{FSInterface, FileInterface},
+                sdss::sdss_r1::{
+                    rw::{TrackedReader, TrackedWriter},
+                    FileSpecV1,
+                },
+            },
+            RuntimeResult,
+        },
+        util::compiler::TaggedEnum,
+    },
+    std::{marker::PhantomData, mem, ops::Index},
+};
+
 mod raw;
 #[cfg(test)]
 mod tests;
 
-use {
-    self::raw::{CommitPreference, JournalInitializer, RawJournalAdapter},
-    crate::engine::{
-        error::StorageError,
-        fractal,
-        storage::common::{
-            checksum::SCrc64,
-            interface::fs_traits::{FSInterface, FileInterface},
-            sdss::sdss_r1::{
-                rw::{TrackedReader, TrackedWriter},
-                FileSpecV1,
-            },
-        },
-        RuntimeResult,
-    },
-    std::marker::PhantomData,
-};
-
-/*
-    Event log adapter
-*/
-
-/// A journal based on an [`EventLog`]
-pub type EventLogJournal<E, Fs> = raw::RawJournalWriter<EventLog<E>, Fs>;
-
-/// An [`EventLog`] is a standard, append-only, sequential journal with per-event and per-cycle integrity protection
-pub struct EventLog<E: EventLogAdapter>(PhantomData<E>);
-
-/// An adapter that provides the specification for an event log
-pub trait EventLogAdapter {
-    /// the SDSS file spec
-    type SdssSpec: FileSpecV1;
-    /// global state
-    type GlobalState;
-    /// the event type
-    type Event<'a>;
-    /// the decoded event type
-    type DecodedEvent;
-    /// event metadata
-    type EventMeta: Copy;
-    /// the error type
-    type Error: Into<fractal::error::Error>;
-    /// the maximum value for the event discriminant
-    const EV_MAX: u8;
-    /// get metadata from the raw value
-    unsafe fn meta_from_raw(m: u64) -> Self::EventMeta;
-    /// get metadata from the event
-    fn event_md<'a>(event: &Self::Event<'a>) -> u64;
-    /// encode an event
-    fn encode<'a>(event: Self::Event<'a>) -> Box<[u8]>;
-    /// decode an event
-    fn decode(block: Vec<u8>, kind: Self::EventMeta) -> Result<Self::DecodedEvent, Self::Error>;
-    /// apply the event
-    fn apply_event(g: &Self::GlobalState, ev: Self::DecodedEvent) -> Result<(), Self::Error>;
+pub type EventLogDriver<EL, Fs> = RawJournalWriter<EventLog<EL>, Fs>;
+pub struct EventLog<EL: EventLogAdapter>(PhantomData<EL>);
+impl<EL: EventLogAdapter> EventLog<EL> {
+    pub fn close<Fs: FSInterface>(me: &mut EventLogDriver<EL, Fs>) -> RuntimeResult<()> {
+        RawJournalWriter::close_driver(me)
+    }
 }
 
-impl<E: EventLogAdapter> RawJournalAdapter for EventLog<E> {
-    const COMMIT_PREFERENCE: CommitPreference = CommitPreference::Direct;
-    type Spec = <E as EventLogAdapter>::SdssSpec;
-    type GlobalState = <E as EventLogAdapter>::GlobalState;
+type DispatchFn<G> = fn(&G, Vec<u8>) -> RuntimeResult<()>;
+
+pub trait EventLogAdapter {
+    type Spec: FileSpecV1;
+    type GlobalState;
+    type EventMeta: TaggedEnum<Dscr = u8>;
+    type DecodeDispatch: Index<usize, Output = DispatchFn<Self::GlobalState>>;
+    const DECODE_DISPATCH: Self::DecodeDispatch;
+    const ENSURE: () = assert!(
+        (mem::size_of::<Self::DecodeDispatch>() / mem::size_of::<DispatchFn<Self::GlobalState>>())
+            == Self::EventMeta::VARIANT_COUNT as usize
+    );
+}
+
+impl<EL: EventLogAdapter> RawJournalAdapter for EventLog<EL> {
+    const COMMIT_PREFERENCE: CommitPreference = {
+        let _ = EL::ENSURE;
+        CommitPreference::Direct
+    };
+    type Spec = <EL as EventLogAdapter>::Spec;
+    type GlobalState = <EL as EventLogAdapter>::GlobalState;
     type Context<'a> = () where Self: 'a;
-    type Event<'a> = <E as EventLogAdapter>::Event<'a>;
-    type DecodedEvent = <E as EventLogAdapter>::DecodedEvent;
-    type EventMeta = <E as EventLogAdapter>::EventMeta;
-    fn initialize(_: &JournalInitializer) -> Self {
+    type EventMeta = <EL as EventLogAdapter>::EventMeta;
+    fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
     fn enter_context<'a, Fs: FSInterface>(
-        _: &'a mut raw::RawJournalWriter<Self, Fs>,
+        _: &'a mut RawJournalWriter<Self, Fs>,
     ) -> Self::Context<'a> {
-        ()
     }
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
-        if meta > <E as EventLogAdapter>::EV_MAX as u64 {
-            return None;
-        }
-        unsafe {
-            // UNSAFE(@ohsayan): checked max
-            Some(<E as EventLogAdapter>::meta_from_raw(meta))
-        }
+        <<EL as EventLogAdapter>::EventMeta as TaggedEnum>::try_from_raw(meta as u8)
     }
-    fn get_event_md<'a>(&self, event: &Self::Event<'a>) -> u64 {
-        <E as EventLogAdapter>::event_md(event)
-    }
-    fn commit_direct<'a, Fs: FSInterface>(
+    fn commit_direct<'a, Fs: FSInterface, E>(
         &mut self,
         w: &mut TrackedWriter<Fs::File, Self::Spec>,
-        event: Self::Event<'a>,
-    ) -> RuntimeResult<()> {
-        let pl = <E as EventLogAdapter>::encode(event);
+        ev: E,
+    ) -> RuntimeResult<()>
+    where
+        E: RawJournalAdapterEvent<Self>,
+    {
+        let mut pl = vec![];
+        ev.write_buffered(&mut pl);
         let plen = (pl.len() as u64).to_le_bytes();
         let mut checksum = SCrc64::new();
         checksum.update(&plen);
@@ -132,16 +113,14 @@ impl<E: EventLogAdapter> RawJournalAdapter for EventLog<E> {
         w.tracked_write(&plen)?;
         w.tracked_write(&pl)
     }
-    fn parse_event<'a, Fs: FSInterface>(
+    fn decode_apply<'a, Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        meta: Self::EventMeta,
         file: &mut TrackedReader<
             <<Fs as FSInterface>::File as FileInterface>::BufReader,
             Self::Spec,
         >,
-        m: Self::EventMeta,
-    ) -> RuntimeResult<Self::DecodedEvent> {
-        /*
-            verify checksum
-        */
+    ) -> RuntimeResult<()> {
         let expected_checksum = u64::from_le_bytes(file.read_block()?);
         let plen = u64::from_le_bytes(file.read_block()?);
         let mut pl = vec![0; plen as usize];
@@ -152,13 +131,9 @@ impl<E: EventLogAdapter> RawJournalAdapter for EventLog<E> {
         if this_checksum.finish() != expected_checksum {
             return Err(StorageError::RawJournalCorrupted.into());
         }
-        <E as EventLogAdapter>::decode(pl, m).map_err(Into::into)
-    }
-    fn apply_event<'a>(
-        gs: &Self::GlobalState,
-        _: Self::EventMeta,
-        event: Self::DecodedEvent,
-    ) -> RuntimeResult<()> {
-        <E as EventLogAdapter>::apply_event(gs, event).map_err(Into::into)
+        <EL as EventLogAdapter>::DECODE_DISPATCH
+            [<<EL as EventLogAdapter>::EventMeta as TaggedEnum>::dscr_u64(&meta) as usize](
+            gs, pl
+        )
     }
 }

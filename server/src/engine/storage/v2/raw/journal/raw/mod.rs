@@ -144,7 +144,6 @@ pub enum JournalReaderTraceEvent {
     AttemptingEvent(u64),
     DetectedServerEvent,
     ServerEventMetadataParsed,
-    ServerEventParsed,
     ServerEventAppliedSuccess,
     // drv events
     DriverEventExpectingClose,
@@ -208,6 +207,19 @@ macro_rules! jtrace_reader {
     impls
 */
 
+pub trait RawJournalAdapterEvent<CA: RawJournalAdapter>: Sized {
+    fn md(&self) -> u64;
+    fn write_direct<Fs: FSInterface>(
+        self,
+        _: &mut TrackedWriter<Fs::File, <CA as RawJournalAdapter>::Spec>,
+    ) -> RuntimeResult<()> {
+        unimplemented!()
+    }
+    fn write_buffered(self, _: &mut Vec<u8>) {
+        unimplemented!()
+    }
+}
+
 /// An adapter defining the low-level structure of a log file
 pub trait RawJournalAdapter: Sized {
     /// event size buffer
@@ -224,12 +236,8 @@ pub trait RawJournalAdapter: Sized {
     type Context<'a>
     where
         Self: 'a;
-    /// a journal event
-    type Event<'a>;
-    /// the decoded event
-    type DecodedEvent;
     /// a type representing the event kind
-    type EventMeta: Copy;
+    type EventMeta;
     /// initialize this adapter
     fn initialize(j_: &JournalInitializer) -> Self;
     /// get a write context
@@ -238,33 +246,32 @@ pub trait RawJournalAdapter: Sized {
     ) -> Self::Context<'a>;
     /// parse event metadata
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta>;
-    /// get event metadata as an [`u64`]
-    fn get_event_md<'a>(&self, event: &Self::Event<'a>) -> u64;
     /// commit event (direct preference)
-    fn commit_direct<'a, Fs: FSInterface>(
+    fn commit_direct<'a, Fs: FSInterface, E>(
         &mut self,
         _: &mut TrackedWriter<Fs::File, Self::Spec>,
-        _: Self::Event<'a>,
-    ) -> RuntimeResult<()> {
+        _: E,
+    ) -> RuntimeResult<()>
+    where
+        E: RawJournalAdapterEvent<Self>,
+    {
         unimplemented!()
     }
     /// commit event (buffered)
-    fn commit_buffered<'a>(&mut self, _: &mut Vec<u8>, _: Self::Event<'a>) {
+    fn commit_buffered<'a, E>(&mut self, _: &mut Vec<u8>, _: E)
+    where
+        E: RawJournalAdapterEvent<Self>,
+    {
         unimplemented!()
     }
-    /// parse the event
-    fn parse_event<'a, Fs: FSInterface>(
+    /// decode and apply the event
+    fn decode_apply<'a, Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        meta: Self::EventMeta,
         file: &mut TrackedReader<
             <<Fs as FSInterface>::File as FileInterface>::BufReader,
             Self::Spec,
         >,
-        meta: Self::EventMeta,
-    ) -> RuntimeResult<Self::DecodedEvent>;
-    /// apply the event
-    fn apply_event<'a>(
-        gs: &Self::GlobalState,
-        meta: Self::EventMeta,
-        event: Self::DecodedEvent,
     ) -> RuntimeResult<()>;
 }
 
@@ -275,15 +282,14 @@ pub enum CommitPreference {
 }
 
 #[derive(Debug, PartialEq)]
-/**
-A driver event
----
-Structured as:
-+------------------+----------+--------------+------------------+-------------------+-----------------+-----------------+
-|   16B: Event ID  | 8B: Meta | 8B: Checksum | 8B: Payload size | 8B: prev checksum | 8B: prev offset | 8B: prev txn id |
-+------------------+----------+--------------+------------------+-------------------+-----------------+-----------------+
+/*
+    A driver event
+    ---
+    Structured as:
+    +------------------+----------+--------------+------------------+-------------------+-----------------+-----------------+
+    |   16B: Event ID  | 8B: Meta | 8B: Checksum | 8B: Payload size | 8B: prev checksum | 8B: prev offset | 8B: prev txn id |
+    +------------------+----------+--------------+------------------+-------------------+-----------------+-----------------+
 */
-
 struct DriverEvent {
     txn_id: u128,
     event: DriverEventKind,
@@ -493,10 +499,13 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
     /// Commit a new event to the journal
     ///
     /// This will auto-flush the buffer and sync metadata as soon as the [`RawJournalAdapter::commit`] method returns,
-    /// unless otherwise configured
-    pub fn commit_event<'a>(&mut self, event: J::Event<'a>) -> RuntimeResult<()> {
+    /// unless otherwise configured.
+    pub fn commit_event<'a, E: RawJournalAdapterEvent<J>>(
+        &mut self,
+        event: E,
+    ) -> RuntimeResult<()> {
         self.txn_context(|me, txn_id| {
-            let ev_md = me.j.get_event_md(&event);
+            let ev_md = event.md();
             jtrace_writer!(CommitAttemptForEvent(txn_id as u64));
             // MSB must be unused; set msb
             debug_assert!(ev_md & SERVER_EV_MASK != 1, "MSB must be unset");
@@ -520,7 +529,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
                     log_file.tracked_write(&ev_md.to_le_bytes())?;
                     jtrace_writer!(CommitServerEventWroteMetadata);
                     // now hand over control to adapter impl
-                    J::commit_direct::<Fs>(j, log_file, event)?;
+                    J::commit_direct::<Fs, _>(j, log_file, event)?;
                 }
             }
             jtrace_writer!(CommitServerEventAdapterCompleted);
@@ -674,10 +683,8 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
                     jtrace_reader!(ServerEventMetadataParsed);
                     // now parse the actual event
                     let Self { tr: reader, .. } = self;
-                    let event = J::parse_event::<Fs>(reader, meta)?;
-                    jtrace_reader!(ServerEventParsed);
                     // we do not consider a parsed event a success signal; so we must actually apply it
-                    match J::apply_event(gs, meta, event) {
+                    match J::decode_apply::<Fs>(gs, meta, reader) {
                         Ok(()) => {
                             jtrace_reader!(ServerEventAppliedSuccess);
                             Self::__refresh_known_txn(self);
