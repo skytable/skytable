@@ -46,6 +46,12 @@ pub struct SCrc64 {
     digest: Digest<'static, u64>,
 }
 
+impl Default for SCrc64 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl fmt::Debug for SCrc64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SCrc64")

@@ -26,20 +26,23 @@
 
 #![allow(dead_code)]
 
-use crate::{
-    engine::{
-        mem::fixed_vec::FixedVec,
-        storage::common::{
-            checksum::SCrc64,
-            interface::fs_traits::{
-                FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt,
-                FileInterfaceRead, FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
+use {
+    crate::{
+        engine::{
+            mem::fixed_vec::FixedVec,
+            storage::common::{
+                checksum::SCrc64,
+                interface::fs_traits::{
+                    FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt,
+                    FileInterfaceRead, FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
+                },
+                sdss::sdss_r1::FileSpecV1,
             },
-            sdss::sdss_r1::FileSpecV1,
+            RuntimeResult,
         },
-        RuntimeResult,
+        util::os::SysIOError,
     },
-    util::os::SysIOError,
+    std::mem,
 };
 
 /*
@@ -206,6 +209,30 @@ pub struct TrackedReader<F, S: FileSpecV1> {
     cs: SCrc64,
 }
 
+pub struct TrackedReaderContext<'a, F, S: FileSpecV1> {
+    tr: &'a mut TrackedReader<F, S>,
+    p_checksum: SCrc64,
+}
+
+impl<'a, F: FileInterfaceRead, S: FileSpecV1> TrackedReaderContext<'a, F, S> {
+    pub fn read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
+        self.tr
+            .tracked_read(buf)
+            .map(|_| self.p_checksum.update(buf))
+    }
+    pub fn read_block<const N: usize>(&mut self) -> RuntimeResult<[u8; N]> {
+        let mut block = [0; N];
+        self.tr.tracked_read(&mut block).map(|_| {
+            self.p_checksum.update(&block);
+            block
+        })
+    }
+    pub fn finish(self) -> (u64, &'a mut TrackedReader<F, S>) {
+        let Self { tr, p_checksum } = self;
+        (p_checksum.finish(), tr)
+    }
+}
+
 impl<F: FileInterface, S: FileSpecV1> TrackedReader<F, S> {
     /// Create a new [`TrackedReader`]. This needs to retrieve file position and length
     pub fn new(mut f: SdssFile<F, S>) -> RuntimeResult<TrackedReader<F::BufReader, S>> {
@@ -227,6 +254,12 @@ impl<F: FileInterface, S: FileSpecV1> TrackedReader<F, S> {
 }
 
 impl<F: FileInterfaceRead, S: FileSpecV1> TrackedReader<F, S> {
+    pub fn context(&mut self) -> TrackedReaderContext<F, S> {
+        TrackedReaderContext {
+            tr: self,
+            p_checksum: SCrc64::new(),
+        }
+    }
     /// Attempt to fill the buffer. This read is tracked.
     pub fn tracked_read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         self.untracked_read(buf).map(|_| self.cs.update(buf))
@@ -319,6 +352,7 @@ pub struct TrackedWriter<
     f_md: S::Metadata,
     t_cursor: u64,
     t_checksum: SCrc64,
+    t_partial_checksum: SCrc64,
     buf: FixedVec<u8, SIZE>,
 }
 
@@ -336,6 +370,7 @@ impl<
             f_md,
             t_cursor,
             t_checksum,
+            t_partial_checksum: SCrc64::new(),
             buf: FixedVec::allocate(),
         }
     }
@@ -397,6 +432,11 @@ impl<
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
     > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
+    /// Same as [`Self::tracked_write_through_buffer`], but the partial state is updated
+    pub fn dtrack_write_through_buffer(&mut self, buf: &[u8]) -> RuntimeResult<()> {
+        self.tracked_write_through_buffer(buf)
+            .map(|_| self.t_partial_checksum.update(buf))
+    }
     /// Don't write to the buffer, instead directly write to the file
     ///
     /// NB:
@@ -417,6 +457,15 @@ impl<
                 r
             }
         }
+    }
+    /// Same as [`Self::tracked_write`], but the partial state is updated
+    pub fn dtrack_write(&mut self, buf: &[u8]) -> RuntimeResult<()> {
+        self.tracked_write(buf)
+            .map(|_| self.t_partial_checksum.update(buf))
+    }
+    /// Reset the partial state
+    pub fn reset_partial(&mut self) -> u64 {
+        mem::take(&mut self.t_partial_checksum).finish()
     }
     /// Do a tracked write
     ///

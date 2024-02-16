@@ -29,16 +29,26 @@
 */
 
 use {
-    super::{raw::RawJournalAdapterEvent, DispatchFn, EventLog, EventLogAdapter, EventLogDriver},
+    super::{
+        raw::{RawJournalAdapter, RawJournalAdapterEvent},
+        BatchAdapter, BatchJournal, BatchJournalDriver, DispatchFn, EventLog, EventLogAdapter,
+        EventLogDriver,
+    },
     crate::{
         engine::{
             error::StorageError,
             mem::unsafe_apis,
             storage::{
-                common::interface::fs_test::VirtualFS,
+                common::{
+                    interface::{
+                        fs_test::VirtualFS,
+                        fs_traits::{FSInterface, FileInterface},
+                    },
+                    sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
+                },
                 v2::raw::{
                     journal::raw::{create_journal, open_journal},
-                    spec::SystemDatabaseV1,
+                    spec::{ModelDataBatchAofV1, SystemDatabaseV1},
                 },
             },
             RuntimeResult,
@@ -212,5 +222,151 @@ fn test_this_data() {
         let (db, mut log) = open_log();
         assert_eq!(db._ref().as_slice(), DATA4);
         EventLog::close(&mut log).unwrap();
+    }
+}
+
+/*
+    batch test
+*/
+
+struct BatchDB {
+    data: RefCell<BatchDBInner>,
+}
+
+struct BatchDBInner {
+    data: Vec<String>,
+    changed: usize,
+    last_idx: usize,
+}
+
+impl BatchDB {
+    const THRESHOLD: usize = 1;
+    fn new() -> Self {
+        Self {
+            data: RefCell::new(BatchDBInner {
+                data: vec![],
+                changed: 0,
+                last_idx: 0,
+            }),
+        }
+    }
+    fn _mut(&self) -> RefMut<BatchDBInner> {
+        self.data.borrow_mut()
+    }
+    fn _ref(&self) -> Ref<BatchDBInner> {
+        self.data.borrow()
+    }
+    fn push(
+        &self,
+        log: &mut BatchJournalDriver<BatchDBAdapter, VirtualFS>,
+        key: &str,
+    ) -> RuntimeResult<()> {
+        let mut me = self._mut();
+        me.data.push(key.into());
+        if me.changed == Self::THRESHOLD {
+            me.changed += 1;
+            log.commit_event(FlushBatch::new(&me, me.last_idx, me.changed))?;
+            me.changed = 0;
+            me.last_idx = me.data.len();
+            Ok(())
+        } else {
+            me.changed += 1;
+            Ok(())
+        }
+    }
+}
+
+struct BatchDBAdapter;
+#[derive(Debug, Clone, Copy, TaggedEnum, PartialEq)]
+#[repr(u8)]
+enum BatchEvent {
+    NewBatch = 0,
+}
+impl BatchAdapter for BatchDBAdapter {
+    type Spec = ModelDataBatchAofV1;
+    type GlobalState = BatchDB;
+    type BatchMeta = BatchEvent;
+    fn decode_batch<Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        f: &mut TrackedReaderContext<
+            <<Fs as FSInterface>::File as FileInterface>::BufReader,
+            Self::Spec,
+        >,
+        meta: Self::BatchMeta,
+    ) -> RuntimeResult<()> {
+        let mut gs = gs._mut();
+        assert_eq!(meta, BatchEvent::NewBatch);
+        let mut batch_size = u64::from_le_bytes(f.read_block()?);
+        while batch_size != 0 {
+            let keylen = u64::from_le_bytes(f.read_block()?);
+            let mut key = vec![0; keylen as usize];
+            f.read(&mut key)?;
+            gs.data.push(String::from_utf8(key).unwrap());
+            gs.last_idx += 1;
+            batch_size -= 1;
+        }
+        Ok(())
+    }
+}
+struct FlushBatch<'a> {
+    data: &'a BatchDBInner,
+    start: usize,
+    cnt: usize,
+}
+
+impl<'a> FlushBatch<'a> {
+    fn new(data: &'a BatchDBInner, start: usize, cnt: usize) -> Self {
+        Self { data, start, cnt }
+    }
+}
+
+impl<'a> RawJournalAdapterEvent<BatchJournal<BatchDBAdapter>> for FlushBatch<'a> {
+    fn md(&self) -> u64 {
+        BatchEvent::NewBatch.dscr_u64()
+    }
+    fn write_direct<Fs: FSInterface>(
+        self,
+        w: &mut TrackedWriter<Fs::File, <BatchJournal<BatchDBAdapter> as RawJournalAdapter>::Spec>,
+    ) -> RuntimeResult<()> {
+        // length
+        w.dtrack_write(&(self.cnt as u64).to_le_bytes())?;
+        // now write all the new keys
+        for key in &self.data.data[self.start..self.start + self.cnt] {
+            w.dtrack_write(&(key.len() as u64).to_le_bytes())?;
+            w.dtrack_write(key.as_bytes())?;
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn batch_simple() {
+    {
+        let mut log = create_journal::<_, VirtualFS>("batch_jrnl").unwrap();
+        let db = BatchDB::new();
+        db.push(&mut log, "a").unwrap();
+        db.push(&mut log, "b").unwrap();
+        BatchJournal::close(&mut log).unwrap();
+    }
+    {
+        let db = BatchDB::new();
+        let mut log = open_journal::<_, VirtualFS>("batch_jrnl", &db).unwrap();
+        db.push(&mut log, "c").unwrap();
+        db.push(&mut log, "d").unwrap();
+        BatchJournal::close(&mut log).unwrap();
+    }
+    {
+        let db = BatchDB::new();
+        let mut log = open_journal::<_, VirtualFS>("batch_jrnl", &db).unwrap();
+        db.push(&mut log, "e").unwrap();
+        db.push(&mut log, "f").unwrap();
+        BatchJournal::close(&mut log).unwrap();
+    }
+    {
+        let db = BatchDB::new();
+        let mut log =
+            open_journal::<BatchJournal<BatchDBAdapter>, VirtualFS>("batch_jrnl", &db).unwrap();
+        assert_eq!(db._ref().data, ["a", "b", "c", "d", "e", "f"]);
+        BatchJournal::close(&mut log).unwrap();
     }
 }

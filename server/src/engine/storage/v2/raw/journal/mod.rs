@@ -35,7 +35,7 @@ use {
                 checksum::SCrc64,
                 interface::fs_traits::{FSInterface, FileInterface},
                 sdss::sdss_r1::{
-                    rw::{TrackedReader, TrackedWriter},
+                    rw::{TrackedReader, TrackedReaderContext, TrackedWriter},
                     FileSpecV1,
                 },
             },
@@ -135,5 +135,76 @@ impl<EL: EventLogAdapter> RawJournalAdapter for EventLog<EL> {
             [<<EL as EventLogAdapter>::EventMeta as TaggedEnum>::dscr_u64(&meta) as usize](
             gs, pl
         )
+    }
+}
+
+pub type BatchJournalDriver<BA, Fs> = RawJournalWriter<BatchJournal<BA>, Fs>;
+pub struct BatchJournal<BA: BatchAdapter>(PhantomData<BA>);
+
+impl<BA: BatchAdapter> BatchJournal<BA> {
+    pub fn close<Fs: FSInterface>(me: &mut BatchJournalDriver<BA, Fs>) -> RuntimeResult<()> {
+        RawJournalWriter::close_driver(me)
+    }
+}
+
+pub trait BatchAdapter {
+    type Spec: FileSpecV1;
+    type GlobalState;
+    type BatchMeta: TaggedEnum<Dscr = u8>;
+    fn decode_batch<Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        f: &mut TrackedReaderContext<
+            <<Fs as FSInterface>::File as FileInterface>::BufReader,
+            Self::Spec,
+        >,
+        meta: Self::BatchMeta,
+    ) -> RuntimeResult<()>;
+}
+
+impl<BA: BatchAdapter> RawJournalAdapter for BatchJournal<BA> {
+    const COMMIT_PREFERENCE: CommitPreference = CommitPreference::Direct;
+    type Spec = <BA as BatchAdapter>::Spec;
+    type GlobalState = <BA as BatchAdapter>::GlobalState;
+    type Context<'a> = () where BA: 'a;
+    type EventMeta = <BA as BatchAdapter>::BatchMeta;
+    fn initialize(_: &raw::JournalInitializer) -> Self {
+        Self(PhantomData)
+    }
+    fn enter_context<'a, Fs: FSInterface>(
+        _: &'a mut RawJournalWriter<Self, Fs>,
+    ) -> Self::Context<'a> {
+    }
+    fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
+        <<BA as BatchAdapter>::BatchMeta as TaggedEnum>::try_from_raw(meta as u8)
+    }
+    fn commit_direct<'a, Fs: FSInterface, E>(
+        &mut self,
+        w: &mut TrackedWriter<Fs::File, Self::Spec>,
+        ev: E,
+    ) -> RuntimeResult<()>
+    where
+        E: RawJournalAdapterEvent<Self>,
+    {
+        ev.write_direct::<Fs>(w)?;
+        let checksum = w.reset_partial();
+        w.tracked_write(&checksum.to_le_bytes())
+    }
+    fn decode_apply<'a, Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        meta: Self::EventMeta,
+        file: &mut TrackedReader<
+            <<Fs as FSInterface>::File as FileInterface>::BufReader,
+            Self::Spec,
+        >,
+    ) -> RuntimeResult<()> {
+        let mut reader_ctx = file.context();
+        <BA as BatchAdapter>::decode_batch::<Fs>(gs, &mut reader_ctx, meta)?;
+        let (real_checksum, file) = reader_ctx.finish();
+        let stored_checksum = u64::from_le_bytes(file.read_block()?);
+        if real_checksum == stored_checksum {
+            Ok(())
+        } else {
+            Err(StorageError::RawJournalCorrupted.into())
+        }
     }
 }

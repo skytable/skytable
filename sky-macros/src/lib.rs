@@ -141,7 +141,8 @@ pub fn derive_tagged_enum(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(EnumMethods)]
 pub fn derive_value_methods(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-    let (enum_name, repr_type, value_expressions, variant_len, repr_type_ident) = process_enum_tags(&ast);
+    let (enum_name, repr_type, value_expressions, variant_len, repr_type_ident) =
+        process_enum_tags(&ast);
     let repr_type_ident_func = syn::Ident::new(
         &format!("value_{repr_type}"),
         proc_macro2::Span::call_site(),
@@ -210,7 +211,10 @@ fn process_enum_tags(
     } else {
         panic!("This derive macro only works on enums");
     }
-    assert!(!dscr_expressions.is_empty(), "must be a non-empty enumeration");
+    assert!(
+        !dscr_expressions.is_empty(),
+        "must be a non-empty enumeration"
+    );
     let value_expressions = quote! {
         [#(#dscr_expressions),*]
     };
