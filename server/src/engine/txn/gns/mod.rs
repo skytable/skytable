@@ -24,5 +24,28 @@
  *
 */
 
+macro_rules! impl_gns_event {
+    ($($item:ty = $variant:ident),* $(,)?) => {
+        $(impl crate::engine::txn::gns::GNSTransaction for $item { const CODE: crate::engine::txn::gns::GNSTransactionCode = crate::engine::txn::gns::GNSTransactionCode::$variant;})*
+    }
+}
+
 pub mod model;
 pub mod space;
+
+#[derive(Debug, PartialEq, Clone, Copy, sky_macros::TaggedEnum)]
+#[repr(u8)]
+pub enum GNSTransactionCode {
+    CreateSpace = 0,
+    AlterSpace = 1,
+    DropSpace = 2,
+    CreateModel = 3,
+    AlterModelAdd = 4,
+    AlterModelRemove = 5,
+    AlterModelUpdate = 6,
+    DropModel = 7,
+}
+
+pub trait GNSTransaction {
+    const CODE: GNSTransactionCode;
+}

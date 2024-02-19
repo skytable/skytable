@@ -31,6 +31,14 @@ use crate::engine::{
     txn::{ModelIDRef, SpaceIDRef},
 };
 
+impl_gns_event!(
+    CreateModelTxn<'_> = CreateModel,
+    AlterModelAddTxn<'_> = AlterModelAdd,
+    AlterModelRemoveTxn<'_> = AlterModelRemove,
+    AlterModelUpdateTxn<'_> = AlterModelUpdate,
+    DropModelTxn<'_> = DropModel
+);
+
 #[derive(Debug, Clone, Copy)]
 /// The commit payload for a `create model ... (...) with {...}` txn
 pub struct CreateModelTxn<'a> {

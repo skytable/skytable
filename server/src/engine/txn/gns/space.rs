@@ -26,6 +26,8 @@
 
 use crate::engine::{core::space::Space, data::DictGeneric, txn::SpaceIDRef};
 
+impl_gns_event!(CreateSpaceTxn<'_> = CreateSpace, AlterSpaceTxn<'_> = AlterSpace, DropSpaceTxn<'_> = DropSpace);
+
 #[derive(Clone, Copy)]
 /// Transaction commit payload for a `create space ...` query
 pub struct CreateSpaceTxn<'a> {

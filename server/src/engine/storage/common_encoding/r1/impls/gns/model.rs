@@ -252,7 +252,6 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
 }
 
 impl<'a> GNSEvent for CreateModelTxn<'a> {
-    const OPC: u16 = 3;
     type CommitType = CreateModelTxn<'a>;
     type RestoreType = CreateModelTxnRestorePL;
     fn update_global_state(
@@ -349,7 +348,6 @@ impl<'a> PersistObject for AlterModelAddTxn<'a> {
 }
 
 impl<'a> GNSEvent for AlterModelAddTxn<'a> {
-    const OPC: u16 = 4;
     type CommitType = AlterModelAddTxn<'a>;
     type RestoreType = AlterModelAddTxnRestorePL;
     fn update_global_state(
@@ -440,7 +438,6 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
 }
 
 impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
-    const OPC: u16 = 5;
     type CommitType = AlterModelRemoveTxn<'a>;
     type RestoreType = AlterModelRemoveTxnRestorePL;
     fn update_global_state(
@@ -522,7 +519,6 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
 }
 
 impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
-    const OPC: u16 = 6;
     type CommitType = AlterModelUpdateTxn<'a>;
     type RestoreType = AlterModelUpdateTxnRestorePL;
     fn update_global_state(
@@ -580,7 +576,6 @@ impl<'a> PersistObject for DropModelTxn<'a> {
 }
 
 impl<'a> GNSEvent for DropModelTxn<'a> {
-    const OPC: u16 = 7;
     type CommitType = DropModelTxn<'a>;
     type RestoreType = ModelIDRes;
     fn update_global_state(

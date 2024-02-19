@@ -29,10 +29,10 @@ use {
         engine::{
             core::GlobalNS,
             data::uuid::Uuid,
-            error::RuntimeResult,
+            error::{RuntimeResult, StorageError},
             mem::BufferedScanner,
             storage::common_encoding::r1::{self, PersistObject},
-            txn::SpaceIDRef,
+            txn::{gns::GNSTransaction, SpaceIDRef},
         },
         util::EndianQW,
     },
@@ -58,17 +58,24 @@ mod tests;
 /// Definition for an event in the GNS (DDL queries)
 pub trait GNSEvent
 where
-    Self: PersistObject<InputType = Self, OutputType = Self::RestoreType> + Sized,
+    Self: PersistObject<InputType = Self, OutputType = Self::RestoreType> + Sized + GNSTransaction,
 {
-    /// OPC for the event (unique)
-    const OPC: u16;
     /// Expected type for a commit
     type CommitType;
     /// Expected type for a restore
     type RestoreType;
     /// Encodes the event into the given buffer
-    fn encode_super_event(commit: Self, buf: &mut Vec<u8>) {
-        r1::enc::enc_full_into_buffer::<Self>(buf, commit)
+    fn encode_event(commit: Self, buf: &mut Vec<u8>) {
+        r1::enc::full_into_buffer::<Self>(buf, commit)
+    }
+    fn decode_apply(gns: &GlobalNS, data: Vec<u8>) -> RuntimeResult<()> {
+        let mut scanner = BufferedScanner::new(&data);
+        Self::decode_and_update_global_state(&mut scanner, gns)?;
+        if scanner.eof() {
+            Ok(())
+        } else {
+            Err(StorageError::JournalLogEntryCorrupted.into())
+        }
     }
     fn decode_and_update_global_state(
         scanner: &mut BufferedScanner,
@@ -78,7 +85,7 @@ where
     }
     /// Attempts to decode the event using the given scanner
     fn decode(scanner: &mut BufferedScanner) -> RuntimeResult<Self::RestoreType> {
-        r1::dec::dec_full_from_scanner::<Self>(scanner).map_err(|e| e.into())
+        r1::dec::full_from_scanner::<Self>(scanner).map_err(|e| e.into())
     }
     /// Update the global state from the restored event
     fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> RuntimeResult<()>;

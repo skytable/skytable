@@ -49,10 +49,42 @@ use {
 mod raw;
 #[cfg(test)]
 mod tests;
+pub use raw::RawJournalAdapterEvent as JournalAdapterEvent;
 
-pub type EventLogDriver<EL, Fs> = RawJournalWriter<EventLog<EL>, Fs>;
-pub struct EventLog<EL: EventLogAdapter>(PhantomData<EL>);
-impl<EL: EventLogAdapter> EventLog<EL> {
+/*
+    implementation of a blanket event log
+
+    ---
+    1. linear
+    2. append-only
+    3. single-file
+    4. multi-stage integrity checked
+*/
+
+/// An event log driver
+pub type EventLogDriver<EL, Fs> = RawJournalWriter<EventLogAdapter<EL>, Fs>;
+/// The event log adapter
+pub struct EventLogAdapter<EL: EventLogSpec>(PhantomData<EL>);
+
+impl<EL: EventLogSpec> EventLogAdapter<EL> {
+    /// Open a new event log
+    pub fn open<Fs: FSInterface>(
+        name: &str,
+        gs: &EL::GlobalState,
+    ) -> RuntimeResult<EventLogDriver<EL, Fs>>
+    where
+        EL::Spec: FileSpecV1<DecodeArgs = ()>,
+    {
+        raw::open_journal::<EventLogAdapter<EL>, Fs>(name, gs)
+    }
+    /// Create a new event log
+    pub fn create<Fs: FSInterface>(name: &str) -> RuntimeResult<EventLogDriver<EL, Fs>>
+    where
+        EL::Spec: FileSpecV1<EncodeArgs = ()>,
+    {
+        raw::create_journal::<EventLogAdapter<EL>, Fs>(name)
+    }
+    /// Close an event log
     pub fn close<Fs: FSInterface>(me: &mut EventLogDriver<EL, Fs>) -> RuntimeResult<()> {
         RawJournalWriter::close_driver(me)
     }
@@ -60,9 +92,13 @@ impl<EL: EventLogAdapter> EventLog<EL> {
 
 type DispatchFn<G> = fn(&G, Vec<u8>) -> RuntimeResult<()>;
 
-pub trait EventLogAdapter {
+/// Specification for an event log
+pub trait EventLogSpec {
+    /// the SDSS spec for this log
     type Spec: FileSpecV1;
+    /// the global state for this log
     type GlobalState;
+    /// event metadata
     type EventMeta: TaggedEnum<Dscr = u8>;
     type DecodeDispatch: Index<usize, Output = DispatchFn<Self::GlobalState>>;
     const DECODE_DISPATCH: Self::DecodeDispatch;
@@ -72,15 +108,15 @@ pub trait EventLogAdapter {
     );
 }
 
-impl<EL: EventLogAdapter> RawJournalAdapter for EventLog<EL> {
+impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
     const COMMIT_PREFERENCE: CommitPreference = {
         let _ = EL::ENSURE;
         CommitPreference::Direct
     };
-    type Spec = <EL as EventLogAdapter>::Spec;
-    type GlobalState = <EL as EventLogAdapter>::GlobalState;
+    type Spec = <EL as EventLogSpec>::Spec;
+    type GlobalState = <EL as EventLogSpec>::GlobalState;
     type Context<'a> = () where Self: 'a;
-    type EventMeta = <EL as EventLogAdapter>::EventMeta;
+    type EventMeta = <EL as EventLogSpec>::EventMeta;
     fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
@@ -89,7 +125,7 @@ impl<EL: EventLogAdapter> RawJournalAdapter for EventLog<EL> {
     ) -> Self::Context<'a> {
     }
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
-        <<EL as EventLogAdapter>::EventMeta as TaggedEnum>::try_from_raw(meta as u8)
+        <<EL as EventLogSpec>::EventMeta as TaggedEnum>::try_from_raw(meta as u8)
     }
     fn commit_direct<'a, Fs: FSInterface, E>(
         &mut self,
@@ -131,42 +167,93 @@ impl<EL: EventLogAdapter> RawJournalAdapter for EventLog<EL> {
         if this_checksum.finish() != expected_checksum {
             return Err(StorageError::RawJournalCorrupted.into());
         }
-        <EL as EventLogAdapter>::DECODE_DISPATCH
-            [<<EL as EventLogAdapter>::EventMeta as TaggedEnum>::dscr_u64(&meta) as usize](
+        <EL as EventLogSpec>::DECODE_DISPATCH
+            [<<EL as EventLogSpec>::EventMeta as TaggedEnum>::dscr_u64(&meta) as usize](
             gs, pl
         )
     }
 }
 
-pub type BatchJournalDriver<BA, Fs> = RawJournalWriter<BatchJournal<BA>, Fs>;
-pub struct BatchJournal<BA: BatchAdapter>(PhantomData<BA>);
+/*
+    implementation of a batch journal
 
-impl<BA: BatchAdapter> BatchJournal<BA> {
-    pub fn close<Fs: FSInterface>(me: &mut BatchJournalDriver<BA, Fs>) -> RuntimeResult<()> {
+    ---
+
+    1. linear
+    2. append-only
+    3. event batches
+    4. integrity checked
+*/
+
+/// Batch journal driver
+pub type BatchDriver<BA, Fs> = RawJournalWriter<BatchAdapter<BA>, Fs>;
+/// Batch journal adapter
+pub struct BatchAdapter<BA: BatchAdapterSpec>(PhantomData<BA>);
+
+impl<BA: BatchAdapterSpec> BatchAdapter<BA> {
+    /// Open a new batch journal
+    pub fn open<Fs: FSInterface>(
+        name: &str,
+        gs: &BA::GlobalState,
+    ) -> RuntimeResult<BatchDriver<BA, Fs>>
+    where
+        BA::Spec: FileSpecV1<DecodeArgs = ()>,
+    {
+        raw::open_journal::<BatchAdapter<BA>, Fs>(name, gs)
+    }
+    /// Create a new batch journal
+    pub fn create<Fs: FSInterface>(name: &str) -> RuntimeResult<BatchDriver<BA, Fs>>
+    where
+        BA::Spec: FileSpecV1<EncodeArgs = ()>,
+    {
+        raw::create_journal::<BatchAdapter<BA>, Fs>(name)
+    }
+    /// Close a batch journal
+    pub fn close<Fs: FSInterface>(me: &mut BatchDriver<BA, Fs>) -> RuntimeResult<()> {
         RawJournalWriter::close_driver(me)
     }
 }
 
-pub trait BatchAdapter {
+/// A specification for a batch journal
+///
+/// NB: This trait's impl is fairly complex and is going to require careful handling to get it right. Also, the event has to have
+/// a specific on-disk layout: `[EXPECTED COMMIT][ANY ADDITIONAL METADATA][BATCH BODY][ACTUAL COMMIT]`
+pub trait BatchAdapterSpec {
     type Spec: FileSpecV1;
     type GlobalState;
-    type BatchMeta: TaggedEnum<Dscr = u8>;
-    fn decode_batch<Fs: FSInterface>(
+    type BatchType: TaggedEnum<Dscr = u8>;
+    type EventType: TaggedEnum<Dscr = u8> + PartialEq;
+    type BatchMetadata;
+    type BatchState;
+    fn is_early_exit(event_type: &Self::EventType) -> bool;
+    fn initialize_batch_state(gs: &Self::GlobalState) -> Self::BatchState;
+    fn decode_batch_metadata<Fs: FSInterface>(
         gs: &Self::GlobalState,
         f: &mut TrackedReaderContext<
             <<Fs as FSInterface>::File as FileInterface>::BufReader,
             Self::Spec,
         >,
-        meta: Self::BatchMeta,
+        meta: Self::BatchType,
+    ) -> RuntimeResult<Self::BatchMetadata>;
+    fn update_state_for_new_event<Fs: FSInterface>(
+        gs: &Self::GlobalState,
+        bs: &mut Self::BatchState,
+        f: &mut TrackedReaderContext<
+            <<Fs as FSInterface>::File as FileInterface>::BufReader,
+            Self::Spec,
+        >,
+        batch_info: &Self::BatchMetadata,
+        event_type: Self::EventType,
     ) -> RuntimeResult<()>;
+    fn finish(bs: Self::BatchState, gs: &Self::GlobalState) -> RuntimeResult<()>;
 }
 
-impl<BA: BatchAdapter> RawJournalAdapter for BatchJournal<BA> {
+impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
     const COMMIT_PREFERENCE: CommitPreference = CommitPreference::Direct;
-    type Spec = <BA as BatchAdapter>::Spec;
-    type GlobalState = <BA as BatchAdapter>::GlobalState;
-    type Context<'a> = () where BA: 'a;
-    type EventMeta = <BA as BatchAdapter>::BatchMeta;
+    type Spec = <BA as BatchAdapterSpec>::Spec;
+    type GlobalState = <BA as BatchAdapterSpec>::GlobalState;
+    type Context<'a> = () where Self: 'a;
+    type EventMeta = <BA as BatchAdapterSpec>::BatchType;
     fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
@@ -175,7 +262,7 @@ impl<BA: BatchAdapter> RawJournalAdapter for BatchJournal<BA> {
     ) -> Self::Context<'a> {
     }
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
-        <<BA as BatchAdapter>::BatchMeta as TaggedEnum>::try_from_raw(meta as u8)
+        <<BA as BatchAdapterSpec>::BatchType as TaggedEnum>::try_from_raw(meta as u8)
     }
     fn commit_direct<'a, Fs: FSInterface, E>(
         &mut self,
@@ -192,14 +279,51 @@ impl<BA: BatchAdapter> RawJournalAdapter for BatchJournal<BA> {
     fn decode_apply<'a, Fs: FSInterface>(
         gs: &Self::GlobalState,
         meta: Self::EventMeta,
-        file: &mut TrackedReader<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        f: &mut TrackedReader<<<Fs as FSInterface>::File as FileInterface>::BufReader, Self::Spec>,
     ) -> RuntimeResult<()> {
-        let mut reader_ctx = file.context();
-        <BA as BatchAdapter>::decode_batch::<Fs>(gs, &mut reader_ctx, meta)?;
-        let (real_checksum, file) = reader_ctx.finish();
+        let mut f = f.context();
+        {
+            // get metadata
+            // read batch size
+            let _stored_expected_commit_size = u64::from_le_bytes(f.read_block()?);
+            // read custom metadata
+            let batch_md = <BA as BatchAdapterSpec>::decode_batch_metadata::<Fs>(gs, &mut f, meta)?;
+            // now read in every event
+            let mut real_commit_size = 0;
+            let mut batch_state = <BA as BatchAdapterSpec>::initialize_batch_state(gs);
+            loop {
+                if real_commit_size == _stored_expected_commit_size {
+                    break;
+                }
+                let event_type = f.read_block::<1>().and_then(|b| {
+                    <<BA as BatchAdapterSpec>::EventType as TaggedEnum>::try_from_raw(b[0])
+                        .ok_or(StorageError::RawJournalCorrupted.into())
+                })?;
+                // is this an early exit marker? if so, exit
+                if <BA as BatchAdapterSpec>::is_early_exit(&event_type) {
+                    break;
+                }
+                // update batch state
+                BA::update_state_for_new_event::<Fs>(
+                    gs,
+                    &mut batch_state,
+                    &mut f,
+                    &batch_md,
+                    event_type,
+                )?;
+                real_commit_size += 1;
+            }
+            // read actual commit size
+            let _stored_actual_commit_size = u64::from_le_bytes(f.read_block()?);
+            if _stored_actual_commit_size == real_commit_size {
+                // finish applying batch
+                BA::finish(batch_state, gs)?;
+            } else {
+                return Err(StorageError::RawJournalCorrupted.into());
+            }
+        }
+        // and finally, verify checksum
+        let (real_checksum, file) = f.finish();
         let stored_checksum = u64::from_le_bytes(file.read_block()?);
         if real_checksum == stored_checksum {
             Ok(())

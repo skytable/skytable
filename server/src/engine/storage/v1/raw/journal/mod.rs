@@ -60,8 +60,8 @@ impl<Fs: FSInterface> GNSTransactionDriverAnyFS<Fs> {
     /// errors (if any)
     pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE) -> RuntimeResult<()> {
         let mut buf = vec![];
-        buf.extend(GE::OPC.to_le_bytes());
-        GE::encode_super_event(gns_event, &mut buf);
+        buf.extend((GE::CODE as u16).to_le_bytes());
+        GE::encode_event(gns_event, &mut buf);
         self.journal
             .append_event_with_recovery_plugin(GNSSuperEvent(buf.into_boxed_slice()))?;
         Ok(())
@@ -87,9 +87,6 @@ impl JournalAdapter for GNSAdapter {
         b
     }
     fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> RuntimeResult<()> {
-        if payload.len() < 2 {
-            return Err(TransactionError::DecodedUnexpectedEof.into());
-        }
         macro_rules! dispatch {
             ($($item:ty),* $(,)?) => {
                 [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::DecodeUnknownTxnOp.into())]
@@ -105,9 +102,12 @@ impl JournalAdapter for GNSAdapter {
             gns::model::AlterModelUpdateTxn,
             gns::model::DropModelTxn
         );
+        if payload.len() < 2 {
+            return Err(TransactionError::DecodedUnexpectedEof.into());
+        }
         let mut scanner = BufferedScanner::new(&payload);
         let opc = unsafe {
-            // UNSAFE(@ohsayan):
+            // UNSAFE(@ohsayan): first branch ensures atleast two bytes
             u16::from_le_bytes(scanner.next_chunk())
         };
         match DISPATCH[(opc as usize).min(DISPATCH.len())](&mut scanner, gs) {

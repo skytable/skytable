@@ -98,7 +98,6 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
 }
 
 impl<'a> GNSEvent for CreateSpaceTxn<'a> {
-    const OPC: u16 = 0;
     type CommitType = CreateSpaceTxn<'a>;
     type RestoreType = CreateSpaceTxnRestorePL;
     fn update_global_state(
@@ -173,7 +172,6 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
 }
 
 impl<'a> GNSEvent for AlterSpaceTxn<'a> {
-    const OPC: u16 = 1;
     type CommitType = AlterSpaceTxn<'a>;
     type RestoreType = AlterSpaceTxnRestorePL;
 
@@ -227,7 +225,6 @@ impl<'a> PersistObject for DropSpaceTxn<'a> {
 }
 
 impl<'a> GNSEvent for DropSpaceTxn<'a> {
-    const OPC: u16 = 2;
     type CommitType = DropSpaceTxn<'a>;
     type RestoreType = super::SpaceIDRes;
     fn update_global_state(

@@ -50,8 +50,8 @@ mod space_tests {
         let orig_space = Space::new_auto_all();
         let space_r = orig_space.props();
         let txn = CreateSpaceTxn::new(&space_r, "myspace", &orig_space);
-        let encoded = enc::enc_full_self(txn);
-        let decoded = dec::dec_full::<CreateSpaceTxn>(&encoded).unwrap();
+        let encoded = enc::full_self(txn);
+        let decoded = dec::full::<CreateSpaceTxn>(&encoded).unwrap();
         assert_eq!(
             CreateSpaceTxnRestorePL {
                 space_name: "myspace".into(),
@@ -65,8 +65,8 @@ mod space_tests {
         let space = Space::new_auto_all();
         let space_r = space.props();
         let txn = AlterSpaceTxn::new(SpaceIDRef::new("myspace", &space), &space_r);
-        let encoded = enc::enc_full_self(txn);
-        let decoded = dec::dec_full::<AlterSpaceTxn>(&encoded).unwrap();
+        let encoded = enc::full_self(txn);
+        let decoded = dec::full::<AlterSpaceTxn>(&encoded).unwrap();
         assert_eq!(
             AlterSpaceTxnRestorePL {
                 space_id: super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
@@ -79,8 +79,8 @@ mod space_tests {
     fn drop() {
         let space = Space::new_auto_all();
         let txn = DropSpaceTxn::new(super::SpaceIDRef::new("myspace", &space));
-        let encoded = enc::enc_full_self(txn);
-        let decoded = dec::dec_full::<DropSpaceTxn>(&encoded).unwrap();
+        let encoded = enc::full_self(txn);
+        let decoded = dec::full::<DropSpaceTxn>(&encoded).unwrap();
         assert_eq!(
             super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
             decoded
@@ -123,8 +123,8 @@ mod model_tests {
     fn create() {
         let (space, model) = default_space_model();
         let txn = CreateModelTxn::new(super::SpaceIDRef::new("myspace", &space), "mymodel", &model);
-        let encoded = super::enc::enc_full_self(txn);
-        let decoded = super::dec::dec_full::<CreateModelTxn>(&encoded).unwrap();
+        let encoded = super::enc::full_self(txn);
+        let decoded = super::dec::full::<CreateModelTxn>(&encoded).unwrap();
         assert_eq!(
             CreateModelTxnRestorePL {
                 space_id: super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
@@ -149,8 +149,8 @@ mod model_tests {
             ),
             &new_fields,
         );
-        let encoded = super::enc::enc_full_self(txn);
-        let decoded = super::dec::dec_full::<AlterModelAddTxn>(&encoded).unwrap();
+        let encoded = super::enc::full_self(txn);
+        let decoded = super::dec::full::<AlterModelAddTxn>(&encoded).unwrap();
         assert_eq!(
             AlterModelAddTxnRestorePL {
                 model_id: super::ModelIDRes::new(
@@ -179,8 +179,8 @@ mod model_tests {
             ),
             &removed_fields,
         );
-        let encoded = super::enc::enc_full_self(txn);
-        let decoded = super::dec::dec_full::<AlterModelRemoveTxn>(&encoded).unwrap();
+        let encoded = super::enc::full_self(txn);
+        let decoded = super::dec::full::<AlterModelRemoveTxn>(&encoded).unwrap();
         assert_eq!(
             AlterModelRemoveTxnRestorePL {
                 model_id: super::ModelIDRes::new(
@@ -214,8 +214,8 @@ mod model_tests {
             ),
             &updated_fields,
         );
-        let encoded = super::enc::enc_full_self(txn);
-        let decoded = super::dec::dec_full::<AlterModelUpdateTxn>(&encoded).unwrap();
+        let encoded = super::enc::full_self(txn);
+        let decoded = super::dec::full::<AlterModelUpdateTxn>(&encoded).unwrap();
         assert_eq!(
             AlterModelUpdateTxnRestorePL {
                 model_id: super::ModelIDRes::new(
@@ -238,8 +238,8 @@ mod model_tests {
             model.get_uuid(),
             model.delta_state().schema_current_version().value_u64(),
         ));
-        let encoded = super::enc::enc_full_self(txn);
-        let decoded = super::dec::dec_full::<DropModelTxn>(&encoded).unwrap();
+        let encoded = super::enc::full_self(txn);
+        let decoded = super::dec::full::<DropModelTxn>(&encoded).unwrap();
         assert_eq!(
             super::ModelIDRes::new(
                 super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),

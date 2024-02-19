@@ -216,25 +216,25 @@ pub mod enc {
     use super::{map, MapStorageSpec, PersistObject, VecU8};
     // obj
     #[cfg(test)]
-    pub fn enc_full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
+    pub fn full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
         let mut v = vec![];
-        enc_full_into_buffer::<Obj>(&mut v, obj);
+        full_into_buffer::<Obj>(&mut v, obj);
         v
     }
-    pub fn enc_full_into_buffer<Obj: PersistObject>(buf: &mut VecU8, obj: Obj::InputType) {
+    pub fn full_into_buffer<Obj: PersistObject>(buf: &mut VecU8, obj: Obj::InputType) {
         Obj::default_full_enc(buf, obj)
     }
     #[cfg(test)]
-    pub fn enc_full_self<Obj: PersistObject<InputType = Obj>>(obj: Obj) -> Vec<u8> {
-        enc_full::<Obj>(obj)
+    pub fn full_self<Obj: PersistObject<InputType = Obj>>(obj: Obj) -> Vec<u8> {
+        full::<Obj>(obj)
     }
     // dict
-    pub fn enc_dict_full<PM: MapStorageSpec>(dict: &PM::InMemoryMap) -> Vec<u8> {
+    pub fn full_dict<PM: MapStorageSpec>(dict: &PM::InMemoryMap) -> Vec<u8> {
         let mut v = vec![];
-        enc_dict_full_into_buffer::<PM>(&mut v, dict);
+        full_dict_into_buffer::<PM>(&mut v, dict);
         v
     }
-    pub fn enc_dict_full_into_buffer<PM: MapStorageSpec>(buf: &mut VecU8, dict: &PM::InMemoryMap) {
+    pub fn full_dict_into_buffer<PM: MapStorageSpec>(buf: &mut VecU8, dict: &PM::InMemoryMap) {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_enc(buf, dict)
     }
 }
@@ -247,21 +247,21 @@ pub mod dec {
     };
     // obj
     #[cfg(test)]
-    pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> RuntimeResult<Obj::OutputType> {
+    pub fn full<Obj: PersistObject>(data: &[u8]) -> RuntimeResult<Obj::OutputType> {
         let mut scanner = BufferedScanner::new(data);
-        dec_full_from_scanner::<Obj>(&mut scanner)
+        full_from_scanner::<Obj>(&mut scanner)
     }
-    pub fn dec_full_from_scanner<Obj: PersistObject>(
+    pub fn full_from_scanner<Obj: PersistObject>(
         scanner: &mut BufferedScanner,
     ) -> RuntimeResult<Obj::OutputType> {
         Obj::default_full_dec(scanner)
     }
     // dec
-    pub fn dec_dict_full<PM: MapStorageSpec>(data: &[u8]) -> RuntimeResult<PM::RestoredMap> {
+    pub fn dict_full<PM: MapStorageSpec>(data: &[u8]) -> RuntimeResult<PM::RestoredMap> {
         let mut scanner = BufferedScanner::new(data);
-        dec_dict_full_from_scanner::<PM>(&mut scanner)
+        dict_full_from_scanner::<PM>(&mut scanner)
     }
-    fn dec_dict_full_from_scanner<PM: MapStorageSpec>(
+    fn dict_full_from_scanner<PM: MapStorageSpec>(
         scanner: &mut BufferedScanner,
     ) -> RuntimeResult<PM::RestoredMap> {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_dec(scanner)

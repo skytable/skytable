@@ -51,24 +51,24 @@ fn dict() {
             "and a null" => Datacell::null(),
         ))
     };
-    let encoded = super::enc::enc_dict_full::<super::map::GenericDictSpec>(&dict);
-    let decoded = super::dec::dec_dict_full::<super::map::GenericDictSpec>(&encoded).unwrap();
+    let encoded = super::enc::full_dict::<super::map::GenericDictSpec>(&dict);
+    let decoded = super::dec::dict_full::<super::map::GenericDictSpec>(&encoded).unwrap();
     assert_eq!(dict, decoded);
 }
 
 #[test]
 fn layer() {
     let layer = Layer::list();
-    let encoded = super::enc::enc_full::<obj::LayerRef>(obj::LayerRef(&layer));
-    let dec = super::dec::dec_full::<obj::LayerRef>(&encoded).unwrap();
+    let encoded = super::enc::full::<obj::LayerRef>(obj::LayerRef(&layer));
+    let dec = super::dec::full::<obj::LayerRef>(&encoded).unwrap();
     assert_eq!(layer, dec);
 }
 
 #[test]
 fn field() {
     let field = Field::new([Layer::list(), Layer::uint64()].into(), true);
-    let encoded = super::enc::enc_full::<obj::FieldRef>((&field).into());
-    let dec = super::dec::dec_full::<obj::FieldRef>(&encoded).unwrap();
+    let encoded = super::enc::full::<obj::FieldRef>((&field).into());
+    let dec = super::dec::full::<obj::FieldRef>(&encoded).unwrap();
     assert_eq!(field, dec);
 }
 
@@ -80,8 +80,8 @@ fn fieldmap() {
         "profile_pic".into(),
         Field::new([Layer::bin()].into(), true),
     );
-    let enc = super::enc::enc_dict_full::<super::map::FieldMapSpec<_>>(&fields);
-    let dec = super::dec::dec_dict_full::<
+    let enc = super::enc::full_dict::<super::map::FieldMapSpec<_>>(&fields);
+    let dec = super::dec::dict_full::<
         super::map::FieldMapSpec<crate::engine::idx::IndexSTSeqCns<Box<str>, _>>,
     >(&enc)
     .unwrap();
@@ -105,8 +105,8 @@ fn model() {
             "profile_pic" => Field::new([Layer::bin()].into(), true),
         },
     );
-    let enc = super::enc::enc_full::<obj::ModelLayoutRef>(obj::ModelLayoutRef(&model));
-    let dec = super::dec::dec_full::<obj::ModelLayoutRef>(&enc).unwrap();
+    let enc = super::enc::full::<obj::ModelLayoutRef>(obj::ModelLayoutRef(&model));
+    let dec = super::dec::full::<obj::ModelLayoutRef>(&enc).unwrap();
     assert_eq!(model, dec);
 }
 
@@ -114,10 +114,8 @@ fn model() {
 fn space() {
     let uuid = Uuid::new();
     let space = Space::new_restore_empty(uuid, Default::default());
-    let enc = super::enc::enc_full::<obj::SpaceLayoutRef>(obj::SpaceLayoutRef::from((
-        &space,
-        space.props(),
-    )));
-    let dec = super::dec::dec_full::<obj::SpaceLayoutRef>(&enc).unwrap();
+    let enc =
+        super::enc::full::<obj::SpaceLayoutRef>(obj::SpaceLayoutRef::from((&space, space.props())));
+    let dec = super::dec::full::<obj::SpaceLayoutRef>(&enc).unwrap();
     assert_eq!(space, dec);
 }
