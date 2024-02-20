@@ -294,7 +294,7 @@ impl Model {
                     model.get_uuid(),
                 )?;
                 // commit txn
-                match txn_driver.gns_driver().try_commit(txn) {
+                match txn_driver.gns_driver().commit_event(txn) {
                     Ok(()) => {}
                     Err(e) => {
                         // failed to commit, request cleanup
@@ -358,7 +358,7 @@ impl Model {
                     model.delta_state().schema_current_version().value_u64(),
                 ));
                 // commit txn
-                global.gns_driver().lock().gns_driver().try_commit(txn)?;
+                global.gns_driver().lock().gns_driver().commit_event(txn)?;
                 // request cleanup
                 global.purge_model_driver(
                     space_name,

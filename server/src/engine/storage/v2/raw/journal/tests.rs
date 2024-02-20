@@ -46,7 +46,7 @@ use {
                     sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
                 },
                 v2::raw::{
-                    journal::raw::{create_journal, open_journal},
+                    journal::raw::{create_journal, open_journal, RawJournalWriter},
                     spec::{ModelDataBatchAofV1, SystemDatabaseV1},
                 },
             },
@@ -197,30 +197,30 @@ fn test_this_data() {
         for key in DATA1 {
             db.push(&mut log, key).unwrap();
         }
-        EventLogAdapter::close(&mut log).unwrap();
+        RawJournalWriter::close_driver(&mut log).unwrap();
     }
     {
         let (db, mut log) = open_log();
         assert_eq!(db._ref().as_slice(), DATA1);
         db.push(&mut log, DATA2[3]).unwrap();
-        EventLogAdapter::close(&mut log).unwrap();
+        RawJournalWriter::close_driver(&mut log).unwrap();
     }
     {
         let (db, mut log) = open_log();
         assert_eq!(db._ref().as_slice(), DATA2);
         db.pop(&mut log).unwrap();
-        EventLogAdapter::close(&mut log).unwrap();
+        RawJournalWriter::close_driver(&mut log).unwrap();
     }
     {
         let (db, mut log) = open_log();
         assert_eq!(db._ref().as_slice(), DATA3);
         db.push(&mut log, DATA4[3]).unwrap();
-        EventLogAdapter::close(&mut log).unwrap();
+        RawJournalWriter::close_driver(&mut log).unwrap();
     }
     {
         let (db, mut log) = open_log();
         assert_eq!(db._ref().as_slice(), DATA4);
-        EventLogAdapter::close(&mut log).unwrap();
+        RawJournalWriter::close_driver(&mut log).unwrap();
     }
 }
 
@@ -366,7 +366,11 @@ impl BatchAdapterSpec for BatchDBAdapter {
         bs.pending_inserts.push(String::from_utf8(key).unwrap());
         Ok(())
     }
-    fn finish(bs: Self::BatchState, gs: &Self::GlobalState) -> RuntimeResult<()> {
+    fn finish(
+        bs: Self::BatchState,
+        _: Self::BatchMetadata,
+        gs: &Self::GlobalState,
+    ) -> RuntimeResult<()> {
         for event in bs.pending_inserts {
             gs._mut().data.push(event);
             gs._mut().last_flushed_at += 1;

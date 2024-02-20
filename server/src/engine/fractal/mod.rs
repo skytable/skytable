@@ -25,19 +25,17 @@
 */
 
 use {
-    self::sys_store::SystemStore,
     super::{
         core::{dml::QueryExecMeta, model::Model, GlobalNS},
         data::uuid::Uuid,
         storage::{
-            self,
-            safe_interfaces::{FSInterface, LocalFS},
-            v1::GNSTransactionDriverAnyFS,
+            safe_interfaces::{paths_v1, FSInterface, LocalFS},
+            GNSDriver, ModelDriver,
         },
     },
     crate::engine::error::RuntimeResult,
-    parking_lot::{Mutex, RwLock},
-    std::{collections::HashMap, fmt, mem::MaybeUninit},
+    parking_lot::Mutex,
+    std::{fmt, mem::MaybeUninit},
     tokio::sync::mpsc::unbounded_channel,
 };
 
@@ -45,17 +43,14 @@ pub mod context;
 mod drivers;
 pub mod error;
 mod mgr;
-pub mod sys_store;
 #[cfg(test)]
 pub mod test_utils;
 mod util;
 pub use {
-    drivers::FractalModelDriver,
+    drivers::ModelDrivers,
     mgr::{CriticalTask, GenericTask, Task, GENERAL_EXECUTOR_WINDOW},
     util::FractalToken,
 };
-
-pub type ModelDrivers<Fs> = HashMap<ModelUniqueID, drivers::FractalModelDriver<Fs>>;
 
 /*
     global state init
@@ -75,21 +70,18 @@ pub struct GlobalStateStart {
 /// Must be called iff this is the only thread calling it
 pub unsafe fn load_and_enable_all(
     gns: GlobalNS,
-    config: SystemStore<LocalFS>,
-    gns_driver: GNSTransactionDriverAnyFS<LocalFS>,
+    gns_driver: GNSDriver<LocalFS>,
     model_drivers: ModelDrivers<LocalFS>,
 ) -> GlobalStateStart {
-    let model_cnt_on_boot = model_drivers.len();
+    let model_cnt_on_boot = model_drivers.count();
     let gns_driver = drivers::FractalGNSDriver::new(gns_driver);
-    let mdl_driver = RwLock::new(model_drivers);
     let (hp_sender, hp_recv) = unbounded_channel();
     let (lp_sender, lp_recv) = unbounded_channel();
     let global_state = GlobalState::new(
         gns,
         gns_driver,
-        mdl_driver,
+        model_drivers,
         mgr::FractalMgr::new(hp_sender, lp_sender, model_cnt_on_boot),
-        config,
     );
     *Global::__gref_raw() = MaybeUninit::new(global_state);
     let token = Global::new();
@@ -153,8 +145,6 @@ pub trait GlobalInstanceLike {
             )));
         }
     }
-    // config handle
-    fn sys_store(&self) -> &SystemStore<Self::FileSystem>;
 }
 
 impl GlobalInstanceLike for Global {
@@ -177,10 +167,6 @@ impl GlobalInstanceLike for Global {
     fn get_max_delta_size(&self) -> usize {
         self._get_max_delta_size()
     }
-    // sys
-    fn sys_store(&self) -> &SystemStore<Self::FileSystem> {
-        &self.get_state().config
-    }
     // model
     fn purge_model_driver(
         &self,
@@ -191,11 +177,7 @@ impl GlobalInstanceLike for Global {
         skip_delete: bool,
     ) {
         let id = ModelUniqueID::new(space_name, model_name, model_uuid);
-        self.get_state()
-            .mdl_driver
-            .write()
-            .remove(&id)
-            .expect("tried to remove non existent driver");
+        self.get_state().mdl_driver.remove_driver(id);
         if !skip_delete {
             self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
                 space_name, space_uuid, model_name, model_uuid,
@@ -210,17 +192,16 @@ impl GlobalInstanceLike for Global {
         model_uuid: Uuid,
     ) -> RuntimeResult<()> {
         // create dir
-        LocalFS::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
+        LocalFS::fs_create_dir(&paths_v1::model_dir(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
         // init driver
-        let driver =
-            storage::v1::create_batch_journal(&storage::v1::loader::SEInitState::model_path(
-                space_name, space_uuid, model_name, model_uuid,
-            ))?;
-        self.get_state().mdl_driver.write().insert(
+        let driver = ModelDriver::create_model_driver(&paths_v1::model_path(
+            space_name, space_uuid, model_name, model_uuid,
+        ))?;
+        self.get_state().mdl_driver.add_driver(
             ModelUniqueID::new(space_name, model_name, model_uuid),
-            drivers::FractalModelDriver::init(driver),
+            driver,
         );
         Ok(())
     }
@@ -274,9 +255,9 @@ impl Global {
             mdl_driver,
             ..
         } = Self::__gref_raw().assume_init_read();
-        let gns_driver = gns_driver.into_inner().txn_driver.into_inner();
+        let mut gns_driver = gns_driver.into_inner().txn_driver;
         let mdl_drivers = mdl_driver.into_inner();
-        gns_driver.close().unwrap();
+        GNSDriver::close_driver(&mut gns_driver).unwrap();
         for (_, driver) in mdl_drivers {
             driver.close().unwrap();
         }
@@ -291,28 +272,25 @@ impl Global {
 struct GlobalState {
     gns: GlobalNS,
     gns_driver: Mutex<drivers::FractalGNSDriver<LocalFS>>,
-    mdl_driver: RwLock<ModelDrivers<LocalFS>>,
+    mdl_driver: ModelDrivers<LocalFS>,
     task_mgr: mgr::FractalMgr,
-    config: SystemStore<LocalFS>,
 }
 
 impl GlobalState {
     fn new(
         gns: GlobalNS,
         gns_driver: drivers::FractalGNSDriver<LocalFS>,
-        mdl_driver: RwLock<ModelDrivers<LocalFS>>,
+        mdl_driver: ModelDrivers<LocalFS>,
         task_mgr: mgr::FractalMgr,
-        config: SystemStore<LocalFS>,
     ) -> Self {
         Self {
             gns,
             gns_driver: Mutex::new(gns_driver),
             mdl_driver,
             task_mgr,
-            config,
         }
     }
-    pub(self) fn get_mdl_drivers(&self) -> &RwLock<ModelDrivers<LocalFS>> {
+    pub(self) fn get_mdl_drivers(&self) -> &ModelDrivers<LocalFS> {
         &self.mdl_driver
     }
     pub(self) fn fractal_mgr(&self) -> &mgr::FractalMgr {

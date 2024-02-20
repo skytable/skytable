@@ -31,8 +31,8 @@ use {
             storage::common::{
                 checksum::SCrc64,
                 interface::fs_traits::{
-                    FSInterface, FileInterface, FileInterfaceBufWrite, FileInterfaceExt,
-                    FileInterfaceRead, FileInterfaceWrite, FileInterfaceWriteExt, FileOpen,
+                    FSInterface, FileInterface, FileInterfaceExt, FileInterfaceRead,
+                    FileInterfaceWrite, FileInterfaceWriteExt,
                 },
                 sdss,
             },
@@ -44,31 +44,15 @@ use {
 
 pub struct TrackedWriter<Fs: FSInterface> {
     file: SDSSFileIO<Fs, <Fs::File as FileInterface>::BufWriter>,
-    cs: SCrc64,
+    _cs: SCrc64,
 }
 
 impl<Fs: FSInterface> TrackedWriter<Fs> {
     pub fn new(f: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
         Ok(Self {
             file: f.into_buffered_writer()?,
-            cs: SCrc64::new(),
+            _cs: SCrc64::new(),
         })
-    }
-    pub fn tracked_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
-        self.untracked_write(block).map(|_| self.cs.update(block))
-    }
-    pub fn untracked_write(&mut self, block: &[u8]) -> RuntimeResult<()> {
-        match self.file.write_buffer(block) {
-            Ok(()) => Ok(()),
-            e => e,
-        }
-    }
-    pub fn sync_writes(&mut self) -> RuntimeResult<()> {
-        self.file.f.sync_write_cache()
-    }
-    pub fn reset_and_finish_checksum(&mut self) -> u64 {
-        let scrc = core::mem::replace(&mut self.cs, SCrc64::new());
-        scrc.finish()
     }
     pub fn sync_into_inner(self) -> RuntimeResult<SDSSFileIO<Fs>> {
         self.file.downgrade_writer()
@@ -161,31 +145,6 @@ impl<Fs: FSInterface> SDSSFileIO<Fs> {
         let v = F::read_metadata(&mut f.f, ())?;
         Ok((f, v))
     }
-    pub fn create<F: sdss::sdss_r1::FileSpecV1<EncodeArgs = ()>>(
-        fpath: &str,
-    ) -> RuntimeResult<Self> {
-        let mut f = Self::_new(Fs::fs_fcreate_rw(fpath)?);
-        F::write_metadata(&mut f.f, ())?;
-        Ok(f)
-    }
-    pub fn open_or_create_perm_rw<
-        F: sdss::sdss_r1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>,
-    >(
-        fpath: &str,
-    ) -> RuntimeResult<FileOpen<Self, (Self, F::Metadata)>> {
-        match Fs::fs_fopen_or_create_rw(fpath)? {
-            FileOpen::Created(c) => {
-                let mut f = Self::_new(c);
-                F::write_metadata(&mut f.f, ())?;
-                Ok(FileOpen::Created(f))
-            }
-            FileOpen::Existing(e) => {
-                let mut f = Self::_new(e);
-                let header = F::read_metadata(&mut f.f, ())?;
-                Ok(FileOpen::Existing((f, header)))
-            }
-        }
-    }
     pub fn into_buffered_reader(
         self,
     ) -> RuntimeResult<SDSSFileIO<Fs, <Fs::File as FileInterface>::BufReader>> {
@@ -248,17 +207,7 @@ impl<Fs: FSInterface, F: FileInterfaceRead + FileInterfaceExt> SDSSFileIO<Fs, F>
     }
 }
 
-impl<Fs: FSInterface, F: FileInterfaceWrite> SDSSFileIO<Fs, F> {
-    pub fn write_buffer(&mut self, data: &[u8]) -> RuntimeResult<()> {
-        self.f.fw_write_all(data)
-    }
-}
-
 impl<Fs: FSInterface, F: FileInterfaceWrite + FileInterfaceWriteExt> SDSSFileIO<Fs, F> {
-    pub fn fsync_all(&mut self) -> RuntimeResult<()> {
-        self.f.fwext_sync_all()?;
-        Ok(())
-    }
     pub fn fsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
         self.f.fw_write_all(data)?;
         self.f.fwext_sync_all()

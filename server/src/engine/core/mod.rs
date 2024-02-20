@@ -25,13 +25,14 @@
 */
 
 pub(in crate::engine) mod dcl;
-pub(super) mod ddl_misc;
+mod ddl_misc;
 pub(in crate::engine) mod dml;
 pub(in crate::engine) mod exec;
 pub(in crate::engine) mod index;
 pub(in crate::engine) mod model;
 pub(in crate::engine) mod query_meta;
 pub(in crate::engine) mod space;
+pub(in crate::engine) mod system_db;
 // util
 mod util;
 // test
@@ -60,6 +61,7 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 pub struct GlobalNS {
     idx_mdl: RWLIdx<EntityID, Model>,
     idx: RWLIdx<Box<str>, Space>,
+    sys_db: system_db::SystemDatabase,
 }
 
 impl GlobalNS {
@@ -67,6 +69,7 @@ impl GlobalNS {
         Self {
             idx_mdl: RWLIdx::default(),
             idx: RWLIdx::default(),
+            sys_db: system_db::SystemDatabase::empty(),
         }
     }
     pub fn ddl_with_all_mut<T>(
@@ -136,6 +139,9 @@ impl GlobalNS {
     }
     pub fn contains_space(&self, name: &str) -> bool {
         self.idx.read().contains_key(name)
+    }
+    pub fn sys_db(&self) -> &system_db::SystemDatabase {
+        &self.sys_db
     }
 }
 

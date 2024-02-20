@@ -24,6 +24,7 @@ tokio-openssl = "0.6.4"
 uuid = { version = "1.7.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
 crc = "3.0.1"
 serde_yaml = "0.9.31"
+chrono = "0.4.34"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps

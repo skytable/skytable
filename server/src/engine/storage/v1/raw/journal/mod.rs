@@ -25,48 +25,14 @@
 */
 
 use {
-    self::raw::{JournalAdapter, JournalWriter},
+    self::raw::JournalAdapter,
     crate::engine::{
-        core::GlobalNS,
-        error::TransactionError,
-        mem::BufferedScanner,
-        storage::{
-            common_encoding::r1::impls::gns::GNSEvent,
-            safe_interfaces::{FSInterface, LocalFS},
-        },
-        txn::gns,
-        RuntimeResult,
+        core::GlobalNS, error::TransactionError, mem::BufferedScanner,
+        storage::common_encoding::r1::impls::gns::GNSEvent, txn::gns, RuntimeResult,
     },
 };
 
 pub mod raw;
-
-/// The GNS transaction driver is used to handle DDL transactions
-pub struct GNSTransactionDriverAnyFS<Fs: FSInterface = LocalFS> {
-    journal: JournalWriter<Fs, GNSAdapter>,
-}
-
-impl<Fs: FSInterface> GNSTransactionDriverAnyFS<Fs> {
-    pub fn new(journal: JournalWriter<Fs, GNSAdapter>) -> Self {
-        Self { journal }
-    }
-    pub fn into_inner(self) -> JournalWriter<Fs, GNSAdapter> {
-        self.journal
-    }
-    pub fn __journal_mut(&mut self) -> &mut JournalWriter<Fs, GNSAdapter> {
-        &mut self.journal
-    }
-    /// Attempts to commit the given event into the journal, handling any possible recovery triggers and returning
-    /// errors (if any)
-    pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE) -> RuntimeResult<()> {
-        let mut buf = vec![];
-        buf.extend((GE::CODE as u16).to_le_bytes());
-        GE::encode_event(gns_event, &mut buf);
-        self.journal
-            .append_event_with_recovery_plugin(GNSSuperEvent(buf.into_boxed_slice()))?;
-        Ok(())
-    }
-}
 
 /*
     journal implementor

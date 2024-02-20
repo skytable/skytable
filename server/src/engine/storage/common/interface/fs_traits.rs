@@ -40,31 +40,6 @@ pub enum FileOpen<CF, EF = CF> {
     Existing(EF),
 }
 
-#[cfg(test)]
-impl<CF, EF> FileOpen<CF, EF> {
-    pub fn into_existing(self) -> Option<EF> {
-        match self {
-            Self::Existing(e) => Some(e),
-            Self::Created(_) => None,
-        }
-    }
-    pub fn into_created(self) -> Option<CF> {
-        match self {
-            Self::Existing(_) => None,
-            Self::Created(c) => Some(c),
-        }
-    }
-}
-
-#[cfg(test)]
-impl<CF> FileOpen<CF> {
-    pub fn into_inner(self) -> CF {
-        match self {
-            Self::Created(f) | Self::Existing(f) => f,
-        }
-    }
-}
-
 pub trait FSInterface {
     // settings
     /// set to false if the file system is a special device like `/dev/null`

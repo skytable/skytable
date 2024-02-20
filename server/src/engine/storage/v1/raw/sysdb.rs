@@ -25,40 +25,17 @@
 */
 
 use {
+    super::spec::SysDBV1,
     crate::engine::{
-        config::{ConfigAuth, ConfigMode},
+        core::system_db::SystemDatabase,
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
         error::{RuntimeResult, StorageError},
-        fractal::sys_store::{SysAuth, SysAuthUser, SysConfig, SysHostData, SystemStore},
         storage::{
-            common::interface::fs_traits::{FSInterface, FileOpen},
-            common_encoding::r1,
-            v1::raw::{rw::SDSSFileIO, spec},
+            common::interface::fs_traits::FSInterface, common_encoding::r1, v1::raw::rw::SDSSFileIO,
         },
     },
-    parking_lot::RwLock,
     std::collections::HashMap,
 };
-
-#[derive(Debug, PartialEq)]
-/// The system store init state
-pub enum SystemStoreInitState {
-    /// No system store was present. it was created
-    Created,
-    /// The system store was present, but no new changes were applied
-    Unchanged,
-    /// The system store was present, root settings were updated
-    UpdatedRoot,
-}
-
-impl SystemStoreInitState {
-    pub const fn is_created(&self) -> bool {
-        matches!(self, Self::Created)
-    }
-    pub const fn is_existing_updated_root(&self) -> bool {
-        matches!(self, Self::UpdatedRoot)
-    }
-}
 
 fn rkey<T>(
     d: &mut DictGeneric,
@@ -71,117 +48,31 @@ fn rkey<T>(
     }
 }
 
-impl<Fs: FSInterface> SystemStore<Fs> {
-    const SYSDB_PATH: &'static str = "sys.db";
-    const SYSDB_COW_PATH: &'static str = "sys.db.cow";
+pub struct RestoredSystemDatabase {
+    pub users: HashMap<Box<str>, Box<[u8]>>,
+    pub startup_counter: u64,
+    pub settings_version: u64,
+}
+
+impl RestoredSystemDatabase {
     const SYS_KEY_AUTH: &'static str = "auth";
     const SYS_KEY_AUTH_USERS: &'static str = "users";
     const SYS_KEY_SYS: &'static str = "sys";
     const SYS_KEY_SYS_STARTUP_COUNTER: &'static str = "sc";
     const SYS_KEY_SYS_SETTINGS_VERSION: &'static str = "sv";
-    pub fn open_or_restore(
-        auth: ConfigAuth,
-        run_mode: ConfigMode,
-    ) -> RuntimeResult<(Self, SystemStoreInitState)> {
-        Self::open_with_name(Self::SYSDB_PATH, Self::SYSDB_COW_PATH, auth, run_mode)
-    }
-    pub fn sync_db(&self, auth: &SysAuth) -> RuntimeResult<()> {
-        self._sync_with(Self::SYSDB_PATH, Self::SYSDB_COW_PATH, auth)
-    }
-    pub fn open_with_name(
-        sysdb_name: &str,
-        sysdb_cow_path: &str,
-        auth: ConfigAuth,
-        run_mode: ConfigMode,
-    ) -> RuntimeResult<(Self, SystemStoreInitState)> {
-        match SDSSFileIO::open_or_create_perm_rw::<spec::SysDBV1>(sysdb_name)? {
-            FileOpen::Created(new) => {
-                let me = Self::_new(SysConfig::new_auth(auth, run_mode));
-                me._sync(new, &me.system_store().auth_data().read())?;
-                Ok((me, SystemStoreInitState::Created))
-            }
-            FileOpen::Existing((ex, _)) => {
-                Self::restore_and_sync(ex, auth, run_mode, sysdb_name, sysdb_cow_path)
-            }
+    pub fn new(
+        users: HashMap<Box<str>, Box<[u8]>>,
+        startup_counter: u64,
+        settings_version: u64,
+    ) -> Self {
+        Self {
+            users,
+            startup_counter,
+            settings_version,
         }
     }
-}
-
-impl<Fs: FSInterface> SystemStore<Fs> {
-    fn _sync(&self, mut f: SDSSFileIO<Fs>, auth: &SysAuth) -> RuntimeResult<()> {
-        let cfg = self.system_store();
-        // prepare our flat file
-        let mut map: DictGeneric = into_dict!(
-            Self::SYS_KEY_SYS => DictEntryGeneric::Map(into_dict!(
-                Self::SYS_KEY_SYS_SETTINGS_VERSION => Datacell::new_uint_default(cfg.host_data().settings_version() as _),
-                Self::SYS_KEY_SYS_STARTUP_COUNTER => Datacell::new_uint_default(cfg.host_data().startup_counter() as _),
-            )),
-            Self::SYS_KEY_AUTH => DictGeneric::new(),
-        );
-        let auth_key = map.get_mut(Self::SYS_KEY_AUTH).unwrap();
-        let auth_key = auth_key.as_dict_mut().unwrap();
-        auth_key.insert(
-            Self::SYS_KEY_AUTH_USERS.into(),
-            DictEntryGeneric::Map(
-                // username -> [..settings]
-                auth.users()
-                    .iter()
-                    .map(|(username, user)| {
-                        (
-                            username.to_owned(),
-                            DictEntryGeneric::Data(Datacell::new_list(vec![Datacell::new_bin(
-                                user.key().into(),
-                            )])),
-                        )
-                    })
-                    .collect(),
-            ),
-        );
-        // write
-        let buf = r1::enc::full_dict::<r1::map::GenericDictSpec>(&map);
-        f.fsynced_write(&buf)
-    }
-    fn _sync_with(&self, target: &str, cow: &str, auth: &SysAuth) -> RuntimeResult<()> {
-        let f = SDSSFileIO::create::<spec::SysDBV1>(cow)?;
-        self._sync(f, auth)?;
-        Fs::fs_rename(cow, target)
-    }
-    fn restore_and_sync(
-        f: SDSSFileIO<Fs>,
-        auth: ConfigAuth,
-        run_mode: ConfigMode,
-        fname: &str,
-        fcow_name: &str,
-    ) -> RuntimeResult<(Self, SystemStoreInitState)> {
-        let prev_sysdb = Self::_restore(f, run_mode)?;
-        let state;
-        // see if settings have changed
-        if prev_sysdb
-            .auth_data()
-            .read()
-            .verify_user(SysAuthUser::USER_ROOT, &auth.root_key)
-            .is_ok()
-        {
-            state = SystemStoreInitState::Unchanged;
-        } else {
-            state = SystemStoreInitState::UpdatedRoot;
-        }
-        // create new config
-        let new_syscfg = SysConfig::new_full(
-            auth,
-            SysHostData::new(
-                prev_sysdb.host_data().startup_counter() + 1,
-                prev_sysdb.host_data().settings_version()
-                    + !matches!(state, SystemStoreInitState::Unchanged) as u32,
-            ),
-            run_mode,
-        );
-        let slf = Self::_new(new_syscfg);
-        // now sync
-        slf._sync_with(fname, fcow_name, &slf.system_store().auth_data().read())?;
-        Ok((slf, state))
-    }
-    fn _restore(mut f: SDSSFileIO<Fs>, run_mode: ConfigMode) -> RuntimeResult<SysConfig> {
+    pub fn restore<Fs: FSInterface>(name: &str) -> RuntimeResult<Self> {
+        let (mut f, _) = SDSSFileIO::<Fs>::open::<SysDBV1>(name)?;
         let mut sysdb_data = r1::dec::dict_full::<r1::map::GenericDictSpec>(&f.read_full()?)?;
         // get our auth and sys stores
         let mut auth_store = rkey(
@@ -214,9 +105,8 @@ impl<Fs: FSInterface> SystemStore<Fs> {
                 .remove(0)
                 .into_bin()
                 .ok_or(StorageError::SysDBCorrupted)?;
-            loaded_users.insert(username, SysAuthUser::new(user_password.into_boxed_slice()));
+            loaded_users.insert(username, user_password.into_boxed_slice());
         }
-        let sys_auth = SysAuth::new(loaded_users);
         // load sys data
         let sc = rkey(&mut sys_store, Self::SYS_KEY_SYS_STARTUP_COUNTER, |d| {
             d.into_data()?.into_uint()
@@ -227,14 +117,10 @@ impl<Fs: FSInterface> SystemStore<Fs> {
         if !(sysdb_data.is_empty()
             & auth_store.is_empty()
             & sys_store.is_empty()
-            & sys_auth.users().contains_key(SysAuthUser::USER_ROOT))
+            & loaded_users.contains_key(SystemDatabase::ROOT_ACCOUNT))
         {
             return Err(StorageError::SysDBCorrupted.into());
         }
-        Ok(SysConfig::new(
-            RwLock::new(sys_auth),
-            SysHostData::new(sc, sv as u32),
-            run_mode,
-        ))
+        Ok(Self::new(loaded_users, sc, sv))
     }
 }

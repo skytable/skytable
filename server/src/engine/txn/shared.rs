@@ -36,11 +36,11 @@ pub struct SpaceIDRef<'a> {
 }
 
 impl<'a> SpaceIDRef<'a> {
+    pub fn with_uuid(name: &'a str, uuid: Uuid) -> Self {
+        Self { uuid, name }
+    }
     pub fn new(name: &'a str, space: &Space) -> Self {
-        Self {
-            uuid: space.get_uuid(),
-            name,
-        }
+        Self::with_uuid(name, space.get_uuid())
     }
     pub fn name(&self) -> &str {
         self.name

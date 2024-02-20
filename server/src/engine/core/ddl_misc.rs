@@ -56,8 +56,8 @@ pub fn inspect(
                 drop(spaces_iter);
                 drop(spaces);
                 // collect users
-                let users = g.sys_store().system_store().auth_data().read();
-                let mut users_iter = users.users().iter().peekable();
+                let users = g.namespace().sys_db().users().read();
+                let mut users_iter = users.iter().peekable();
                 while let Some((user, _)) = users_iter.next() {
                     ret.push('"');
                     ret.push_str(&user);

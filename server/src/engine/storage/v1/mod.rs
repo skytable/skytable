@@ -28,10 +28,42 @@
 //!
 //! Target tags: `0.8.0-beta`, `0.8.0-beta.2`, `0.8.0-beta.3`
 
-pub mod loader;
+mod loader;
 pub mod raw;
 
-pub use self::{
-    raw::batch_jrnl::create as create_batch_journal, raw::batch_jrnl::DataBatchPersistDriver,
-    raw::journal::GNSTransactionDriverAnyFS,
+use {
+    self::raw::sysdb::RestoredSystemDatabase,
+    super::common::interface::{fs_imp::LocalFS, fs_traits::FSInterface},
+    crate::{
+        engine::{core::GlobalNS, RuntimeResult},
+        util,
+    },
 };
+
+pub const GNS_PATH: &str = "gns.db-tlog";
+pub const SYSDB_PATH: &str = "sys.db";
+pub const DATA_DIR: &str = "data";
+
+pub fn load_gns_prepare_migration() -> RuntimeResult<GlobalNS> {
+    // load gns
+    let gns = loader::load_gns()?;
+    // load sysdb
+    let RestoredSystemDatabase { users, .. } =
+        raw::sysdb::RestoredSystemDatabase::restore::<LocalFS>(SYSDB_PATH)?;
+    for (user, phash) in users {
+        gns.sys_db().__insert_user(user, phash);
+    }
+    // now move all our files into a backup directory
+    let backup_dir_path = format!(
+        "backups/{}",
+        util::time_now_with_postfix("before_upgrade_to_v2")
+    );
+    // move data folder
+    LocalFS::fs_create_dir_all(&backup_dir_path)?;
+    util::os::move_files_recursively("data", &format!("{backup_dir_path}/data"))?;
+    // move GNS
+    LocalFS::fs_rename(GNS_PATH, &format!("{backup_dir_path}/{GNS_PATH}"))?;
+    // move sysdb
+    LocalFS::fs_rename(SYSDB_PATH, &format!("{backup_dir_path}/{SYSDB_PATH}"))?;
+    Ok(gns)
+}

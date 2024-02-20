@@ -29,3 +29,29 @@ pub mod interface;
 pub mod sdss;
 pub mod static_meta;
 pub mod versions;
+
+pub mod paths_v1 {
+    use crate::engine::data::uuid::Uuid;
+    pub fn model_path(
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) -> String {
+        format!(
+            "{}/data.db-btlog",
+            self::model_dir(space_name, space_uuid, model_name, model_uuid)
+        )
+    }
+    pub fn model_dir(
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) -> String {
+        format!("data/{space_name}-{space_uuid}/mdl_{model_name}-{model_uuid}")
+    }
+    pub fn space_dir(space_name: &str, space_uuid: Uuid) -> String {
+        format!("data/{space_name}-{space_uuid}")
+    }
+}

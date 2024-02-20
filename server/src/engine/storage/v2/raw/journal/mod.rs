@@ -27,7 +27,7 @@
 #![allow(dead_code)]
 
 use {
-    self::raw::{CommitPreference, RawJournalAdapter, RawJournalAdapterEvent, RawJournalWriter},
+    self::raw::{CommitPreference, RawJournalAdapterEvent, RawJournalWriter},
     crate::{
         engine::{
             error::StorageError,
@@ -49,7 +49,9 @@ use {
 mod raw;
 #[cfg(test)]
 mod tests;
-pub use raw::RawJournalAdapterEvent as JournalAdapterEvent;
+pub use raw::{
+    create_journal, open_journal, RawJournalAdapter, RawJournalAdapterEvent as JournalAdapterEvent,
+};
 
 /*
     implementation of a blanket event log
@@ -65,31 +67,6 @@ pub use raw::RawJournalAdapterEvent as JournalAdapterEvent;
 pub type EventLogDriver<EL, Fs> = RawJournalWriter<EventLogAdapter<EL>, Fs>;
 /// The event log adapter
 pub struct EventLogAdapter<EL: EventLogSpec>(PhantomData<EL>);
-
-impl<EL: EventLogSpec> EventLogAdapter<EL> {
-    /// Open a new event log
-    pub fn open<Fs: FSInterface>(
-        name: &str,
-        gs: &EL::GlobalState,
-    ) -> RuntimeResult<EventLogDriver<EL, Fs>>
-    where
-        EL::Spec: FileSpecV1<DecodeArgs = ()>,
-    {
-        raw::open_journal::<EventLogAdapter<EL>, Fs>(name, gs)
-    }
-    /// Create a new event log
-    pub fn create<Fs: FSInterface>(name: &str) -> RuntimeResult<EventLogDriver<EL, Fs>>
-    where
-        EL::Spec: FileSpecV1<EncodeArgs = ()>,
-    {
-        raw::create_journal::<EventLogAdapter<EL>, Fs>(name)
-    }
-    /// Close an event log
-    pub fn close<Fs: FSInterface>(me: &mut EventLogDriver<EL, Fs>) -> RuntimeResult<()> {
-        RawJournalWriter::close_driver(me)
-    }
-}
-
 type DispatchFn<G> = fn(&G, Vec<u8>) -> RuntimeResult<()>;
 
 /// Specification for an event log
@@ -219,14 +196,23 @@ impl<BA: BatchAdapterSpec> BatchAdapter<BA> {
 /// NB: This trait's impl is fairly complex and is going to require careful handling to get it right. Also, the event has to have
 /// a specific on-disk layout: `[EXPECTED COMMIT][ANY ADDITIONAL METADATA][BATCH BODY][ACTUAL COMMIT]`
 pub trait BatchAdapterSpec {
+    /// the SDSS spec for this journal
     type Spec: FileSpecV1;
+    /// global state used for syncing events
     type GlobalState;
+    /// batch type tag
     type BatchType: TaggedEnum<Dscr = u8>;
+    /// event type tag (event in batch)
     type EventType: TaggedEnum<Dscr = u8> + PartialEq;
+    /// custom batch metadata
     type BatchMetadata;
+    /// batch state
     type BatchState;
+    /// return true if the given event tag indicates an early exit
     fn is_early_exit(event_type: &Self::EventType) -> bool;
+    /// initialize the batch state
     fn initialize_batch_state(gs: &Self::GlobalState) -> Self::BatchState;
+    /// decode batch start metadata
     fn decode_batch_metadata<Fs: FSInterface>(
         gs: &Self::GlobalState,
         f: &mut TrackedReaderContext<
@@ -235,6 +221,7 @@ pub trait BatchAdapterSpec {
         >,
         meta: Self::BatchType,
     ) -> RuntimeResult<Self::BatchMetadata>;
+    /// decode new event and update state. if called, it is guaranteed that the event is not an early exit
     fn update_state_for_new_event<Fs: FSInterface>(
         gs: &Self::GlobalState,
         bs: &mut Self::BatchState,
@@ -245,7 +232,12 @@ pub trait BatchAdapterSpec {
         batch_info: &Self::BatchMetadata,
         event_type: Self::EventType,
     ) -> RuntimeResult<()>;
-    fn finish(bs: Self::BatchState, gs: &Self::GlobalState) -> RuntimeResult<()>;
+    /// finish applying all changes to the global state
+    fn finish(
+        batch_state: Self::BatchState,
+        batch_meta: Self::BatchMetadata,
+        gs: &Self::GlobalState,
+    ) -> RuntimeResult<()>;
 }
 
 impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
@@ -317,7 +309,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
             let _stored_actual_commit_size = u64::from_le_bytes(f.read_block()?);
             if _stored_actual_commit_size == real_commit_size {
                 // finish applying batch
-                BA::finish(batch_state, gs)?;
+                BA::finish(batch_state, batch_md, gs)?;
             } else {
                 return Err(StorageError::RawJournalCorrupted.into());
             }

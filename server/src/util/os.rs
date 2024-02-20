@@ -477,6 +477,33 @@ mod hostname_impl {
     }
 }
 
+pub fn move_files_recursively(src: &str, dst: &str) -> std::io::Result<()> {
+    let src = Path::new(src);
+    let dst = Path::new(dst);
+    rmove(src, dst)
+}
+
+fn rmove(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            // Compute the new destination path for this directory
+            let new_dst = dst.join(entry.file_name());
+            rmove(&path, &new_dst)?;
+        } else if path.is_file() {
+            // Compute the destination path for this file
+            let dest_file = dst.join(entry.file_name());
+            fs::rename(&path, &dest_file)?;
+        }
+    }
+
+    Ok(())
+}
+
 #[test]
 fn rcopy_okay() {
     let dir_paths = [

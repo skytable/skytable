@@ -213,7 +213,9 @@ pub trait MapStorageSpec {
 
 // enc
 pub mod enc {
-    use super::{map, MapStorageSpec, PersistObject, VecU8};
+    #[cfg(test)]
+    use super::{map, MapStorageSpec};
+    use super::{PersistObject, VecU8};
     // obj
     #[cfg(test)]
     pub fn full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
@@ -229,11 +231,13 @@ pub mod enc {
         full::<Obj>(obj)
     }
     // dict
+    #[cfg(test)]
     pub fn full_dict<PM: MapStorageSpec>(dict: &PM::InMemoryMap) -> Vec<u8> {
         let mut v = vec![];
         full_dict_into_buffer::<PM>(&mut v, dict);
         v
     }
+    #[cfg(test)]
     pub fn full_dict_into_buffer<PM: MapStorageSpec>(buf: &mut VecU8, dict: &PM::InMemoryMap) {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_enc(buf, dict)
     }

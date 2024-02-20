@@ -33,7 +33,9 @@ use {
         engine::{
             core::GlobalNS,
             storage::{
-                common_encoding::r1::impls::gns::GNSEvent, v2::raw::journal::JournalAdapterEvent,
+                common::interface::fs_traits::FSInterface,
+                common_encoding::r1::impls::gns::GNSEvent,
+                v2::raw::journal::{self, EventLogDriver, JournalAdapterEvent},
             },
             txn::gns::{
                 model::{
@@ -41,6 +43,7 @@ use {
                     DropModelTxn,
                 },
                 space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
+                sysctl::{AlterUserTxn, CreateUserTxn, DropUserTxn},
                 GNSTransaction, GNSTransactionCode,
             },
             RuntimeResult,
@@ -53,7 +56,28 @@ use {
     GNS event log impl
 */
 
+pub type GNSDriver<Fs> = EventLogDriver<GNSEventLog, Fs>;
 pub struct GNSEventLog;
+
+impl<Fs: FSInterface> GNSDriver<Fs> {
+    const FILE_PATH: &'static str = "gns.db-tlog";
+    pub fn open_gns_with_name(name: &str, gs: &GlobalNS) -> RuntimeResult<Self> {
+        journal::open_journal::<_, Fs>(name, gs)
+    }
+    pub fn open_gns(gs: &GlobalNS) -> RuntimeResult<Self> {
+        Self::open_gns_with_name(Self::FILE_PATH, gs)
+    }
+    /// Create a new event log
+    pub fn create_gns() -> RuntimeResult<Self> {
+        journal::create_journal::<_, Fs>(Self::FILE_PATH)
+    }
+}
+
+macro_rules! make_dispatch {
+    ($($obj:ty),* $(,)?) => {
+        [$(<$obj as crate::engine::storage::common_encoding::r1::impls::gns::GNSEvent>::decode_apply),*]
+    }
+}
 
 impl EventLogSpec for GNSEventLog {
     type Spec = SystemDatabaseV1;
@@ -61,15 +85,18 @@ impl EventLogSpec for GNSEventLog {
     type EventMeta = GNSTransactionCode;
     type DecodeDispatch =
         [fn(&GlobalNS, Vec<u8>) -> RuntimeResult<()>; GNSTransactionCode::VARIANT_COUNT];
-    const DECODE_DISPATCH: Self::DecodeDispatch = [
-        <CreateSpaceTxn as GNSEvent>::decode_apply,
-        <AlterSpaceTxn as GNSEvent>::decode_apply,
-        <DropSpaceTxn as GNSEvent>::decode_apply,
-        <CreateModelTxn as GNSEvent>::decode_apply,
-        <AlterModelAddTxn as GNSEvent>::decode_apply,
-        <AlterModelRemoveTxn as GNSEvent>::decode_apply,
-        <AlterModelUpdateTxn as GNSEvent>::decode_apply,
-        <DropModelTxn as GNSEvent>::decode_apply,
+    const DECODE_DISPATCH: Self::DecodeDispatch = make_dispatch![
+        CreateSpaceTxn,
+        AlterSpaceTxn,
+        DropSpaceTxn,
+        CreateModelTxn,
+        AlterModelAddTxn,
+        AlterModelRemoveTxn,
+        AlterModelUpdateTxn,
+        DropModelTxn,
+        CreateUserTxn,
+        AlterUserTxn,
+        DropUserTxn,
     ];
 }
 

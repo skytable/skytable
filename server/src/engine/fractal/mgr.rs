@@ -33,7 +33,7 @@ use {
                 EntityIDRef,
             },
             data::uuid::Uuid,
-            storage::safe_interfaces::LocalFS,
+            storage::safe_interfaces::{paths_v1, LocalFS, StdModelBatch},
         },
         util::os,
     },
@@ -85,17 +85,11 @@ impl GenericTask {
         model_uuid: Uuid,
     ) -> Self {
         Self::DeleteDirAll(
-            crate::engine::storage::v1::loader::SEInitState::model_dir(
-                space_name, space_uuid, model_name, model_uuid,
-            )
-            .into(),
+            paths_v1::model_dir(space_name, space_uuid, model_name, model_uuid).into(),
         )
     }
     pub fn delete_space_dir(space_name: &str, space_uuid: Uuid) -> Self {
-        Self::DeleteDirAll(
-            crate::engine::storage::v1::loader::SEInitState::space_dir(space_name, space_uuid)
-                .into(),
-        )
+        Self::DeleteDirAll(paths_v1::space_dir(space_name, space_uuid).into())
     }
 }
 
@@ -285,7 +279,7 @@ impl FractalMgr {
         match task {
             CriticalTask::WriteBatch(model_id, observed_size) => {
                 info!("fhp: {model_id} has reached cache capacity. writing to disk");
-                let mdl_drivers = global.get_state().get_mdl_drivers().read();
+                let mdl_drivers = global.get_state().get_mdl_drivers().drivers().read();
                 let Some(mdl_driver) = mdl_drivers.get(&model_id) else {
                     // because we maximize throughput, the model driver may have been already removed but this task
                     // was way behind in the queue
@@ -380,7 +374,7 @@ impl FractalMgr {
         }
     }
     fn general_executor(&'static self, global: super::Global) {
-        let mdl_drivers = global.get_state().get_mdl_drivers().read();
+        let mdl_drivers = global.get_state().get_mdl_drivers().drivers().read();
         for (model_id, driver) in mdl_drivers.iter() {
             let mut observed_len = 0;
             let res = global._namespace().with_model(
@@ -428,7 +422,7 @@ impl FractalMgr {
     fn try_write_model_data_batch(
         model: &Model,
         observed_size: usize,
-        mdl_driver: &super::FractalModelDriver<LocalFS>,
+        mdl_driver: &super::drivers::FractalModelDriver<LocalFS>,
     ) -> crate::engine::error::QueryResult<()> {
         if observed_size == 0 {
             // no changes, all good
@@ -436,7 +430,7 @@ impl FractalMgr {
         }
         // try flushing the batch
         let mut batch_driver = mdl_driver.batch_driver().lock();
-        batch_driver.write_new_batch(model, observed_size)?;
+        batch_driver.commit_event(StdModelBatch::new(model, observed_size))?;
         Ok(())
     }
 }

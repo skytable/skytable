@@ -30,5 +30,3 @@ pub(super) mod journal;
 pub(super) mod rw;
 pub mod spec;
 pub mod sysdb;
-#[cfg(test)]
-mod tests;

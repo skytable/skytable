@@ -38,8 +38,6 @@ const MARKER_ACTUAL_BATCH_EVENT: u8 = 0xFE;
 /// recovery batch event marker
 const MARKER_RECOVERY_EVENT: u8 = 0xFF;
 
-#[cfg(test)]
-pub(super) use restore::{DecodedBatchEvent, DecodedBatchEventKind, NormalBatch};
 pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};
 
 use {
@@ -60,10 +58,4 @@ pub fn reinit<Fs: FSInterface>(
     let mut restore_driver = DataBatchRestoreDriver::new(f)?;
     restore_driver.read_data_batch_into_model(model)?;
     DataBatchPersistDriver::new(restore_driver.into_file()?, false)
-}
-
-/// Create a new batch journal
-pub fn create<Fs: FSInterface>(path: &str) -> RuntimeResult<DataBatchPersistDriver<Fs>> {
-    let f = SDSSFileIO::<Fs>::create::<spec::DataBatchJournalV1>(path)?;
-    DataBatchPersistDriver::new(f, true)
 }

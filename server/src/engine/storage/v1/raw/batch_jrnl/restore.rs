@@ -127,17 +127,6 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
             Self::apply_batch(model, batch)
         })
     }
-    #[cfg(test)]
-    pub(in crate::engine::storage::v1) fn read_all_batches(
-        &mut self,
-    ) -> RuntimeResult<Vec<NormalBatch>> {
-        let mut all_batches = vec![];
-        self.read_all_batches_and_for_each(|batch| {
-            all_batches.push(batch);
-            Ok(())
-        })?;
-        Ok(all_batches)
-    }
 }
 
 impl<F: FSInterface> DataBatchRestoreDriver<F> {

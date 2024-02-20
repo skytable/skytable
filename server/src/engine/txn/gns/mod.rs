@@ -32,6 +32,7 @@ macro_rules! impl_gns_event {
 
 pub mod model;
 pub mod space;
+pub mod sysctl;
 
 #[derive(Debug, PartialEq, Clone, Copy, sky_macros::TaggedEnum)]
 #[repr(u8)]
@@ -44,6 +45,9 @@ pub enum GNSTransactionCode {
     AlterModelRemove = 5,
     AlterModelUpdate = 6,
     DropModel = 7,
+    CreateUser = 8,
+    AlterUser = 9,
+    DropUser = 10,
 }
 
 pub trait GNSTransaction {

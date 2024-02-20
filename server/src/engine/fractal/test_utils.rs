@@ -26,17 +26,15 @@
 
 use {
     super::{
-        drivers::FractalGNSDriver,
-        sys_store::{SysConfig, SystemStore},
-        CriticalTask, FractalModelDriver, GenericTask, GlobalInstanceLike, ModelUniqueID, Task,
+        drivers::FractalGNSDriver, CriticalTask, GenericTask, GlobalInstanceLike, ModelUniqueID,
+        Task,
     },
     crate::engine::{
         core::GlobalNS,
         data::uuid::Uuid,
         storage::{
-            self,
-            safe_interfaces::{FSInterface, NullFS, VirtualFS},
-            v1::GNSTransactionDriverAnyFS,
+            safe_interfaces::{paths_v1, FSInterface, NullFS, VirtualFS},
+            GNSDriver, ModelDriver,
         },
     },
     parking_lot::{Mutex, RwLock},
@@ -51,16 +49,11 @@ pub struct TestGlobal<Fs: FSInterface = VirtualFS> {
     #[allow(unused)]
     max_delta_size: usize,
     txn_driver: Mutex<FractalGNSDriver<Fs>>,
-    model_drivers: RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>>,
-    sys_cfg: SystemStore<Fs>,
+    model_drivers: RwLock<HashMap<ModelUniqueID, super::drivers::FractalModelDriver<Fs>>>,
 }
 
 impl<Fs: FSInterface> TestGlobal<Fs> {
-    fn new(
-        gns: GlobalNS,
-        max_delta_size: usize,
-        txn_driver: GNSTransactionDriverAnyFS<Fs>,
-    ) -> Self {
+    fn new(gns: GlobalNS, max_delta_size: usize, txn_driver: GNSDriver<Fs>) -> Self {
         Self {
             gns,
             hp_queue: RwLock::default(),
@@ -68,7 +61,6 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
             max_delta_size,
             txn_driver: Mutex::new(FractalGNSDriver::new(txn_driver)),
             model_drivers: RwLock::default(),
-            sys_cfg: SystemStore::_new(SysConfig::test_default()),
         }
     }
 }
@@ -76,10 +68,8 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
 impl<Fs: FSInterface> TestGlobal<Fs> {
     pub fn new_with_driver_id(log_name: &str) -> Self {
         let gns = GlobalNS::empty();
-        let driver = storage::v1::loader::open_gns_driver(log_name, &gns)
-            .unwrap()
-            .into_inner();
-        Self::new(gns, 0, GNSTransactionDriverAnyFS::new(driver))
+        let driver = GNSDriver::open_gns_with_name(log_name, &gns).unwrap();
+        Self::new(gns, 0, driver)
     }
 }
 
@@ -115,9 +105,6 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     fn get_max_delta_size(&self) -> usize {
         100
     }
-    fn sys_store(&self) -> &SystemStore<Fs> {
-        &self.sys_cfg
-    }
     fn purge_model_driver(
         &self,
         space_name: &str,
@@ -145,16 +132,15 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         model_uuid: Uuid,
     ) -> crate::engine::error::RuntimeResult<()> {
         // create model dir
-        Fs::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
+        Fs::fs_create_dir(&paths_v1::model_dir(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
-        let driver =
-            storage::v1::create_batch_journal(&storage::v1::loader::SEInitState::model_path(
-                space_name, space_uuid, model_name, model_uuid,
-            ))?;
+        let driver = ModelDriver::create_model_driver(&paths_v1::model_path(
+            space_name, space_uuid, model_name, model_uuid,
+        ))?;
         self.model_drivers.write().insert(
             ModelUniqueID::new(space_name, model_name, model_uuid),
-            FractalModelDriver::init(driver),
+            super::drivers::FractalModelDriver::init(driver),
         );
         Ok(())
     }
@@ -163,10 +149,6 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
 impl<Fs: FSInterface> Drop for TestGlobal<Fs> {
     fn drop(&mut self) {
         let mut txn_driver = self.txn_driver.lock();
-        txn_driver
-            .gns_driver()
-            .__journal_mut()
-            .__close_mut()
-            .unwrap();
+        GNSDriver::close_driver(&mut txn_driver.txn_driver).unwrap()
     }
 }

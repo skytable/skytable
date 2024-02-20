@@ -41,9 +41,6 @@
   - FIXME(@ohsayan): we will probably (naively) need to dynamically reposition the cursor in case the metadata is corrupted as well
 */
 
-#[cfg(test)]
-use crate::engine::storage::common::interface::fs_traits::FileOpen;
-
 use {
     super::super::{rw::SDSSFileIO, spec::Header},
     crate::{
@@ -57,35 +54,6 @@ use {
 };
 
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-
-#[cfg(test)]
-pub fn open_or_create_journal<
-    TA: JournalAdapter,
-    Fs: FSInterface,
-    F: sdss::sdss_r1::FileSpecV1<DecodeArgs = (), EncodeArgs = ()>,
->(
-    log_file_name: &str,
-    gs: &TA::GlobalState,
-) -> RuntimeResult<FileOpen<JournalWriter<Fs, TA>>> {
-    let file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<F>(log_file_name)? {
-        FileOpen::Created(f) => return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?)),
-        FileOpen::Existing((file, _header)) => file,
-    };
-    let (file, last_txn) = JournalReader::<TA, Fs>::scroll(file, gs)?;
-    Ok(FileOpen::Existing(JournalWriter::new(
-        file, last_txn, false,
-    )?))
-}
-
-pub fn create_journal<
-    TA: JournalAdapter,
-    Fs: FSInterface,
-    F: sdss::sdss_r1::FileSpecV1<EncodeArgs = ()>,
->(
-    log_file_name: &str,
-) -> RuntimeResult<JournalWriter<Fs, TA>> {
-    JournalWriter::new(SDSSFileIO::create::<F>(log_file_name)?, 0, true)
-}
 
 pub fn load_journal<
     TA: JournalAdapter,
@@ -395,46 +363,9 @@ impl<Fs: FSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
         }
         Ok(slf)
     }
-    pub fn append_event(&mut self, event: TA::JournalEvent) -> RuntimeResult<()> {
-        let encoded = TA::encode(event);
-        let md = JournalEntryMetadata::new(
-            self._incr_id() as u128,
-            EventSourceMarker::SERVER_STD,
-            CRC.checksum(&encoded),
-            encoded.len() as u64,
-        )
-        .encoded();
-        self.log_file.write_buffer(&md)?;
-        self.log_file.write_buffer(&encoded)?;
-        self.log_file.fsync_all()?;
-        Ok(())
-    }
-    pub fn append_event_with_recovery_plugin(
-        &mut self,
-        event: TA::JournalEvent,
-    ) -> RuntimeResult<()> {
-        debug_assert!(TA::RECOVERY_PLUGIN);
-        match self.append_event(event) {
-            Ok(()) => Ok(()),
-            Err(e) => compiler::cold_call(move || {
-                // IMPORTANT: we still need to return an error so that the caller can retry if deemed appropriate
-                self.appendrec_journal_reverse_entry()?;
-                Err(e)
-            }),
-        }
-    }
 }
 
 impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
-    pub fn appendrec_journal_reverse_entry(&mut self) -> RuntimeResult<()> {
-        let mut entry =
-            JournalEntryMetadata::new(0, EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL, 0, 0);
-        entry.event_id = self._incr_id() as u128;
-        if self.log_file.fsynced_write(&entry.encoded()).is_ok() {
-            return Ok(());
-        }
-        Err(StorageError::JournalWRecoveryStageOneFailCritical.into())
-    }
     pub fn append_journal_reopen(&mut self) -> RuntimeResult<()> {
         let id = self._incr_id() as u128;
         self.log_file.fsynced_write(

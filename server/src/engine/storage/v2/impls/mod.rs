@@ -24,5 +24,5 @@
  *
 */
 
-mod gns_log;
-mod mdl_journal;
+pub mod gns_log;
+pub mod mdl_journal;

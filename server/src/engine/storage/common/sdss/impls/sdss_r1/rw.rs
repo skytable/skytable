@@ -231,6 +231,9 @@ impl<'a, F: FileInterfaceRead, S: FileSpecV1> TrackedReaderContext<'a, F, S> {
         let Self { tr, p_checksum } = self;
         (p_checksum.finish(), tr)
     }
+    pub fn remaining(&self) -> u64 {
+        self.tr.remaining()
+    }
 }
 
 impl<F: FileInterface, S: FileSpecV1> TrackedReader<F, S> {
