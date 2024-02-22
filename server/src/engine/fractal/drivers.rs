@@ -48,7 +48,7 @@ impl<Fs: FSInterface> FractalGNSDriver<Fs> {
             txn_driver: txn_driver,
         }
     }
-    pub fn gns_driver(&mut self) -> &mut GNSDriver<Fs> {
+    pub fn driver(&mut self) -> &mut GNSDriver<Fs> {
         &mut self.txn_driver
     }
 }

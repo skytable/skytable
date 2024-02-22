@@ -116,7 +116,7 @@ macro_rules! impl_db_event {
     ($($ty:ty as $code:expr $(=> $expr:expr)?),*) => {
         $(impl SimpleDBEvent for $ty {
             const OPC: u8 = $code;
-            fn write_buffered(self, buf: &mut Vec<u8>) { let _ = buf; fn do_it(s: $ty, b: &mut Vec<u8>, f: impl Fn($ty, &mut Vec<u8>)) { f(s, b) } $(do_it(self, buf, $expr))? }
+            fn write_buffered(self, buf: &mut Vec<u8>) { let _ = buf; fn _do_it(s: $ty, b: &mut Vec<u8>, f: impl Fn($ty, &mut Vec<u8>)) { f(s, b) } $(_do_it(self, buf, $expr))? }
         })*
     }
 }
@@ -139,11 +139,6 @@ impl<T: SimpleDBEvent> RawJournalAdapterEvent<SimpleDBJournal> for T {
     }
 }
 
-pub enum DbEventRestored {
-    NewKey(String),
-    Pop,
-    Clear,
-}
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum EventMeta {
     NewKey,

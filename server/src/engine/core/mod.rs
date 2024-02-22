@@ -153,7 +153,7 @@ pub(self) fn with_model_for_data_update<'a, F>(
 where
     F: FnOnce(&Model) -> QueryResult<QueryExecMeta>,
 {
-    let mdl_idx = global.namespace().idx_mdl.read();
+    let mdl_idx = global.state().idx_mdl.read();
     let Some(model) = mdl_idx.get(&entity) else {
         return Err(QueryError::QExecObjectNotFound);
     };

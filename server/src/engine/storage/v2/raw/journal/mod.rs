@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(dead_code)]
-
 use {
     self::raw::{CommitPreference, RawJournalAdapterEvent, RawJournalWriter},
     crate::{
@@ -167,6 +165,7 @@ pub type BatchDriver<BA, Fs> = RawJournalWriter<BatchAdapter<BA>, Fs>;
 /// Batch journal adapter
 pub struct BatchAdapter<BA: BatchAdapterSpec>(PhantomData<BA>);
 
+#[cfg(test)]
 impl<BA: BatchAdapterSpec> BatchAdapter<BA> {
     /// Open a new batch journal
     pub fn open<Fs: FSInterface>(

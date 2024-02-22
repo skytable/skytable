@@ -292,9 +292,9 @@ async fn do_handshake<S: Socket>(
     match core::str::from_utf8(handshake.hs_auth().username()) {
         Ok(uname) => {
             match global
-                .namespace()
+                .state()
                 .sys_db()
-                .__verify_user(uname, handshake.hs_auth().password())
+                .verify_user(uname, handshake.hs_auth().password())
             {
                 okay @ (VerifyUser::Okay | VerifyUser::OkayRoot) => {
                     let hs = handshake.hs_static();

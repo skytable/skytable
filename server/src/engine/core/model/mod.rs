@@ -268,7 +268,7 @@ impl Model {
         let (space_name, model_name) = (stmt.model_name.space(), stmt.model_name.entity());
         let if_nx = stmt.if_not_exists;
         let model = Self::process_create(stmt)?;
-        global.namespace().ddl_with_space_mut(&space_name, |space| {
+        global.state().ddl_with_space_mut(&space_name, |space| {
             // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
             if space.models().contains(model_name) {
                 if if_nx {
@@ -294,7 +294,7 @@ impl Model {
                     model.get_uuid(),
                 )?;
                 // commit txn
-                match txn_driver.gns_driver().commit_event(txn) {
+                match txn_driver.driver().commit_event(txn) {
                     Ok(()) => {}
                     Err(e) => {
                         // failed to commit, request cleanup
@@ -313,7 +313,7 @@ impl Model {
             // update global state
             let _ = space.models_mut().insert(model_name.into());
             let _ = global
-                .namespace()
+                .state()
                 .idx_models()
                 .write()
                 .insert(EntityID::new(&space_name, &model_name), model);
@@ -329,7 +329,7 @@ impl Model {
         stmt: DropModel,
     ) -> QueryResult<Option<bool>> {
         let (space_name, model_name) = (stmt.entity.space(), stmt.entity.entity());
-        global.namespace().ddl_with_space_mut(&space_name, |space| {
+        global.state().ddl_with_space_mut(&space_name, |space| {
             if !space.models().contains(model_name) {
                 if stmt.if_exists {
                     return Ok(Some(false));
@@ -339,7 +339,7 @@ impl Model {
                 }
             }
             // get exclusive lock on models
-            let mut models_idx = global.namespace().idx_models().write();
+            let mut models_idx = global.state().idx_models().write();
             let model = models_idx
                 .get(&EntityIDRef::new(&space_name, &model_name))
                 .unwrap();
@@ -358,7 +358,7 @@ impl Model {
                     model.delta_state().schema_current_version().value_u64(),
                 ));
                 // commit txn
-                global.gns_driver().lock().gns_driver().commit_event(txn)?;
+                global.gns_driver().lock().driver().commit_event(txn)?;
                 // request cleanup
                 global.purge_model_driver(
                     space_name,

@@ -51,7 +51,7 @@ pub fn load_gns_prepare_migration() -> RuntimeResult<GlobalNS> {
     let RestoredSystemDatabase { users, .. } =
         raw::sysdb::RestoredSystemDatabase::restore::<LocalFS>(SYSDB_PATH)?;
     for (user, phash) in users {
-        gns.sys_db().__insert_user(user, phash);
+        gns.sys_db().__raw_create_user(user, phash);
     }
     // now move all our files into a backup directory
     let backup_dir_path = format!(

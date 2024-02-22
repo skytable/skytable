@@ -39,7 +39,7 @@ pub fn inspect(
     let ret = match stmt {
         Inspect::Global => {
             // collect spaces
-            let spaces = g.namespace().idx().read();
+            let spaces = g.state().idx().read();
             let mut spaces_iter = spaces.iter().peekable();
             let mut ret = format!("{{\"spaces\":[");
             while let Some((space, _)) = spaces_iter.next() {
@@ -56,7 +56,7 @@ pub fn inspect(
                 drop(spaces_iter);
                 drop(spaces);
                 // collect users
-                let users = g.namespace().sys_db().users().read();
+                let users = g.state().sys_db().users().read();
                 let mut users_iter = users.iter().peekable();
                 while let Some((user, _)) = users_iter.next() {
                     ret.push('"');
@@ -70,7 +70,7 @@ pub fn inspect(
             ret.push_str("],\"settings\":{}}");
             ret
         }
-        Inspect::Model(m) => match g.namespace().idx_models().read().get(&m) {
+        Inspect::Model(m) => match g.state().idx_models().read().get(&m) {
             Some(m) => format!(
                 "{{\"decl\":\"{}\",\"rows\":{},\"properties\":{{}}}}",
                 m.describe(),
@@ -78,7 +78,7 @@ pub fn inspect(
             ),
             None => return Err(QueryError::QExecObjectNotFound),
         },
-        Inspect::Space(s) => match g.namespace().idx().read().get(s.as_str()) {
+        Inspect::Space(s) => match g.state().idx().read().get(s.as_str()) {
             Some(s) => {
                 let mut ret = format!("{{\"models\":[");
                 let mut models_iter = s.models().iter().peekable();

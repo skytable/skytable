@@ -122,11 +122,13 @@ pub fn obtain_trace() -> Vec<JournalTraceEvent> {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg(test)]
 pub enum JournalTraceEvent {
     Writer(JournalWriterTraceEvent),
     Reader(JournalReaderTraceEvent),
 }
 
+#[cfg(test)]
 direct_from! {
     JournalTraceEvent => {
         JournalWriterTraceEvent as Writer,
@@ -135,6 +137,7 @@ direct_from! {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg(test)]
 pub enum JournalReaderTraceEvent {
     Initialized,
     Completed,
@@ -159,6 +162,7 @@ pub enum JournalReaderTraceEvent {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg(test)]
 pub(super) enum JournalWriterTraceEvent {
     Initialized,
     ReinitializeAttempt,
@@ -174,7 +178,6 @@ pub(super) enum JournalWriterTraceEvent {
         event_id: u64,
         prev_id: u64,
     },
-    DriverEventPresyncCompleted,
     DriverEventCompleted,
     DriverClosed,
 }
@@ -277,6 +280,7 @@ pub trait RawJournalAdapter: Sized {
 
 #[derive(Debug, PartialEq)]
 pub enum CommitPreference {
+    #[allow(unused)]
     Buffered,
     Direct,
 }
@@ -318,6 +322,7 @@ impl DriverEvent {
     const OFFSET_6_LAST_TXN_ID: Range<usize> =
         Self::OFFSET_5_LAST_OFFSET.end..Self::OFFSET_5_LAST_OFFSET.end + sizeof!(u64);
     /// Create a new driver event (checksum auto-computed)
+    #[cfg(test)]
     fn new(
         txn_id: u128,
         driver_event: DriverEventKind,
@@ -359,6 +364,7 @@ impl DriverEvent {
         }
     }
     /// Encode the current driver event
+    #[cfg(test)]
     fn encode_self(&self) -> [u8; 64] {
         Self::encode(
             self.txn_id,
@@ -492,9 +498,6 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
             jtrace_writer!(ReinitializeComplete);
         }
         Ok(me)
-    }
-    pub fn context(&mut self) -> J::Context<'_> {
-        J::enter_context(self)
     }
     /// Commit a new event to the journal
     ///

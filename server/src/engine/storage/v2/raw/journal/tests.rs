@@ -77,7 +77,7 @@ macro_rules! impl_test_event {
     ($($ty:ty as $code:expr $(=> $expr:expr)?),* $(,)?) => {
         $(impl IsTestEvent for $ty {
             const EVCODE: TestEvent = $code;
-            fn encode(self, buf: &mut Vec<u8>) { let _ = buf; fn do_it(s: $ty, b: &mut Vec<u8>, f: impl Fn($ty, &mut Vec<u8>)) { f(s, b) } $(do_it(self, buf, $expr))? }
+            fn encode(self, buf: &mut Vec<u8>) { let _ = buf; fn _do_it(s: $ty, b: &mut Vec<u8>, f: impl Fn($ty, &mut Vec<u8>)) { f(s, b) } $(_do_it(self, buf, $expr))? }
         })*
     }
 }
@@ -220,6 +220,7 @@ fn test_this_data() {
     {
         let (db, mut log) = open_log();
         assert_eq!(db._ref().as_slice(), DATA4);
+        db.clear(&mut log).unwrap();
         RawJournalWriter::close_driver(&mut log).unwrap();
     }
 }

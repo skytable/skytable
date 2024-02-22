@@ -102,7 +102,7 @@ pub trait GlobalInstanceLike {
     // stat
     fn get_max_delta_size(&self) -> usize;
     // global namespace
-    fn namespace(&self) -> &GlobalNS;
+    fn state(&self) -> &GlobalNS;
     fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver<Self::FileSystem>>;
     // model drivers
     fn initialize_model_driver(
@@ -150,7 +150,7 @@ pub trait GlobalInstanceLike {
 impl GlobalInstanceLike for Global {
     type FileSystem = LocalFS;
     // ns
-    fn namespace(&self) -> &GlobalNS {
+    fn state(&self) -> &GlobalNS {
         self._namespace()
     }
     fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver<Self::FileSystem>> {

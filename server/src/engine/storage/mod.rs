@@ -66,7 +66,6 @@ pub struct SELoaded {
 }
 
 pub fn load(cfg: &Configuration) -> RuntimeResult<SELoaded> {
-    info!("loading databases");
     // first determine if this is a new install, an existing install or if it uses the old driver
     if Path::new(v1::SYSDB_PATH).is_file() {
         warn!("older storage format detected");
@@ -86,6 +85,6 @@ pub fn load(cfg: &Configuration) -> RuntimeResult<SELoaded> {
     } else {
         info!("reinitializing databases");
         context::set_dmsg("loading databases");
-        v2::restore()
+        v2::restore(cfg)
     }
 }

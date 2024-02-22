@@ -201,7 +201,7 @@ fn cstate_use(
                 NB: just like SQL, we don't really care about what this is set to as it's basically a shorthand.
                 so we do a simple vanity check
             */
-            if !global.namespace().contains_space(new_space.as_str()) {
+            if !global.state().contains_space(new_space.as_str()) {
                 return Err(QueryError::QExecObjectNotFound);
             }
             cstate.set_cs(new_space.boxed_str());
@@ -209,7 +209,7 @@ fn cstate_use(
         Use::RefreshCurrent => match cstate.get_cs() {
             None => return Ok(Response::Null),
             Some(space) => {
-                if !global.namespace().contains_space(space) {
+                if !global.state().contains_space(space) {
                     cstate.unset_cs();
                     return Err(QueryError::QExecObjectNotFound);
                 }

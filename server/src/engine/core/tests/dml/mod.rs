@@ -44,7 +44,7 @@ use crate::engine::{
 
 fn _exec_only_create_space_model(global: &impl GlobalInstanceLike, model: &str) -> QueryResult<()> {
     let _ = global
-        .namespace()
+        .state()
         .idx()
         .write()
         .insert("myspace".into(), Space::new_auto_all().into());
@@ -73,7 +73,7 @@ fn _exec_only_read_key_and_then<T>(
     and_then: impl Fn(Row) -> T,
 ) -> QueryResult<T> {
     let guard = sync::atm::cpin();
-    global.namespace().with_model(entity, |mdl| {
+    global.state().with_model(entity, |mdl| {
         let row = mdl
             .primary_index()
             .select(Lit::from(key_name), &guard)
@@ -90,7 +90,7 @@ fn _exec_delete_only(global: &impl GlobalInstanceLike, delete: &str, key: &str) 
     let entity = delete.entity();
     dml::delete(global, delete)?;
     assert_eq!(
-        global.namespace().with_model(entity, |model| {
+        global.state().with_model(entity, |model| {
             let g = sync::atm::cpin();
             Ok(model.primary_index().select(key.into(), &g).is_none())
         }),

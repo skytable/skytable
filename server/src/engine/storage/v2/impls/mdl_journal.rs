@@ -110,10 +110,28 @@ struct RowWriter<'b, Fs: FSInterface> {
 }
 
 impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
-    fn write_row_metadata(&mut self, delta: &DataDelta) -> RuntimeResult<()> {
+    fn write_static_metadata(&mut self, model: &Model) -> RuntimeResult<()> {
+        // write batch start information: [pk tag:1B][schema version][column count]
+        self.f
+            .dtrack_write(&[model.p_tag().tag_unique().value_u8()])?;
+        self.f.dtrack_write(
+            &model
+                .delta_state()
+                .schema_current_version()
+                .value_u64()
+                .to_le_bytes(),
+        )?;
+        self.f
+            .dtrack_write(&(model.fields().st_len() as u64).to_le_bytes())
+    }
+    fn write_row_metadata(
+        &mut self,
+        change: DataDeltaKind,
+        txn_id: DeltaVersion,
+    ) -> RuntimeResult<()> {
         if cfg!(debug) {
-            let event_kind = EventType::try_from_raw(delta.change().value_u8()).unwrap();
-            match (event_kind, delta.change()) {
+            let event_kind = EventType::try_from_raw(change.value_u8()).unwrap();
+            match (event_kind, change) {
                 (EventType::Delete, DataDeltaKind::Delete)
                 | (EventType::Insert, DataDeltaKind::Insert)
                 | (EventType::Update, DataDeltaKind::Update) => {}
@@ -122,9 +140,9 @@ impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
             }
         }
         // write [change type][txn id]
-        let change_type = [delta.change().value_u8()];
+        let change_type = [change.value_u8()];
         self.f.dtrack_write(&change_type)?;
-        let txn_id = delta.data_version().value_u64().to_le_bytes();
+        let txn_id = txn_id.value_u64().to_le_bytes();
         self.f.dtrack_write(&txn_id)?;
         Ok(())
     }
@@ -235,19 +253,11 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
             <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
         >,
     ) -> RuntimeResult<Self> {
-        // write batch start information: [pk tag:1B][schema version][column count]
-        f.dtrack_write(&[model.p_tag().tag_unique().value_u8()])?;
-        f.dtrack_write(
-            &model
-                .delta_state()
-                .schema_current_version()
-                .value_u64()
-                .to_le_bytes(),
-        )?;
-        f.dtrack_write(&(model.fields().st_len() as u64).to_le_bytes())?;
+        let mut row_writer = RowWriter { f };
+        row_writer.write_static_metadata(model)?;
         Ok(Self {
             model,
-            row_writer: RowWriter { f },
+            row_writer,
             g,
             sync_count: 0,
         })
@@ -255,7 +265,8 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
     fn step(&mut self, delta: &DataDelta) -> RuntimeResult<()> {
         match delta.change() {
             DataDeltaKind::Delete => {
-                self.row_writer.write_row_metadata(&delta)?;
+                self.row_writer
+                    .write_row_metadata(delta.change(), delta.data_version())?;
                 self.row_writer.write_row_pk(delta.row().d_key())?;
             }
             DataDeltaKind::Insert | DataDeltaKind::Update => {
@@ -269,7 +280,8 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
                     // inconsistent read. there should already be another revised delta somewhere
                     return Ok(());
                 }
-                self.row_writer.write_row_metadata(&delta)?;
+                self.row_writer
+                    .write_row_metadata(delta.change(), delta.data_version())?;
                 // encode data
                 self.row_writer.write_row_pk(delta.row().d_key())?;
                 self.row_writer.write_row_data(self.model, &row_data)?;
@@ -309,6 +321,49 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
             writer.dtrack_write(&[EventType::EarlyExit.dscr()])?;
         }
         writer.dtrack_write(&(actual_commit as u64).to_le_bytes())
+    }
+}
+
+pub struct FullModel<'a>(&'a Model);
+
+impl<'a> FullModel<'a> {
+    pub fn new(model: &'a Model) -> Self {
+        Self(model)
+    }
+}
+
+impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for FullModel<'a> {
+    fn md(&self) -> u64 {
+        BatchType::Standard.dscr_u64()
+    }
+    fn write_direct<Fs: FSInterface>(
+        self,
+        f: &mut TrackedWriter<
+            Fs::File,
+            <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
+        >,
+    ) -> RuntimeResult<()> {
+        let g = pin();
+        let mut row_writer: RowWriter<'_, Fs> = RowWriter { f };
+        let index = self.0.primary_index().__raw_index();
+        let current_row_count = index.mt_len();
+        // expect commit == current row count
+        row_writer
+            .f
+            .dtrack_write(&current_row_count.u64_bytes_le())?;
+        // [pk tag][schema version][column cnt]
+        row_writer.write_static_metadata(self.0)?;
+        for (key, row_data) in index.mt_iter_kv(&g) {
+            let row_data = row_data.read();
+            row_writer.write_row_metadata(DataDeltaKind::Insert, row_data.get_txn_revised())?;
+            row_writer.write_row_pk(key)?;
+            row_writer.write_row_data(self.0, &row_data)?;
+        }
+        // actual commit == current row count
+        row_writer
+            .f
+            .dtrack_write(&current_row_count.u64_bytes_le())?;
+        Ok(())
     }
 }
 

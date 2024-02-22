@@ -90,7 +90,7 @@ impl TestGlobal<NullFS> {
 
 impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     type FileSystem = Fs;
-    fn namespace(&self) -> &GlobalNS {
+    fn state(&self) -> &GlobalNS {
         &self.gns
     }
     fn gns_driver(&self) -> &Mutex<FractalGNSDriver<Self::FileSystem>> {

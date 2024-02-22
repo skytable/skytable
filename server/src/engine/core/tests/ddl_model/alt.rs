@@ -55,7 +55,7 @@ fn exec_plan(
     let mdl_name = exec_create(global, model, new_space)?;
     let prev_uuid = {
         global
-            .namespace()
+            .state()
             .idx_models()
             .read()
             .get(&EntityIDRef::new("myspace", &mdl_name))
@@ -65,7 +65,7 @@ fn exec_plan(
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
     Model::transactional_exec_alter(global, alter)?;
-    let models = global.namespace().idx_models().read();
+    let models = global.state().idx_models().read();
     let model = models.get(&EntityIDRef::new("myspace", &mdl_name)).unwrap();
     assert_eq!(prev_uuid, model.get_uuid());
     f(model);

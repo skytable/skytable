@@ -41,16 +41,18 @@ pub struct SystemDatabase {
 
 #[derive(Debug, PartialEq)]
 pub struct User {
-    password: Box<[u8]>,
+    phash: Box<[u8]>,
 }
 
 impl User {
-    pub fn new(password: Box<[u8]>) -> Self {
-        Self { password }
+    pub fn new(password_hash: Box<[u8]>) -> Self {
+        Self {
+            phash: password_hash,
+        }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum VerifyUser {
     NotFound,
     IncorrectPassword,
@@ -74,12 +76,12 @@ impl SystemDatabase {
     pub fn users(&self) -> &RWLIdx<Box<str>, User> {
         &self.users
     }
-    pub fn __verify_user(&self, username: &str, password: &[u8]) -> VerifyUser {
+    pub fn verify_user(&self, username: &str, password: &[u8]) -> VerifyUser {
         self.users
             .read()
             .get(username)
             .map(|user| {
-                if rcrypt::verify(password, &user.password).unwrap() {
+                if rcrypt::verify(password, &user.phash).unwrap() {
                     if username == Self::ROOT_ACCOUNT {
                         VerifyUser::OkayRoot
                     } else {
@@ -91,22 +93,25 @@ impl SystemDatabase {
             })
             .unwrap_or(VerifyUser::NotFound)
     }
-    pub fn __insert_user(&self, username: Box<str>, password: Box<[u8]>) -> bool {
+}
+
+impl SystemDatabase {
+    pub fn __raw_create_user(&self, username: Box<str>, password_hash: Box<[u8]>) -> bool {
         match self.users.write().entry(username) {
             Entry::Vacant(ve) => {
-                ve.insert(User::new(password));
+                ve.insert(User::new(password_hash));
                 true
             }
             Entry::Occupied(_) => false,
         }
     }
-    pub fn __delete_user(&self, username: &str) -> bool {
+    pub fn __raw_delete_user(&self, username: &str) -> bool {
         self.users.write().remove(username).is_some()
     }
-    pub fn __change_user_password(&self, username: &str, new_password: Box<[u8]>) -> bool {
+    pub fn __raw_alter_user(&self, username: &str, new_password_hash: Box<[u8]>) -> bool {
         match self.users.write().get_mut(username) {
             Some(user) => {
-                user.password = new_password;
+                user.phash = new_password_hash;
                 true
             }
             None => false,
@@ -129,7 +134,7 @@ impl SystemDatabase {
         match global
             .gns_driver()
             .lock()
-            .gns_driver()
+            .driver()
             .commit_event(CreateUserTxn::new(&username, &password_hash))
         {
             Ok(()) => {
@@ -154,11 +159,11 @@ impl SystemDatabase {
                 match global
                     .gns_driver()
                     .lock()
-                    .gns_driver()
+                    .driver()
                     .commit_event(AlterUserTxn::new(username, &password_hash))
                 {
                     Ok(()) => {
-                        user.password = password_hash.into_boxed_slice();
+                        user.phash = password_hash.into_boxed_slice();
                         Ok(())
                     }
                     Err(e) => {
@@ -178,7 +183,7 @@ impl SystemDatabase {
         match global
             .gns_driver()
             .lock()
-            .gns_driver()
+            .driver()
             .commit_event(DropUserTxn::new(username))
         {
             Ok(()) => {

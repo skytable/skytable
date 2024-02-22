@@ -53,7 +53,7 @@ impl<'a> GNSEvent for CreateUserTxn<'a> {
         FullUserDefinition { username, password }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        if gns.sys_db().__insert_user(username, password) {
+        if gns.sys_db().__raw_create_user(username, password) {
             Ok(())
         } else {
             Err(TransactionError::OnRestoreDataConflictAlreadyExists.into())
@@ -140,7 +140,7 @@ impl<'a> GNSEvent for AlterUserTxn<'a> {
         FullUserDefinition { username, password }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        if gns.sys_db().__change_user_password(&username, password) {
+        if gns.sys_db().__raw_alter_user(&username, password) {
             Ok(())
         } else {
             Err(TransactionError::OnRestoreDataConflictMismatch.into())
@@ -202,7 +202,7 @@ impl<'a> GNSEvent for DropUserTxn<'a> {
         DropUserPayload(username): Self::RestoreType,
         gns: &GlobalNS,
     ) -> RuntimeResult<()> {
-        if gns.sys_db().__delete_user(&username) {
+        if gns.sys_db().__raw_delete_user(&username) {
             Ok(())
         } else {
             Err(TransactionError::OnRestoreDataConflictMismatch.into())

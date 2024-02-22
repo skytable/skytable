@@ -252,7 +252,7 @@ impl Model {
     ) -> QueryResult<()> {
         let (space_name, model_name) = (alter.model.space(), alter.model.entity());
         global
-            .namespace()
+            .state()
             .with_model_space_mut_for_ddl(alter.model, |space, model| {
                 // prepare plan
                 let plan = AlterPlan::fdeltas(model, alter)?;
@@ -273,7 +273,7 @@ impl Model {
                                 &new_fields,
                             );
                             // commit txn
-                            global.gns_driver().lock().gns_driver().commit_event(txn)?;
+                            global.gns_driver().lock().driver().commit_event(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         new_fields
@@ -291,7 +291,7 @@ impl Model {
                                 &removed,
                             );
                             // commit txn
-                            global.gns_driver().lock().gns_driver().commit_event(txn)?;
+                            global.gns_driver().lock().driver().commit_event(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
@@ -306,7 +306,7 @@ impl Model {
                                 &updated,
                             );
                             // commit txn
-                            global.gns_driver().lock().gns_driver().commit_event(txn)?;
+                            global.gns_driver().lock().driver().commit_event(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {

@@ -57,7 +57,7 @@ fn init_space(global: &impl GlobalInstanceLike, space_name: &str, env: &str) -> 
     let name = stmt.space_name;
     Space::transactional_exec_create(global, stmt).unwrap();
     global
-        .namespace()
+        .state()
         .idx()
         .read()
         .get(name.as_str())
@@ -76,7 +76,7 @@ fn create_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
-            let spaces = global.namespace().idx().read();
+            let spaces = global.state().idx().read();
             let space = spaces.get("myspace").unwrap();
             assert_eq!(
                 &*space,
@@ -106,7 +106,7 @@ fn alter_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
-            let spaces = global.namespace().idx().read();
+            let spaces = global.state().idx().read();
             let space = spaces.get("myspace").unwrap();
             assert_eq!(
                 &*space,
@@ -133,7 +133,7 @@ fn drop_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
-            assert!(global.namespace().idx().read().get("myspace").is_none());
+            assert!(global.state().idx().read().get("myspace").is_none());
         })
     })
 }
@@ -150,7 +150,7 @@ fn init_model(
     let model_name = stmt.model_name;
     Model::transactional_exec_create(global, stmt).unwrap();
     global
-        .namespace()
+        .state()
         .with_model(model_name, |model| Ok(model.get_uuid()))
         .unwrap()
 }
@@ -177,7 +177,7 @@ fn create_model() {
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
-                .namespace()
+                .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model,
@@ -215,7 +215,7 @@ fn alter_model_add() {
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
-                .namespace()
+                .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model.fields().st_get("profile_pic").unwrap(),
@@ -250,7 +250,7 @@ fn alter_model_remove() {
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
-                .namespace()
+                .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert!(model.fields().st_get("has_secure_key").is_none());
                     assert!(model.fields().st_get("is_dumb").is_none());
@@ -282,7 +282,7 @@ fn alter_model_update() {
         multirun(|| {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             global
-                .namespace()
+                .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model.fields().st_get("profile_pic").unwrap(),
@@ -310,7 +310,7 @@ fn drop_model() {
             let global = TestGlobal::new_with_vfs_driver(log_name);
             assert_eq!(
                 global
-                    .namespace()
+                    .state()
                     .with_model(("myspace", "mymodel").into(), |_| { Ok(()) })
                     .unwrap_err(),
                 QueryError::QExecObjectNotFound

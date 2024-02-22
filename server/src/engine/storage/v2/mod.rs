@@ -25,17 +25,25 @@
 */
 
 use {
+    self::impls::mdl_journal::FullModel,
     super::{
         common::interface::{fs_imp::LocalFS, fs_traits::FSInterface},
         v1, SELoaded,
     },
     crate::engine::{
         config::Configuration,
-        core::{system_db::SystemDatabase, GlobalNS},
+        core::{
+            system_db::{SystemDatabase, VerifyUser},
+            GlobalNS,
+        },
         fractal::{context, ModelDrivers, ModelUniqueID},
         storage::common::paths_v1,
         txn::{
-            gns::{model::CreateModelTxn, space::CreateSpaceTxn, sysctl::CreateUserTxn},
+            gns::{
+                model::CreateModelTxn,
+                space::CreateSpaceTxn,
+                sysctl::{AlterUserTxn, CreateUserTxn},
+            },
             SpaceIDRef,
         },
         RuntimeResult,
@@ -69,7 +77,7 @@ pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
             model_id.entity(),
             model.get_uuid(),
         ))?;
-        let model_driver = ModelDriver::create_model_driver(&paths_v1::model_path(
+        let mut model_driver = ModelDriver::create_model_driver(&paths_v1::model_path(
             model_id.space(),
             space_uuid,
             model_id.entity(),
@@ -80,12 +88,12 @@ pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
             model_id.entity(),
             model,
         ))?;
+        model_driver.commit_event(FullModel::new(model))?;
         model_drivers.add_driver(
             ModelUniqueID::new(model_id.space(), model_id.entity(), model.get_uuid()),
             model_driver,
         );
     }
-    // FIXME(@ohsayan): write all model data
     Ok(SELoaded {
         gns,
         gns_driver,
@@ -103,7 +111,7 @@ pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
         SystemDatabase::ROOT_ACCOUNT,
         &password_hash,
     ))?;
-    assert!(gns.sys_db().__insert_user(
+    assert!(gns.sys_db().__raw_create_user(
         SystemDatabase::ROOT_ACCOUNT.to_owned().into_boxed_str(),
         password_hash.into_boxed_slice(),
     ));
@@ -114,10 +122,10 @@ pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
     })
 }
 
-pub fn restore() -> RuntimeResult<SELoaded> {
+pub fn restore(cfg: &Configuration) -> RuntimeResult<SELoaded> {
     let gns = GlobalNS::empty();
     context::set_dmsg("loading gns");
-    let gns_driver = impls::gns_log::GNSDriver::open_gns(&gns)?;
+    let mut gns_driver = impls::gns_log::GNSDriver::open_gns(&gns)?;
     let model_drivers = ModelDrivers::empty();
     for (id, model) in gns.idx_models().write().iter_mut() {
         let space_uuid = gns.idx().read().get(id.space()).unwrap().get_uuid();
@@ -134,6 +142,20 @@ pub fn restore() -> RuntimeResult<SELoaded> {
             // UNSAFE(@ohsayan): all pieces of data are upgraded by now, so vacuum
             model.model_mutator().vacuum_stashed();
         }
+    }
+    // check if password has changed
+    if gns
+        .sys_db()
+        .verify_user(SystemDatabase::ROOT_ACCOUNT, cfg.auth.root_key.as_bytes())
+        == VerifyUser::IncorrectPassword
+    {
+        // the password was changed
+        warn!("root password changed via configuration");
+        context::set_dmsg("updating password to system database from configuration");
+        let phash = rcrypt::hash(&cfg.auth.root_key, rcrypt::DEFAULT_COST).unwrap();
+        gns_driver.commit_event(AlterUserTxn::new(SystemDatabase::ROOT_ACCOUNT, &phash))?;
+        gns.sys_db()
+            .__raw_alter_user(SystemDatabase::ROOT_ACCOUNT, phash.into_boxed_slice());
     }
     Ok(SELoaded {
         gns,
