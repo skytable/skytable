@@ -32,6 +32,7 @@ use {
     crate::engine::{
         core::GlobalNS,
         data::uuid::Uuid,
+        error::ErrorKind,
         storage::{
             safe_interfaces::{paths_v1, FSInterface, NullFS, VirtualFS},
             GNSDriver, ModelDriver,
@@ -68,7 +69,19 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
 impl<Fs: FSInterface> TestGlobal<Fs> {
     pub fn new_with_driver_id(log_name: &str) -> Self {
         let gns = GlobalNS::empty();
-        let driver = GNSDriver::open_gns_with_name(log_name, &gns).unwrap();
+        let driver = match GNSDriver::create_gns_with_name(log_name) {
+            Ok(drv) => Ok(drv),
+            Err(e) => match e.kind() {
+                ErrorKind::IoError(e_) => match e_.kind() {
+                    std::io::ErrorKind::AlreadyExists => {
+                        GNSDriver::open_gns_with_name(log_name, &gns)
+                    }
+                    _ => Err(e),
+                },
+                _ => Err(e),
+            },
+        }
+        .unwrap();
         Self::new(gns, 0, driver)
     }
 }

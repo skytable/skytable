@@ -67,9 +67,12 @@ impl<Fs: FSInterface> GNSDriver<Fs> {
     pub fn open_gns(gs: &GlobalNS) -> RuntimeResult<Self> {
         Self::open_gns_with_name(Self::FILE_PATH, gs)
     }
+    pub fn create_gns_with_name(name: &str) -> RuntimeResult<Self> {
+        journal::create_journal::<_, Fs>(name)
+    }
     /// Create a new event log
     pub fn create_gns() -> RuntimeResult<Self> {
-        journal::create_journal::<_, Fs>(Self::FILE_PATH)
+        Self::create_gns_with_name(Self::FILE_PATH)
     }
 }
 

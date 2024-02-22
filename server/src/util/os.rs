@@ -51,6 +51,9 @@ impl SysIOError {
     pub fn into_inner(self) -> std::io::Error {
         self.0
     }
+    pub fn kind(&self) -> std::io::ErrorKind {
+        self.0.kind()
+    }
 }
 
 impl From<std::io::Error> for SysIOError {
