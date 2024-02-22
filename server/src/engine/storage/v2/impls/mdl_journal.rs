@@ -110,8 +110,11 @@ struct RowWriter<'b, Fs: FSInterface> {
 }
 
 impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
-    fn write_static_metadata(&mut self, model: &Model) -> RuntimeResult<()> {
-        // write batch start information: [pk tag:1B][schema version][column count]
+    /// write global row information:
+    /// - pk tag
+    /// - schema version
+    /// - column count
+    fn write_row_global_metadata(&mut self, model: &Model) -> RuntimeResult<()> {
         self.f
             .dtrack_write(&[model.p_tag().tag_unique().value_u8()])?;
         self.f.dtrack_write(
@@ -119,11 +122,14 @@ impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
                 .delta_state()
                 .schema_current_version()
                 .value_u64()
-                .to_le_bytes(),
+                .u64_bytes_le(),
         )?;
         self.f
-            .dtrack_write(&(model.fields().st_len() as u64).to_le_bytes())
+            .dtrack_write(&(model.fields().st_len() - 1).u64_bytes_le())
     }
+    /// write row metadata:
+    /// - change type
+    /// - txn id
     fn write_row_metadata(
         &mut self,
         change: DataDeltaKind,
@@ -139,10 +145,9 @@ impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
                 _ => panic!(),
             }
         }
-        // write [change type][txn id]
         let change_type = [change.value_u8()];
         self.f.dtrack_write(&change_type)?;
-        let txn_id = txn_id.value_u64().to_le_bytes();
+        let txn_id = txn_id.value_u64().u64_bytes_le();
         self.f.dtrack_write(&txn_id)?;
         Ok(())
     }
@@ -154,7 +159,7 @@ impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
                     // UNSAFE(@ohsayan): +tagck
                     pk.read_uint()
                 }
-                .to_le_bytes();
+                .u64_bytes_le();
                 self.f.dtrack_write(&data)?;
             }
             TagUnique::Str | TagUnique::Bin => {
@@ -206,7 +211,7 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
     fn write_batch(
         model: &'a Model,
         g: &'a Guard,
-        count: usize,
+        expected: usize,
         f: &'b mut TrackedWriter<
             Fs::File,
             <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
@@ -224,10 +229,12 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
         let mut me = Self::new(model, g, f)?;
         let mut applied_deltas = vec![];
         let mut i = 0;
-        while i < count {
+        while i < expected {
             let delta = me.model.delta_state().__data_delta_dequeue(me.g).unwrap();
             match me.step(&delta) {
                 Ok(()) => {
+                    // flush buffer after every delta write
+                    me.row_writer.f.flush_buf()?;
                     applied_deltas.push(delta);
                     i += 1;
                 }
@@ -254,7 +261,7 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
         >,
     ) -> RuntimeResult<Self> {
         let mut row_writer = RowWriter { f };
-        row_writer.write_static_metadata(model)?;
+        row_writer.write_row_global_metadata(model)?;
         Ok(Self {
             model,
             row_writer,
@@ -313,14 +320,14 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
         >,
     ) -> RuntimeResult<()> {
         // [expected commit]
-        writer.dtrack_write(&(self.1 as u64).to_le_bytes())?;
+        writer.dtrack_write(&self.1.u64_bytes_le())?;
         let g = pin();
         let actual_commit = BatchWriter::<Fs>::write_batch(self.0, &g, self.1, writer)?;
         if actual_commit != self.1 {
             // early exit
             writer.dtrack_write(&[EventType::EarlyExit.dscr()])?;
         }
-        writer.dtrack_write(&(actual_commit as u64).to_le_bytes())
+        writer.dtrack_write(&actual_commit.u64_bytes_le())
     }
 }
 
@@ -352,7 +359,7 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for FullModel<'a> {
             .f
             .dtrack_write(&current_row_count.u64_bytes_le())?;
         // [pk tag][schema version][column cnt]
-        row_writer.write_static_metadata(self.0)?;
+        row_writer.write_row_global_metadata(self.0)?;
         for (key, row_data) in index.mt_iter_kv(&g) {
             let row_data = row_data.read();
             row_writer.write_row_metadata(DataDeltaKind::Insert, row_data.get_txn_revised())?;

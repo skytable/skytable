@@ -30,13 +30,15 @@ use {
         Task,
     },
     crate::engine::{
-        core::GlobalNS,
+        core::{EntityIDRef, GlobalNS},
         data::uuid::Uuid,
         error::ErrorKind,
+        fractal::drivers::FractalModelDriver,
         storage::{
-            safe_interfaces::{paths_v1, FSInterface, NullFS, VirtualFS},
+            safe_interfaces::{paths_v1, FSInterface, NullFS, StdModelBatch, VirtualFS},
             GNSDriver, ModelDriver,
         },
+        RuntimeResult,
     },
     parking_lot::{Mutex, RwLock},
     std::collections::HashMap,
@@ -45,24 +47,51 @@ use {
 /// A `test` mode global implementation
 pub struct TestGlobal<Fs: FSInterface = VirtualFS> {
     gns: GlobalNS,
-    hp_queue: RwLock<Vec<Task<CriticalTask>>>,
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
     #[allow(unused)]
     max_delta_size: usize,
     txn_driver: Mutex<FractalGNSDriver<Fs>>,
     model_drivers: RwLock<HashMap<ModelUniqueID, super::drivers::FractalModelDriver<Fs>>>,
+    max_data_pressure: usize,
 }
 
 impl<Fs: FSInterface> TestGlobal<Fs> {
     fn new(gns: GlobalNS, max_delta_size: usize, txn_driver: GNSDriver<Fs>) -> Self {
         Self {
             gns,
-            hp_queue: RwLock::default(),
             lp_queue: RwLock::default(),
             max_delta_size,
             txn_driver: Mutex::new(FractalGNSDriver::new(txn_driver)),
             model_drivers: RwLock::default(),
+            max_data_pressure: usize::MAX,
         }
+    }
+    pub fn set_max_data_pressure(&mut self, max_data_pressure: usize) {
+        self.max_data_pressure = max_data_pressure;
+    }
+    /// Normally, model drivers are not loaded on startup because of shared global state. Calling this will attempt to load
+    /// all model drivers
+    pub fn load_model_drivers(&self) -> RuntimeResult<()> {
+        let mut mdl_drivers = self.model_drivers.write();
+        let space_idx = self.gns.idx().read();
+        for (model_name, model) in self.gns.idx_models().read().iter() {
+            let space_uuid = space_idx.get(model_name.space()).unwrap().get_uuid();
+            assert!(mdl_drivers
+                .insert(
+                    ModelUniqueID::new(model_name.space(), model_name.entity(), model.get_uuid()),
+                    FractalModelDriver::init(ModelDriver::open_model_driver(
+                        model,
+                        &paths_v1::model_path(
+                            model_name.space(),
+                            space_uuid,
+                            model_name.entity(),
+                            model.get_uuid(),
+                        ),
+                    )?)
+                )
+                .is_none());
+        }
+        Ok(())
     }
 }
 
@@ -110,13 +139,28 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         &self.txn_driver
     }
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
-        self.hp_queue.write().push(task)
+        match task.into_task() {
+            CriticalTask::WriteBatch(mdl_id, count) => {
+                let models = self.gns.idx_models().read();
+                let mdl = models
+                    .get(&EntityIDRef::new(mdl_id.space(), mdl_id.model()))
+                    .unwrap();
+                self.model_drivers
+                    .read()
+                    .get(&mdl_id)
+                    .unwrap()
+                    .batch_driver()
+                    .lock()
+                    .commit_event(StdModelBatch::new(mdl, count))
+                    .unwrap()
+            }
+        }
     }
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>) {
         self.lp_queue.write().push(task)
     }
     fn get_max_delta_size(&self) -> usize {
-        100
+        self.max_data_pressure
     }
     fn purge_model_driver(
         &self,
@@ -162,6 +206,9 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
 impl<Fs: FSInterface> Drop for TestGlobal<Fs> {
     fn drop(&mut self) {
         let mut txn_driver = self.txn_driver.lock();
-        GNSDriver::close_driver(&mut txn_driver.txn_driver).unwrap()
+        GNSDriver::close_driver(&mut txn_driver.txn_driver).unwrap();
+        for (_, model_driver) in self.model_drivers.write().drain() {
+            model_driver.close().unwrap();
+        }
     }
 }

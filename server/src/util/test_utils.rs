@@ -42,8 +42,18 @@ pub fn rng() -> ThreadRng {
     rand::thread_rng()
 }
 
+pub fn multi_run(count: usize, f: impl Fn()) {
+    for _ in 0..count {
+        f()
+    }
+}
+
 pub fn shuffle_slice<T>(slice: &mut [T], rng: &mut impl Rng) {
     slice.shuffle(rng)
+}
+
+pub fn with_variable<T, U>(variable: T, f: impl Fn(T) -> U) -> U {
+    f(variable)
 }
 
 pub fn with_files<const N: usize, T>(files: [&str; N], f: impl Fn([&str; N]) -> T) -> T {

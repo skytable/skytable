@@ -286,8 +286,8 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
                 if real_commit_size == _stored_expected_commit_size {
                     break;
                 }
-                let event_type = f.read_block::<1>().and_then(|b| {
-                    <<BA as BatchAdapterSpec>::EventType as TaggedEnum>::try_from_raw(b[0])
+                let event_type = f.read_block().and_then(|[b]| {
+                    <<BA as BatchAdapterSpec>::EventType as TaggedEnum>::try_from_raw(b)
                         .ok_or(StorageError::RawJournalCorrupted.into())
                 })?;
                 // is this an early exit marker? if so, exit

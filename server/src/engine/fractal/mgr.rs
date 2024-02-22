@@ -51,6 +51,7 @@ use {
 pub const GENERAL_EXECUTOR_WINDOW: u64 = 5 * 60;
 
 /// A task for the [`FractalMgr`] to perform
+#[derive(Debug)]
 pub struct Task<T> {
     threshold: usize,
     task: T,
@@ -65,6 +66,10 @@ impl<T> Task<T> {
     /// Create a task with the given threshold
     fn with_threshold(task: T, threshold: usize) -> Self {
         Self { threshold, task }
+    }
+    #[cfg(test)]
+    pub fn into_task(self) -> T {
+        self.task
     }
 }
 
@@ -94,6 +99,7 @@ impl GenericTask {
 }
 
 /// A critical task
+#[derive(Debug)]
 pub enum CriticalTask {
     /// Write a new data batch
     WriteBatch(ModelUniqueID, usize),

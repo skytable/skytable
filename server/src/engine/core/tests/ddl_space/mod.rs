@@ -38,7 +38,7 @@ use crate::engine::{
     },
 };
 
-fn exec_create(
+pub fn exec_create(
     gns: &impl GlobalInstanceLike,
     create: &str,
     verify: impl Fn(&Space),
@@ -54,7 +54,7 @@ fn exec_create(
     })
 }
 
-fn exec_alter(
+pub fn exec_alter(
     gns: &impl GlobalInstanceLike,
     alter: &str,
     verify: impl Fn(&Space),
@@ -70,7 +70,7 @@ fn exec_alter(
     })
 }
 
-fn exec_create_alter(
+pub fn exec_create_alter(
     gns: &impl GlobalInstanceLike,
     crt: &str,
     alt: &str,

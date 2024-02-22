@@ -1,5 +1,5 @@
 /*
- * Created on Sun Feb 18 2024
+ * Created on Thu Feb 22 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,7 +24,4 @@
  *
 */
 
-pub mod gns_log;
-pub mod mdl_journal;
-#[cfg(test)]
-mod tests;
+mod model_driver;
