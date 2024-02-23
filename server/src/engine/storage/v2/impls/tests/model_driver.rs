@@ -151,7 +151,7 @@ fn model_data_inserts() {
 
 #[test]
 fn model_data_updates() {
-    test_utils::with_variable(("model_data_updates", 50), |(log_name, n)| {
+    test_utils::with_variable(("model_data_updates", 8200), |(log_name, n)| {
         let key_values = create_test_kv(n);
         /*
             - we first open the log and then insert n values

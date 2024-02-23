@@ -233,8 +233,6 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
             let delta = me.model.delta_state().__data_delta_dequeue(me.g).unwrap();
             match me.step(&delta) {
                 Ok(()) => {
-                    // flush buffer after every delta write
-                    me.row_writer.f.flush_buf()?;
                     applied_deltas.push(delta);
                     i += 1;
                 }

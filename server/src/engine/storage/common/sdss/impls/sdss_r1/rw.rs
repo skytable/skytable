@@ -367,6 +367,19 @@ impl<
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
     > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
+    fn available_capacity(&self) -> usize {
+        self.buf.remaining_capacity()
+    }
+}
+
+impl<
+        F,
+        S: FileSpecV1,
+        const SIZE: usize,
+        const PANIC_IF_UNFLUSHED: bool,
+        const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
+    > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+{
     fn _new(f_d: F, f_md: S::Metadata, t_cursor: u64, t_checksum: SCrc64) -> Self {
         Self {
             f_d,
@@ -492,23 +505,26 @@ impl<
     }
     /// Do an untracked write
     pub fn untracked_write(&mut self, buf: &[u8]) -> RuntimeResult<()> {
-        if self.buf.at_capacity() {
-            self.flush_buf()?;
+        if self.available_capacity() >= buf.len() {
+            unsafe {
+                // UNSAFE(@ohsayan): above branch guarantees that we have sufficient space
+                self.buf.extend_from_slice(buf)
+            }
+            return Ok(());
         }
-        let write_size = buf.len().saturating_sub(SIZE);
-        match self.f_d.fwrite_all_count(&buf[..write_size]) {
-            (written, r) => {
-                self.t_cursor += written;
-                // the buffer was flushed, but we errored here. the caller should be able to track
-                // the number of bytes that we wrote using the cursor and utilize it for any
-                // recovery attempts
+        self.flush_buf()?;
+        // write whatever capacity exceeds the buffer size
+        let to_write_cnt = buf.len().saturating_sub(SIZE);
+        match self.f_d.fwrite_all_count(&buf[..to_write_cnt]) {
+            (cnt, r) => {
+                self.t_cursor += cnt;
                 r?;
             }
         }
+        // store remainder in buffer
         unsafe {
-            // UNSAFE(@ohsayan): the slice is at most SIZE bytes in length
-            debug_assert!(buf[write_size..].len() <= SIZE);
-            self.buf.extend_from_slice(&buf[write_size..]);
+            // UNSAFE(@ohsayan): above branch guarantees that we have sufficient space
+            self.buf.extend_from_slice(&buf[to_write_cnt..])
         }
         Ok(())
     }
