@@ -607,6 +607,22 @@ pub struct RawJournalReader<J: RawJournalAdapter, Fs: FSInterface> {
     last_txn_id: u64,
     last_txn_offset: u64,
     last_txn_checksum: u64,
+    stats: JournalStats,
+}
+
+#[derive(Debug)]
+pub struct JournalStats {
+    server_events: usize,
+    driver_events: usize,
+}
+
+impl JournalStats {
+    fn new() -> Self {
+        Self {
+            server_events: 0,
+            driver_events: 0,
+        }
+    }
 }
 
 impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
@@ -624,7 +640,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
         jtrace_reader!(Initialized);
         let mut me = Self::new(reader, 0, 0, 0, 0);
         loop {
-            if me._next_event(gs)? {
+            if me._apply_next_event_and_stop(gs)? {
                 jtrace_reader!(Completed);
                 let initializer = JournalInitializer::new(
                     me.tr.cursor(),
@@ -654,6 +670,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
             last_txn_id,
             last_txn_offset,
             last_txn_checksum,
+            stats: JournalStats::new(),
         }
     }
     fn __refresh_known_txn(me: &mut Self) {
@@ -665,7 +682,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
 }
 
 impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
-    fn _next_event(&mut self, gs: &J::GlobalState) -> RuntimeResult<bool> {
+    fn _apply_next_event_and_stop(&mut self, gs: &J::GlobalState) -> RuntimeResult<bool> {
         let txn_id = u128::from_le_bytes(self.tr.read_block()?);
         let meta = u64::from_le_bytes(self.tr.read_block()?);
         if txn_id != self.txn_id as u128 {
@@ -691,6 +708,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
                         Ok(()) => {
                             jtrace_reader!(ServerEventAppliedSuccess);
                             Self::__refresh_known_txn(self);
+                            self.stats.server_events += 1;
                             return Ok(false);
                         }
                         Err(e) => return Err(e),
@@ -745,6 +763,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
             // we're going to refuse to read this
             return Err(StorageError::RawJournalCorrupted.into());
         }
+        self.stats.driver_events += 1;
         // update
         Self::__refresh_known_txn(self);
         // full metadata validated; this is a valid close event but is it actually a close
@@ -774,6 +793,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
         if valid_meta {
             // valid meta, update all
             Self::__refresh_known_txn(self);
+            self.stats.driver_events += 1;
             jtrace_reader!(ReopenSuccess);
             Ok(false)
         } else {

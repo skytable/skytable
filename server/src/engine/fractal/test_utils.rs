@@ -76,18 +76,19 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
         let space_idx = self.gns.idx().read();
         for (model_name, model) in self.gns.idx_models().read().iter() {
             let space_uuid = space_idx.get(model_name.space()).unwrap().get_uuid();
+            let driver = ModelDriver::open_model_driver(
+                model,
+                &paths_v1::model_path(
+                    model_name.space(),
+                    space_uuid,
+                    model_name.entity(),
+                    model.get_uuid(),
+                ),
+            )?;
             assert!(mdl_drivers
                 .insert(
                     ModelUniqueID::new(model_name.space(), model_name.entity(), model.get_uuid()),
-                    FractalModelDriver::init(ModelDriver::open_model_driver(
-                        model,
-                        &paths_v1::model_path(
-                            model_name.space(),
-                            space_uuid,
-                            model_name.entity(),
-                            model.get_uuid(),
-                        ),
-                    )?)
+                    FractalModelDriver::init(driver)
                 )
                 .is_none());
         }
@@ -152,7 +153,7 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
                     .batch_driver()
                     .lock()
                     .commit_event(StdModelBatch::new(mdl, count))
-                    .unwrap()
+                    .unwrap();
             }
         }
     }

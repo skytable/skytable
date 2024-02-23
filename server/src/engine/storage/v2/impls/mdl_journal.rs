@@ -510,54 +510,66 @@ impl BatchAdapterSpec for ModelDataAdapter {
         let mut pending_delete = HashMap::new();
         let p_index = gs.primary_index().__raw_index();
         let m = gs;
+        let mut real_last_txn_id = DeltaVersion::genesis();
         for DecodedBatchEvent { txn_id, pk, kind } in batch_state.events {
             match kind {
                 DecodedBatchEventKind::Insert(new_row) | DecodedBatchEventKind::Update(new_row) => {
-                    // this is more like a "newrow"
-                    match p_index.mt_get_element(&pk, &g) {
-                        Some(row) if row.d_data().read().get_restored_txn_revised() > txn_id => {
-                            // skewed
-                            // resolve deltas if any
-                            let _ = row.resolve_schema_deltas_and_freeze(m.delta_state());
-                            continue;
-                        }
-                        Some(_) | None => {
-                            // new row (logically)
-                            let _ = p_index.mt_delete(&pk, &g);
-                            let mut data = DcFieldIndex::default();
-                            for (field_name, new_data) in m
-                                .fields()
-                                .stseq_ord_key()
-                                .filter(|key| key.as_str() != m.p_key())
-                                .zip(new_row)
-                            {
-                                data.st_insert(
-                                    unsafe {
-                                        // UNSAFE(@ohsayan): model in scope, we're good
-                                        field_name.clone()
-                                    },
-                                    new_data,
-                                );
-                            }
-                            let row = Row::new_restored(
-                                pk,
-                                data,
-                                DeltaVersion::__new(batch_md.schema_version),
-                                DeltaVersion::__new(0),
-                                txn_id,
-                            );
-                            // resolve any deltas
-                            let _ = row.resolve_schema_deltas_and_freeze(m.delta_state());
-                            // put it back in (lol); blame @ohsayan for this joke
-                            p_index.mt_insert(row, &g);
-                        }
+                    let popped_row = p_index.mt_delete_return(&pk, &g);
+                    if let Some(row) = popped_row {
+                        /*
+                            if a newer version of the row is received first and the older version is pending to be synced, the older
+                            version is never synced. this is how the diffing algorithm works to ensure consistency.
+                            the delta diff algorithm statically guarantees this.
+                        */
+                        let row_txn_revised = row.read().get_txn_revised();
+                        assert!(
+                            row_txn_revised.value_u64() == 0 || row_txn_revised < txn_id,
+                            "revised ID is {} but our row has version {}",
+                            row.read().get_txn_revised().value_u64(),
+                            txn_id.value_u64()
+                        );
                     }
+                    if txn_id > real_last_txn_id {
+                        real_last_txn_id = txn_id;
+                    }
+                    let mut data = DcFieldIndex::default();
+                    for (field_name, new_data) in m
+                        .fields()
+                        .stseq_ord_key()
+                        .filter(|key| key.as_str() != m.p_key())
+                        .zip(new_row)
+                    {
+                        data.st_insert(
+                            unsafe {
+                                // UNSAFE(@ohsayan): model in scope, we're good
+                                field_name.clone()
+                            },
+                            new_data,
+                        );
+                    }
+                    let row = Row::new_restored(
+                        pk,
+                        data,
+                        DeltaVersion::__new(batch_md.schema_version),
+                        txn_id,
+                    );
+                    // resolve any deltas
+                    let _ = row.resolve_schema_deltas_and_freeze(m.delta_state());
+                    // put it back in (lol); blame @ohsayan for this joke
+                    p_index.mt_insert(row, &g);
                 }
                 DecodedBatchEventKind::Delete => {
+                    /*
+                        due to the concurrent nature of the engine, deletes can "appear before" an insert or update and since
+                        we don't store deleted txn ids, we just put this in a pending list.
+                    */
                     match pending_delete.entry(pk) {
                         HMEntry::Occupied(mut existing_delete) => {
                             if *existing_delete.get() > txn_id {
-                                // the existing delete "happened after" our delete, so it takes precedence
+                                /*
+                                    this is a "newer delete" and it takes precedence. basically the same key was
+                                    deleted by two txns but they were only synced much later, and out of order.
+                                */
                                 continue;
                             }
                             // the existing delete happened before our delete, so our delete takes precedence
@@ -572,11 +584,14 @@ impl BatchAdapterSpec for ModelDataAdapter {
                 }
             }
         }
-        // apply pending deletes; are our conflicts would have been resolved by now
+        // apply pending deletes; all our conflicts would have been resolved by now
         for (pk, txn_id) in pending_delete {
+            if txn_id > real_last_txn_id {
+                real_last_txn_id = txn_id;
+            }
             match p_index.mt_get(&pk, &g) {
                 Some(row) => {
-                    if row.read().get_restored_txn_revised() > txn_id {
+                    if row.read().get_txn_revised() > txn_id {
                         // our delete "happened before" this row was inserted
                         continue;
                     }
@@ -584,11 +599,15 @@ impl BatchAdapterSpec for ModelDataAdapter {
                     let _ = p_index.mt_delete(&pk, &g);
                 }
                 None => {
-                    // since we never delete rows until here, this is impossible
-                    unreachable!()
+                    // if we reach here it basically means that both an (insert and/or update) and a delete
+                    // were present as part of the same diff and the delta algorithm ignored the insert/update
+                    // in this case, we do nothing
                 }
             }
         }
+        // +1 since it is a fetch add!
+        m.delta_state()
+            .__set_delta_version(DeltaVersion::__new(real_last_txn_id.value_u64() + 1));
         Ok(())
     }
 }

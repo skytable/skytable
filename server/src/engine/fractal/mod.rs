@@ -131,11 +131,11 @@ pub trait GlobalInstanceLike {
         model: &Model,
         hint: QueryExecMeta,
     ) {
-        let current_delta_size = hint.delta_hint();
-        let index_size = model.primary_index().count();
-        let five = (index_size as f64 * 0.05) as usize;
-        let max_delta = five.max(self.get_max_delta_size());
-        if current_delta_size >= max_delta {
+        // check if we need to sync
+        let r_tolerated_change = hint.delta_hint() >= self.get_max_delta_size();
+        let r_percent_change = (hint.delta_hint() >= ((model.primary_index().count() / 100) * 5))
+            & (r_tolerated_change);
+        if r_tolerated_change | r_percent_change {
             let obtained_delta_size = model
                 .delta_state()
                 .__fractal_take_full_from_data_delta(FractalToken::new());

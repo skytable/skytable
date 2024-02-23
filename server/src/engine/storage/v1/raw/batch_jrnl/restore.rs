@@ -216,7 +216,7 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
                 DecodedBatchEventKind::Insert(new_row) | DecodedBatchEventKind::Update(new_row) => {
                     // this is more like a "newrow"
                     match p_index.mt_get_element(&pk, &g) {
-                        Some(row) if row.d_data().read().get_restored_txn_revised() > txn_id => {
+                        Some(row) if row.d_data().read().get_txn_revised() > txn_id => {
                             // skewed
                             // resolve deltas if any
                             let _ = row.resolve_schema_deltas_and_freeze(m.delta_state());
@@ -244,7 +244,6 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
                                 pk,
                                 data,
                                 DeltaVersion::__new(schema_version),
-                                DeltaVersion::__new(0),
                                 txn_id,
                             );
                             // resolve any deltas
@@ -276,7 +275,7 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
         for (pk, txn_id) in pending_delete {
             match p_index.mt_get(&pk, &g) {
                 Some(row) => {
-                    if row.read().get_restored_txn_revised() > txn_id {
+                    if row.read().get_txn_revised() > txn_id {
                         // our delete "happened before" this row was inserted
                         continue;
                     }

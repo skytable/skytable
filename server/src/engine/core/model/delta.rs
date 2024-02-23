@@ -62,6 +62,10 @@ impl DeltaState {
             data_deltas_size: AtomicUsize::new(0),
         }
     }
+    pub fn __set_delta_version(&self, version: DeltaVersion) {
+        self.data_current_version
+            .store(version.value_u64(), Ordering::Relaxed)
+    }
 }
 
 // data direct
