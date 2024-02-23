@@ -94,7 +94,7 @@ where
     Fm: FnMut(&mut T, &Model, usize),
     F: FnMut(&mut T, &Datacell, usize),
 {
-    global.namespace().with_model(select.entity, |mdl| {
+    global.state().with_model(select.entity, |mdl| {
         let g = sync::atm::cpin();
         let mut i = 0;
         if select.wildcard {
@@ -181,7 +181,7 @@ pub fn select_custom<F>(
 where
     F: FnMut(&Datacell),
 {
-    global.namespace().with_model(select.entity(), |mdl| {
+    global.state().with_model(select.entity(), |mdl| {
         let target_key = mdl.resolve_where(select.clauses_mut())?;
         let pkdc = VirtualDatacell::new(target_key.clone(), mdl.p_tag().tag_unique());
         let g = sync::atm::cpin();

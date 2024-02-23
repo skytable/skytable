@@ -24,14 +24,9 @@
  *
 */
 
-use std::{
-    alloc::{dealloc, Layout},
-    borrow::Borrow,
-    fmt,
-    hash::Hash,
-    marker::PhantomData,
-    mem::ManuallyDrop,
-    slice, str,
+use {
+    crate::engine::mem::unsafe_apis,
+    std::{borrow::Borrow, fmt, hash::Hash, marker::PhantomData, mem::ManuallyDrop, slice, str},
 };
 
 pub struct EntityID {
@@ -63,8 +58,8 @@ impl EntityID {
 impl Drop for EntityID {
     fn drop(&mut self) {
         unsafe {
-            dealloc(self.sp, Layout::array::<u8>(self.sl).unwrap_unchecked());
-            dealloc(self.ep, Layout::array::<u8>(self.el).unwrap_unchecked());
+            unsafe_apis::dealloc_array(self.sp, self.sl);
+            unsafe_apis::dealloc_array(self.ep, self.el);
         }
     }
 }

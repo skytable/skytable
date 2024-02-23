@@ -25,12 +25,14 @@
 */
 
 mod astr;
+pub mod fixed_vec;
 mod ll;
 mod numbuf;
 mod rawslice;
 pub mod scanner;
 mod stackop;
 mod uarray;
+pub mod unsafe_apis;
 mod vinline;
 mod word;
 // test
@@ -47,14 +49,6 @@ pub use {
     vinline::VInline,
     word::{DwordNN, DwordQN, WordIO, ZERO_BLOCK},
 };
-// imports
-use std::alloc::{self, Layout};
-
-pub unsafe fn dealloc_array<T>(ptr: *mut T, l: usize) {
-    if l != 0 {
-        alloc::dealloc(ptr as *mut u8, Layout::array::<T>(l).unwrap_unchecked())
-    }
-}
 
 /// Native double pointer width (note, native != arch native, but host native)
 pub struct NativeDword([usize; 2]);

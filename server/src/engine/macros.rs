@@ -397,7 +397,7 @@ macro_rules! sizeof {
 }
 
 macro_rules! local {
-    ($($vis:vis static$ident:ident:$ty:ty=$expr:expr;)*)=> {::std::thread_local!{$($vis static $ident: ::std::cell::RefCell::<$ty> = ::std::cell::RefCell::new($expr);)*}};
+    ($($(#[$attr:meta])*$vis:vis static$ident:ident:$ty:ty=$expr:expr;)*)=> {::std::thread_local!{$($(#[$attr])*$vis static $ident: ::std::cell::RefCell::<$ty> = ::std::cell::RefCell::new($expr);)*}};
 }
 
 macro_rules! local_mut {
@@ -419,4 +419,32 @@ macro_rules! local_ref {
         }
         ::std::thread::LocalKey::with(&$ident, |v| _f(v, $call))
     }};
+}
+
+macro_rules! var {
+    (let $($name:ident),* $(,)?) => {
+        $(let $name;)*
+    }
+}
+
+macro_rules! okay {
+    ($($expr:expr),* $(,)?) => {
+        $(($expr) &)*true
+    }
+}
+
+#[cfg(test)]
+macro_rules! closure {
+    ($($f:tt)*) => {{
+        let f = || { $($f)* };
+        f()
+    }}
+}
+
+#[cfg(test)]
+macro_rules! array {
+    ($($(#[$attr:meta])* $vis:vis const $name:ident: [$ty:ty] = [$($expr:expr),* $(,)?]);* $(;)?) => {
+        $(#[allow(non_snake_case)]mod$name{pub(super)const LEN:usize={let mut i=0;$(let _=$expr;i+=1;)*i+=0;i};}
+        $(#[$attr])*$vis const$name:[$ty;$name::LEN]=[$($expr),*];)*
+    }
 }

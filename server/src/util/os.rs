@@ -47,6 +47,15 @@ pub use {flock::FileLock, free_memory::free_memory_in_bytes};
 /// A wrapper around [`std`]'s I/O [Error](std::io::Error) type for simplicity with equality
 pub struct SysIOError(std::io::Error);
 
+impl SysIOError {
+    pub fn into_inner(self) -> std::io::Error {
+        self.0
+    }
+    pub fn kind(&self) -> std::io::ErrorKind {
+        self.0.kind()
+    }
+}
+
 impl From<std::io::Error> for SysIOError {
     fn from(e: std::io::Error) -> Self {
         Self(e)
@@ -365,7 +374,7 @@ mod uptime_impl {
 
     #[cfg(target_os = "windows")]
     pub(super) fn uptime() -> std::io::Result<u128> {
-        Ok(unsafe { winapi::um::sysinfoapi::GetTickCount64() } as u128)
+        Ok(unsafe { windows::Win32::System::SystemInformation::GetTickCount64() as u128 })
     }
 }
 
@@ -418,18 +427,22 @@ mod hostname_impl {
 
     #[cfg(target_family = "windows")]
     fn get_hostname() -> Hostname {
-        use winapi::shared::minwindef::DWORD;
-        use winapi::um::sysinfoapi::{self, GetComputerNameExA};
-
+        use windows::{
+            core::PSTR,
+            Win32::System::SystemInformation::{
+                ComputerNamePhysicalDnsHostname, GetComputerNameExA,
+            },
+        };
         let mut buf: [u8; 256] = [0; 256];
-        let mut size: DWORD = buf.len() as u32;
-
+        let mut size: u32 = buf.len() as u32;
         unsafe {
+            // UNSAFE(@ohsayan): correct call to the windows API
             GetComputerNameExA(
-                sysinfoapi::ComputerNamePhysicalDnsHostname,
-                buf.as_mut_ptr().cast(),
-                &mut size,
-            );
+                ComputerNamePhysicalDnsHostname,
+                PSTR(buf.as_mut_ptr()),
+                &mut size as *mut u32,
+            )
+            .unwrap();
             Hostname::new_from_raw_buf(&buf)
         }
     }
@@ -465,6 +478,33 @@ mod hostname_impl {
             );
         }
     }
+}
+
+pub fn move_files_recursively(src: &str, dst: &str) -> std::io::Result<()> {
+    let src = Path::new(src);
+    let dst = Path::new(dst);
+    rmove(src, dst)
+}
+
+fn rmove(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            // Compute the new destination path for this directory
+            let new_dst = dst.join(entry.file_name());
+            rmove(&path, &new_dst)?;
+        } else if path.is_file() {
+            // Compute the destination path for this file
+            let dest_file = dst.join(entry.file_name());
+            fs::rename(&path, &dest_file)?;
+        }
+    }
+
+    Ok(())
 }
 
 #[test]

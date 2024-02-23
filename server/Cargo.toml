@@ -13,38 +13,40 @@ sky_macros = { path = "../sky-macros" }
 rcrypt = "0.4.0"
 # external deps
 bytes = "1.5.0"
-env_logger = "0.10.1"
+env_logger = "0.11.1"
 log = "0.4.20"
-openssl = { version = "0.10.61", features = ["vendored"] }
-crossbeam-epoch = { version = "0.9.15" }
+openssl = { version = "0.10.63", features = ["vendored"] }
+crossbeam-epoch = { version = "0.9.18" }
 parking_lot = "0.12.1"
-serde = { version = "1.0.193", features = ["derive"] }
-tokio = { version = "1.34.0", features = ["full"] }
-tokio-openssl = "0.6.3"
-uuid = { version = "1.6.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
+serde = { version = "1.0.196", features = ["derive"] }
+tokio = { version = "1.36.0", features = ["full"] }
+tokio-openssl = "0.6.4"
+uuid = { version = "1.7.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
 crc = "3.0.1"
-serde_yaml = "0.9.27"
+serde_yaml = "0.9.31"
+chrono = "0.4.34"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
 jemallocator = "0.5.4"
 [target.'cfg(target_os = "windows")'.dependencies]
 # external deps
-winapi = { version = "0.3.9", features = [
-  "fileapi",
-  "sysinfoapi",
-  "minwinbase",
+windows = { version = "0.52.0", features = [
+  "Win32_Foundation",
+  "Win32_System_IO",
+  "Win32_Storage_FileSystem",
+  "Win32_System_SystemInformation",
 ] }
 
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.150"
+libc = "0.2.153"
 
 [dev-dependencies]
 # external deps
 rand = "0.8.5"
-tokio = { version = "1.34.0", features = ["test-util"] }
-skytable = { branch = "octave", git = "https://github.com/skytable/client-rust.git" }
+tokio = { version = "1.36.0", features = ["test-util"] }
+skytable = { git = "https://github.com/skytable/client-rust.git" }
 
 [features]
 nightly = []
@@ -79,7 +81,7 @@ assets = [
   [
     "../examples/config-files/dpkg/config.yaml",
     "/var/lib/skytable/config.yaml.tmp",
-    "644"
+    "644",
   ],
   [
     "../pkg/common/skyd.service",

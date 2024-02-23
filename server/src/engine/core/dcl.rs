@@ -60,16 +60,21 @@ fn alter_user(
         return Err(QueryError::SysAuthError);
     }
     let (username, password) = get_user_data(user)?;
-    global.sys_store().alter_user(username, password)
+    global
+        .state()
+        .sys_db()
+        .alter_user(global, &username, &password)
 }
 
 fn create_user(global: &impl GlobalInstanceLike, user: UserDecl) -> QueryResult<()> {
     let (username, password) = get_user_data(user)?;
-    global.sys_store().create_new_user(username, password)
+    global
+        .state()
+        .sys_db()
+        .create_user(global, username.into_boxed_str(), &password)
 }
 
-fn get_user_data(mut user: UserDecl) -> Result<(String, String), QueryError> {
-    let username = user.username().to_owned();
+fn get_user_data<'a>(mut user: UserDecl<'a>) -> Result<(String, String), QueryError> {
     let password = match user.options_mut().remove(KEY_PASSWORD) {
         Some(DictEntryGeneric::Data(d))
             if d.kind() == TagClass::Str && user.options().is_empty() =>
@@ -79,6 +84,7 @@ fn get_user_data(mut user: UserDecl) -> Result<(String, String), QueryError> {
             return Err(QueryError::QExecDdlInvalidProperties);
         }
     };
+    let username = user.username().to_owned();
     Ok((username, password))
 }
 
@@ -91,5 +97,8 @@ fn drop_user(
         // you can't delete yourself!
         return Err(QueryError::SysAuthError);
     }
-    global.sys_store().drop_user(user_del.username())
+    global
+        .state()
+        .sys_db()
+        .drop_user(global, user_del.username())
 }

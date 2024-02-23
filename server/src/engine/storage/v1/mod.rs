@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Sat Feb 10 2024
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2024, Sayan Nandan <nandansayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,25 +24,46 @@
  *
 */
 
-// impls
-mod batch_jrnl;
-mod journal;
-pub(in crate::engine) mod loader;
-mod rw;
-pub mod spec;
-pub mod sysdb;
-// hl
-pub mod inf;
-// test
-pub mod memfs;
-#[cfg(test)]
-mod tests;
+//! SDSS based storage engine driver v1 ([`versions::v1`])
+//!
+//! Target tags: `0.8.0-beta`, `0.8.0-beta.2`, `0.8.0-beta.3`
 
-// re-exports
-pub use {
-    journal::{JournalAdapter, JournalWriter},
-    rw::{LocalFS, RawFSInterface, SDSSFileIO},
+mod loader;
+pub mod raw;
+
+use {
+    self::raw::sysdb::RestoredSystemDatabase,
+    super::common::interface::{fs_imp::LocalFS, fs_traits::FSInterface},
+    crate::{
+        engine::{core::GlobalNS, RuntimeResult},
+        util,
+    },
 };
-pub mod data_batch {
-    pub use super::batch_jrnl::{create, DataBatchPersistDriver};
+
+pub const GNS_PATH: &str = "gns.db-tlog";
+pub const SYSDB_PATH: &str = "sys.db";
+pub const DATA_DIR: &str = "data";
+
+pub fn load_gns_prepare_migration() -> RuntimeResult<GlobalNS> {
+    // load gns
+    let gns = loader::load_gns()?;
+    // load sysdb
+    let RestoredSystemDatabase { users, .. } =
+        raw::sysdb::RestoredSystemDatabase::restore::<LocalFS>(SYSDB_PATH)?;
+    for (user, phash) in users {
+        gns.sys_db().__raw_create_user(user, phash);
+    }
+    // now move all our files into a backup directory
+    let backup_dir_path = format!(
+        "backups/{}",
+        util::time_now_with_postfix("before_upgrade_to_v2")
+    );
+    // move data folder
+    LocalFS::fs_create_dir_all(&backup_dir_path)?;
+    util::os::move_files_recursively("data", &format!("{backup_dir_path}/data"))?;
+    // move GNS
+    LocalFS::fs_rename(GNS_PATH, &format!("{backup_dir_path}/{GNS_PATH}"))?;
+    // move sysdb
+    LocalFS::fs_rename(SYSDB_PATH, &format!("{backup_dir_path}/{SYSDB_PATH}"))?;
+    Ok(gns)
 }

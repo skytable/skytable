@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::storage::safe_interfaces::paths_v1;
+
 use super::EntityIDRef;
 
 use {
@@ -33,8 +35,8 @@ use {
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::STIndex,
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
-        storage::v1::{loader::SEInitState, RawFSInterface},
-        txn::gns as gnstxn,
+        storage::safe_interfaces::FSInterface,
+        txn::{self, SpaceIDRef},
     },
     std::collections::HashSet,
 };
@@ -156,7 +158,7 @@ impl Space {
             if_not_exists,
         } = Self::process_create(space)?;
         // lock the global namespace
-        global.namespace().ddl_with_spaces_write(|spaces| {
+        global.state().ddl_with_spaces_write(|spaces| {
             if spaces.st_contains(&space_name) {
                 if if_not_exists {
                     return Ok(Some(false));
@@ -167,14 +169,14 @@ impl Space {
             // commit txn
             if G::FS_IS_NON_NULL {
                 // prepare txn
-                let txn = gnstxn::CreateSpaceTxn::new(space.props(), &space_name, &space);
+                let txn = txn::gns::space::CreateSpaceTxn::new(space.props(), &space_name, &space);
                 // try to create space for...the space
-                G::FileSystem::fs_create_dir_all(&SEInitState::space_dir(
+                G::FileSystem::fs_create_dir_all(&paths_v1::space_dir(
                     &space_name,
                     space.get_uuid(),
                 ))?;
                 // commit txn
-                match global.namespace_txn_driver().lock().try_commit(txn) {
+                match global.gns_driver().lock().driver().commit_event(txn) {
                     Ok(()) => {}
                     Err(e) => {
                         // tell fractal to clean it up sometime
@@ -202,7 +204,7 @@ impl Space {
             updated_props,
         }: AlterSpace,
     ) -> QueryResult<()> {
-        global.namespace().ddl_with_space_mut(&space_name, |space| {
+        global.state().ddl_with_space_mut(&space_name, |space| {
             match updated_props.get(Self::KEY_ENV) {
                 Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
                 Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
@@ -216,10 +218,12 @@ impl Space {
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
-                let txn =
-                    gnstxn::AlterSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space), &patch);
+                let txn = txn::gns::space::AlterSpaceTxn::new(
+                    SpaceIDRef::new(&space_name, space),
+                    &patch,
+                );
                 // commit
-                global.namespace_txn_driver().lock().try_commit(txn)?;
+                global.gns_driver().lock().driver().commit_event(txn)?;
             }
             // merge
             dict::rmerge_data_with_patch(space.props_mut(), patch);
@@ -240,7 +244,7 @@ impl Space {
         }: DropSpace,
     ) -> QueryResult<Option<bool>> {
         if force {
-            global.namespace().ddl_with_all_mut(|spaces, models| {
+            global.state().ddl_with_all_mut(|spaces, models| {
                 let Some(space) = spaces.remove(space_name.as_str()) else {
                     if if_exists {
                         return Ok(Some(false));
@@ -252,9 +256,9 @@ impl Space {
                 if G::FS_IS_NON_NULL {
                     // prepare txn
                     let txn =
-                        gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
+                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global.namespace_txn_driver().lock().try_commit(txn)?;
+                    global.gns_driver().lock().driver().commit_event(txn)?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
@@ -283,7 +287,7 @@ impl Space {
                 }
             })
         } else {
-            global.namespace().ddl_with_spaces_write(|spaces| {
+            global.state().ddl_with_spaces_write(|spaces| {
                 let Some(space) = spaces.get(space_name.as_str()) else {
                     if if_exists {
                         return Ok(Some(false));
@@ -299,9 +303,9 @@ impl Space {
                 if G::FS_IS_NON_NULL {
                     // prepare txn
                     let txn =
-                        gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, &space));
+                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global.namespace_txn_driver().lock().try_commit(txn)?;
+                    global.gns_driver().lock().driver().commit_event(txn)?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),

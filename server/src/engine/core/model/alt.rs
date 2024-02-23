@@ -43,7 +43,7 @@ use {
                 },
                 lex::Ident,
             },
-            txn::gns as gnstxn,
+            txn::{gns, ModelIDRef},
         },
         util,
     },
@@ -252,7 +252,7 @@ impl Model {
     ) -> QueryResult<()> {
         let (space_name, model_name) = (alter.model.space(), alter.model.entity());
         global
-            .namespace()
+            .state()
             .with_model_space_mut_for_ddl(alter.model, |space, model| {
                 // prepare plan
                 let plan = AlterPlan::fdeltas(model, alter)?;
@@ -268,17 +268,12 @@ impl Model {
                         // TODO(@ohsayan): this impacts lockdown duration; fix it
                         if G::FS_IS_NON_NULL {
                             // prepare txn
-                            let txn = gnstxn::AlterModelAddTxn::new(
-                                gnstxn::ModelIDRef::new_ref(
-                                    &space_name,
-                                    &space,
-                                    &model_name,
-                                    model,
-                                ),
+                            let txn = gns::model::AlterModelAddTxn::new(
+                                ModelIDRef::new_ref(&space_name, &space, &model_name, model),
                                 &new_fields,
                             );
                             // commit txn
-                            global.namespace_txn_driver().lock().try_commit(txn)?;
+                            global.gns_driver().lock().driver().commit_event(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         new_fields
@@ -291,12 +286,12 @@ impl Model {
                     AlterAction::Remove(removed) => {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
-                            let txn = gnstxn::AlterModelRemoveTxn::new(
-                                gnstxn::ModelIDRef::new_ref(&space_name, space, &model_name, model),
+                            let txn = gns::model::AlterModelRemoveTxn::new(
+                                ModelIDRef::new_ref(&space_name, space, &model_name, model),
                                 &removed,
                             );
                             // commit txn
-                            global.namespace_txn_driver().lock().try_commit(txn)?;
+                            global.gns_driver().lock().driver().commit_event(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
@@ -306,12 +301,12 @@ impl Model {
                     AlterAction::Update(updated) => {
                         if G::FS_IS_NON_NULL {
                             // prepare txn
-                            let txn = gnstxn::AlterModelUpdateTxn::new(
-                                gnstxn::ModelIDRef::new_ref(&space_name, space, &model_name, model),
+                            let txn = gns::model::AlterModelUpdateTxn::new(
+                                ModelIDRef::new_ref(&space_name, space, &model_name, model),
                                 &updated,
                             );
                             // commit txn
-                            global.namespace_txn_driver().lock().try_commit(txn)?;
+                            global.gns_driver().lock().driver().commit_event(txn)?;
                         }
                         let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {

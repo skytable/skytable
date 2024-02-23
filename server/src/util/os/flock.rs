@@ -23,22 +23,29 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+// Add this to Cargo.toml:
+// windows = "0.33.0" or the latest version
 
-// unix imports
 #[cfg(unix)]
 extern crate libc;
-// windows imports
 #[cfg(windows)]
-extern crate winapi;
-#[cfg(windows)]
-use std::os::windows::io::AsRawHandle;
+use {
+    std::os::windows::io::AsRawHandle,
+    windows::Win32::{
+        Foundation::HANDLE,
+        Storage::FileSystem::{
+            LockFileEx, UnlockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
+        },
+        System::IO::OVERLAPPED,
+    },
+};
 
 use std::{fs::File, io, path::Path};
 
 pub struct FileLock {
     _file: File,
     #[cfg(windows)]
-    handle: winapi::um::winnt::HANDLE,
+    handle: HANDLE,
 }
 
 impl FileLock {
@@ -46,35 +53,21 @@ impl FileLock {
         let file = File::create(path)?;
         #[cfg(windows)]
         {
-            use {
-                std::mem,
-                winapi::um::{
-                    fileapi::LockFileEx,
-                    minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY},
-                    winnt::HANDLE,
-                },
-            };
             let handle = file.as_raw_handle();
-            let mut overlapped = unsafe { mem::zeroed() };
-            let result = unsafe {
+            let mut overlapped = OVERLAPPED::default();
+            unsafe {
                 LockFileEx(
-                    handle as HANDLE,
+                    HANDLE(handle as isize),
                     LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
                     0,
-                    u32::MAX,
-                    u32::MAX,
+                    u32::MAX as u32,
+                    u32::MAX as u32,
                     &mut overlapped,
                 )
-            };
-            if result == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::AlreadyExists,
-                    "file is already locked",
-                ));
-            }
+            }?;
             return Ok(Self {
                 _file: file,
-                handle,
+                handle: HANDLE(handle as isize),
             });
         }
         #[cfg(unix)]
@@ -96,25 +89,16 @@ impl FileLock {
     pub fn release(self) -> io::Result<()> {
         #[cfg(windows)]
         {
-            use {
-                std::mem,
-                winapi::um::{fileapi::UnlockFileEx, winnt::HANDLE},
-            };
-
-            let mut overlapped = unsafe { mem::zeroed() };
-            let result = unsafe {
+            let mut overlapped = OVERLAPPED::default();
+            unsafe {
                 UnlockFileEx(
-                    self.handle as HANDLE,
+                    self.handle,
                     0,
-                    u32::MAX,
-                    u32::MAX,
+                    u32::MAX as u32,
+                    u32::MAX as u32,
                     &mut overlapped,
                 )
-            };
-
-            if result == 0 {
-                return Err(io::Error::last_os_error());
-            }
+            }?;
         }
         #[cfg(unix)]
         {

@@ -46,12 +46,6 @@ pub enum DictEntryGeneric {
 }
 
 impl DictEntryGeneric {
-    pub fn as_dict_mut(&mut self) -> Option<&mut DictGeneric> {
-        match self {
-            Self::Map(m) => Some(m),
-            _ => None,
-        }
-    }
     pub fn into_dict(self) -> Option<DictGeneric> {
         match self {
             Self::Map(m) => Some(m),

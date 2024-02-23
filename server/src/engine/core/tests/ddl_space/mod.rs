@@ -38,7 +38,7 @@ use crate::engine::{
     },
 };
 
-fn exec_create(
+pub fn exec_create(
     gns: &impl GlobalInstanceLike,
     create: &str,
     verify: impl Fn(&Space),
@@ -48,13 +48,13 @@ fn exec_create(
         ast::parse_ast_node_full::<crate::engine::ql::ddl::crt::CreateSpace>(&tok[2..]).unwrap();
     let name = ast_node.space_name;
     Space::transactional_exec_create(gns, ast_node)?;
-    gns.namespace().ddl_with_space_mut(&name, |space| {
+    gns.state().ddl_with_space_mut(&name, |space| {
         verify(space);
         Ok(space.get_uuid())
     })
 }
 
-fn exec_alter(
+pub fn exec_alter(
     gns: &impl GlobalInstanceLike,
     alter: &str,
     verify: impl Fn(&Space),
@@ -64,13 +64,13 @@ fn exec_alter(
         ast::parse_ast_node_full::<crate::engine::ql::ddl::alt::AlterSpace>(&tok[2..]).unwrap();
     let name = ast_node.space_name;
     Space::transactional_exec_alter(gns, ast_node)?;
-    gns.namespace().ddl_with_space_mut(&name, |space| {
+    gns.state().ddl_with_space_mut(&name, |space| {
         verify(space);
         Ok(space.get_uuid())
     })
 }
 
-fn exec_create_alter(
+pub fn exec_create_alter(
     gns: &impl GlobalInstanceLike,
     crt: &str,
     alt: &str,

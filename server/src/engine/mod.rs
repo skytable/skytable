@@ -44,17 +44,12 @@ mod tests;
 // re-export
 pub use error::RuntimeResult;
 
+use crate::engine::storage::SELoaded;
+
 use {
     self::{
         config::{ConfigEndpoint, ConfigEndpointTls, ConfigMode, ConfigReturn, Configuration},
-        fractal::{
-            context::{self, Subsystem},
-            sys_store::SystemStore,
-        },
-        storage::v1::{
-            loader::{self, SEInitState},
-            LocalFS,
-        },
+        fractal::context::{self, Subsystem},
     },
     crate::util::os::TerminationSignal,
     std::process::exit,
@@ -82,29 +77,17 @@ pub fn load_all() -> RuntimeResult<(Configuration, fractal::GlobalStateStart)> {
     if config.mode == ConfigMode::Dev {
         warn!("running in dev mode");
     }
-    // restore system database
-    info!("loading system database ...");
-    context::set_dmsg("loading system database");
-    let (store, state) = SystemStore::<LocalFS>::open_or_restore(config.auth.clone(), config.mode)?;
-    let sysdb_is_new = state.is_created();
-    if state.is_existing_updated_root() {
-        warn!("the root account was updated");
-    }
-    // now load all data
-    if sysdb_is_new {
-        info!("initializing storage engine ...");
-    } else {
-        info!("reinitializing storage engine...");
-    }
-    context::set_dmsg("restoring data");
-    let SEInitState {
-        txn_driver,
-        model_drivers,
+    info!("starting storage engine");
+    context::set_origin(Subsystem::Storage);
+    let SELoaded {
         gns,
-    } = loader::SEInitState::try_init(sysdb_is_new)?;
+        gns_driver,
+        model_drivers,
+    } = storage::load(&config)?;
+    info!("storage engine ready. initializing system");
     let global = unsafe {
-        // UNSAFE(@ohsayan): this is the only entrypoint
-        fractal::load_and_enable_all(gns, store, txn_driver, model_drivers)
+        // UNSAFE(@ohsayan): the only call we ever make
+        fractal::load_and_enable_all(gns, gns_driver, model_drivers)
     };
     Ok((config, global))
 }

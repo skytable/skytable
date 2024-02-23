@@ -187,12 +187,7 @@ enumerate_err! {
         HeaderDecodeVersionMismatch = "header-version-mismatch",
         /// The entire header is corrupted
         HeaderDecodeCorruptedHeader = "header-corrupted",
-        /// Expected header values were not matched with the current header
-        HeaderDecodeDataMismatch = "header-data-mismatch",
         // journal
-        /// While attempting to handle a basic failure (such as adding a journal entry), the recovery engine ran into an exceptional
-        /// situation where it failed to make a necessary repair the log
-        JournalWRecoveryStageOneFailCritical = "journal-recovery-failure",
         /// An entry in the journal is corrupted
         JournalLogEntryCorrupted = "journal-entry-corrupted",
         /// The structure of the journal is corrupted
@@ -204,9 +199,6 @@ enumerate_err! {
         InternalDecodeStructureCorruptedPayload = "structure-decode-corrupted-payload",
         /// the data for an internal structure was decoded but is logically invalid
         InternalDecodeStructureIllegalData = "structure-decode-illegal-data",
-        /// when attempting to flush a data batch, the batch journal crashed and a recovery event was triggered. But even then,
-        /// the data batch journal could not be fixed
-        DataBatchRecoveryFailStageOne = "batch-recovery-failure",
         /// when attempting to restore a data batch from disk, the batch journal crashed and had a corruption, but it is irrecoverable
         DataBatchRestoreCorruptedBatch = "batch-corrupted-batch",
         /// when attempting to restore a data batch from disk, the driver encountered a corrupted entry
@@ -217,5 +209,10 @@ enumerate_err! {
         DataBatchRestoreCorruptedBatchFile = "batch-corrupted-file",
         /// the system database is corrupted
         SysDBCorrupted = "sysdb-corrupted",
+        // raw journal errors
+        RawJournalEventCorruptedMetadata = "journal-event-metadata-corrupted",
+        RawJournalEventCorrupted = "journal-invalid-event",
+        RawJournalCorrupted = "journal-corrupted",
+        RawJournalInvalidEvent = "journal-invalid-event-order",
     }
 }

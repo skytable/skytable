@@ -47,6 +47,8 @@ mod tests;
 // re-export
 pub use exchange::SQuery;
 
+use crate::engine::core::system_db::VerifyUser;
+
 use {
     self::{
         exchange::{QExchangeResult, QExchangeState},
@@ -289,20 +291,22 @@ async fn do_handshake<S: Socket>(
     }
     match core::str::from_utf8(handshake.hs_auth().username()) {
         Ok(uname) => {
-            let auth = global.sys_store().system_store().auth_data().read();
-            let r = auth.verify_user_check_root(uname, handshake.hs_auth().password());
-            match r {
-                Ok(is_root) => {
+            match global
+                .state()
+                .sys_db()
+                .verify_user(uname, handshake.hs_auth().password())
+            {
+                okay @ (VerifyUser::Okay | VerifyUser::OkayRoot) => {
                     let hs = handshake.hs_static();
                     let ret = Ok(PostHandshake::Okay(ClientLocalState::new(
                         uname.into(),
-                        is_root,
+                        okay.is_root(),
                         hs,
                     )));
                     buf.advance(cursor);
                     return ret;
                 }
-                Err(_) => {}
+                VerifyUser::IncorrectPassword | VerifyUser::NotFound => {}
             }
         }
         Err(_) => {}

@@ -218,7 +218,7 @@ impl Drop for PrimaryIndexKey {
             unsafe {
                 // UNSAFE(@ohsayan): Aliasing, sole owner and correct initialization
                 let vdata = self.virtual_block_mut();
-                mem::dealloc_array(vdata.as_mut_ptr(), vdata.len());
+                mem::unsafe_apis::dealloc_array(vdata.as_mut_ptr(), vdata.len());
             }
         }
     }

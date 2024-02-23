@@ -51,7 +51,7 @@ pub fn exec_create(
     let name = create_model.model_name.entity().to_owned();
     if create_new_space {
         global
-            .namespace()
+            .state()
             .create_empty_test_space(create_model.model_name.space())
     }
     Model::transactional_exec_create(global, create_model).map(|_| name)
@@ -70,7 +70,7 @@ fn with_model(
     model_name: &str,
     f: impl Fn(&Model),
 ) {
-    let models = global.namespace().idx_models().read();
+    let models = global.state().idx_models().read();
     let model = models.get(&EntityIDRef::new(space_id, model_name)).unwrap();
     f(model)
 }

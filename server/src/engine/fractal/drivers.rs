@@ -25,56 +25,85 @@
 */
 
 use {
-    super::util,
+    super::{util, ModelUniqueID},
     crate::engine::{
         error::RuntimeResult,
-        storage::v1::{data_batch::DataBatchPersistDriver, RawFSInterface},
-        txn::gns::GNSTransactionDriverAnyFS,
+        storage::{safe_interfaces::FSInterface, GNSDriver, ModelDriver},
     },
-    parking_lot::Mutex,
-    std::sync::Arc,
+    parking_lot::{Mutex, RwLock},
+    std::{collections::HashMap, sync::Arc},
 };
 
 /// GNS driver
-pub(super) struct FractalGNSDriver<Fs: RawFSInterface> {
+pub struct FractalGNSDriver<Fs: FSInterface> {
     #[allow(unused)]
     status: util::Status,
-    pub(super) txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
+    pub(super) txn_driver: GNSDriver<Fs>,
 }
 
-impl<Fs: RawFSInterface> FractalGNSDriver<Fs> {
-    pub(super) fn new(txn_driver: GNSTransactionDriverAnyFS<Fs>) -> Self {
+impl<Fs: FSInterface> FractalGNSDriver<Fs> {
+    pub(super) fn new(txn_driver: GNSDriver<Fs>) -> Self {
         Self {
             status: util::Status::new_okay(),
-            txn_driver: Mutex::new(txn_driver),
+            txn_driver: txn_driver,
         }
     }
-    pub fn txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Fs>> {
-        &self.txn_driver
+    pub fn driver(&mut self) -> &mut GNSDriver<Fs> {
+        &mut self.txn_driver
+    }
+}
+
+pub struct ModelDrivers<Fs: FSInterface> {
+    drivers: RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>>,
+}
+
+impl<Fs: FSInterface> ModelDrivers<Fs> {
+    pub fn empty() -> Self {
+        Self {
+            drivers: RwLock::new(HashMap::new()),
+        }
+    }
+    pub fn drivers(&self) -> &RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>> {
+        &self.drivers
+    }
+    pub fn count(&self) -> usize {
+        self.drivers.read().len()
+    }
+    pub fn add_driver(&self, id: ModelUniqueID, batch_driver: ModelDriver<Fs>) {
+        assert!(self
+            .drivers
+            .write()
+            .insert(id, FractalModelDriver::init(batch_driver))
+            .is_none());
+    }
+    pub fn remove_driver(&self, id: ModelUniqueID) {
+        assert!(self.drivers.write().remove(&id).is_some())
+    }
+    pub fn into_inner(self) -> HashMap<ModelUniqueID, FractalModelDriver<Fs>> {
+        self.drivers.into_inner()
     }
 }
 
 /// Model driver
-pub struct FractalModelDriver<Fs: RawFSInterface> {
+pub struct FractalModelDriver<Fs: FSInterface> {
     #[allow(unused)]
     hooks: Arc<FractalModelHooks>,
-    batch_driver: Mutex<DataBatchPersistDriver<Fs>>,
+    batch_driver: Mutex<ModelDriver<Fs>>,
 }
 
-impl<Fs: RawFSInterface> FractalModelDriver<Fs> {
-    /// Initialize a model driver with default settings
-    pub fn init(batch_driver: DataBatchPersistDriver<Fs>) -> Self {
+impl<Fs: FSInterface> FractalModelDriver<Fs> {
+    pub(in crate::engine::fractal) fn init(batch_driver: ModelDriver<Fs>) -> Self {
         Self {
             hooks: Arc::new(FractalModelHooks::new()),
             batch_driver: Mutex::new(batch_driver),
         }
     }
     /// Returns a reference to the batch persist driver
-    pub fn batch_driver(&self) -> &Mutex<DataBatchPersistDriver<Fs>> {
+    pub fn batch_driver(&self) -> &Mutex<ModelDriver<Fs>> {
         &self.batch_driver
     }
     pub fn close(self) -> RuntimeResult<()> {
-        self.batch_driver.into_inner().close()
+        ModelDriver::close_driver(&mut self.batch_driver.into_inner())
     }
 }
 
