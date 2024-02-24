@@ -24,18 +24,15 @@
  *
 */
 
-use crate::query::ExecKind;
-
 use {
     crate::{
-        args::{ClientConfig, ClientConfigKind},
+        args::ClientConfig,
         error::{CliError, CliResult},
-        query::{self, IsConnection},
+        query::{self, ExecKind, IsConnection},
         resp,
     },
     crossterm::{cursor, execute, terminal},
     rustyline::{config::Configurer, error::ReadlineError, DefaultEditor},
-    skytable::Config,
     std::io::{stdout, ErrorKind},
 };
 
@@ -43,24 +40,7 @@ const SKYSH_HISTORY_FILE: &str = ".sky_history";
 const TXT_WELCOME: &str = include_str!("../help_text/welcome");
 
 pub fn start(cfg: ClientConfig) -> CliResult<()> {
-    match cfg.kind {
-        ClientConfigKind::Tcp(host, port) => {
-            let c = Config::new(&host, port, &cfg.username, &cfg.password).connect()?;
-            println!(
-                "Authenticated as '{}' on {}:{} over Skyhash/TCP\n---",
-                &cfg.username, &host, &port
-            );
-            repl(c)
-        }
-        ClientConfigKind::Tls(host, port, cert) => {
-            let c = Config::new(&host, port, &cfg.username, &cfg.password).connect_tls(&cert)?;
-            println!(
-                "Authenticated as '{}' on {}:{} over Skyhash/TLS\n---",
-                &cfg.username, &host, &port
-            );
-            repl(c)
-        }
-    }
+    query::connect(cfg, true, repl, repl)
 }
 
 fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
@@ -123,7 +103,7 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
                                     q
                                 }
                             };
-                            if resp::format_response(con.execute_query(q)?, special) {
+                            if resp::format_response(con.execute_query(q)?, special, true) {
                                 if let Some(pr) = new_prompt {
                                     prompt = pr;
                                 }

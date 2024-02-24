@@ -50,6 +50,16 @@ fn run() -> error::CliResult<()> {
     match args::parse()? {
         Task::HelpMessage(msg) => println!("{msg}"),
         Task::OpenShell(cfg) => repl::start(cfg)?,
+        Task::ExecOnce(cfg, query) => {
+            let query = skytable::query!(query);
+            let resp = query::connect(
+                cfg,
+                false,
+                |mut c| Ok(c.query(&query)),
+                |mut c| Ok(c.query(&query)),
+            )??;
+            resp::format_response(resp, false, false);
+        }
     }
     Ok(())
 }

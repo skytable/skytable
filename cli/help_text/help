@@ -14,6 +14,7 @@ OPTIONS:
     --user          Set the user for this client session
     --password      Set the password for this client session
     --tls-cert      Set the TLS certificate to use (for TLS endpoints)
+    --eval          Execute and print the query (password must be set)
 
 NOTES:
     - skysh will also look for the `{password_env_var}` environment variable

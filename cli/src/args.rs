@@ -68,6 +68,7 @@ pub enum ClientConfigKind {
 pub enum Task {
     HelpMessage(String),
     OpenShell(ClientConfig),
+    ExecOnce(ClientConfig, String),
 }
 
 enum TaskInner {
@@ -156,10 +157,13 @@ pub fn parse() -> CliResult<Task> {
             }
         }
     };
+    let eval = args.remove("--eval");
     if args.is_empty() {
-        Ok(Task::OpenShell(ClientConfig::new(
-            endpoint, username, password,
-        )))
+        let client = ClientConfig::new(endpoint, username, password);
+        match eval {
+            Some(query) => Ok(Task::ExecOnce(client, query)),
+            None => Ok(Task::OpenShell(client)),
+        }
     } else {
         Err(CliError::ArgsErr(format!("found unknown arguments")))
     }

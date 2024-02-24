@@ -25,11 +25,45 @@
 */
 
 use {
-    crate::error::{CliError, CliResult},
+    crate::{
+        args::{ClientConfig, ClientConfigKind},
+        error::{CliError, CliResult},
+    },
     skytable::{
-        error::ClientResult, query::SQParam, response::Response, Connection, ConnectionTls, Query,
+        error::ClientResult, query::SQParam, response::Response, Config, Connection, ConnectionTls,
+        Query,
     },
 };
+
+pub fn connect<T>(
+    cfg: ClientConfig,
+    print_con_info: bool,
+    tcp_f: impl Fn(Connection) -> CliResult<T>,
+    tls_f: impl Fn(ConnectionTls) -> CliResult<T>,
+) -> CliResult<T> {
+    match cfg.kind {
+        ClientConfigKind::Tcp(host, port) => {
+            let c = Config::new(&host, port, &cfg.username, &cfg.password).connect()?;
+            if print_con_info {
+                println!(
+                    "Authenticated as '{}' on {}:{} over Skyhash/TCP\n---",
+                    &cfg.username, &host, &port
+                );
+            }
+            tcp_f(c)
+        }
+        ClientConfigKind::Tls(host, port, cert) => {
+            let c = Config::new(&host, port, &cfg.username, &cfg.password).connect_tls(&cert)?;
+            if print_con_info {
+                println!(
+                    "Authenticated as '{}' on {}:{} over Skyhash/TLS\n---",
+                    &cfg.username, &host, &port
+                );
+            }
+            tls_f(c)
+        }
+    }
+}
 
 pub trait IsConnection {
     fn execute_query(&mut self, q: Query) -> ClientResult<Response>;

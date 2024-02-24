@@ -29,28 +29,43 @@ use {
     skytable::response::{Response, Row, Value},
 };
 
-pub fn format_response(resp: Response, print_special: bool) -> bool {
+macro_rules! pprint {
+    ($pretty:expr, $base:literal$(.$f:ident())*) => {
+        if $pretty {
+            let pretty = $base$(.$f())*;
+            println!("{}", pretty);
+        } else {
+            println!("{}", $base);
+        }
+    }
+}
+
+pub fn format_response(resp: Response, print_special: bool, pretty_format: bool) -> bool {
     match resp {
-        Response::Empty => println!("{}", "(Okay)".cyan()),
+        Response::Empty => pprint!(pretty_format, "(Okay)".cyan()),
         Response::Error(e) => {
             println!("{}", format!("(server error code: {e})").red());
             return false;
         }
         Response::Value(v) => {
-            print_value(v, print_special);
+            print_value(v, print_special, pretty_format);
             println!();
         }
         Response::Row(r) => {
-            print_row(r);
+            print_row(r, pretty_format);
             println!();
         }
         Response::Rows(rows) => {
             if rows.is_empty() {
-                println!("{}", "[0 rows returned]".grey().italic());
+                pprint!(pretty_format, "[0 rows returned]".grey().italic());
             } else {
                 for (i, row) in rows.into_iter().enumerate().map(|(i, r)| (i + 1, r)) {
-                    print!("{} ", format!("({i})").grey().bold());
-                    print_row(row);
+                    if pretty_format {
+                        println!("{}", "({i})".grey().bold())
+                    } else {
+                        println!("({i})")
+                    }
+                    print_row(row, pretty_format);
                     println!();
                 }
             }
@@ -59,11 +74,11 @@ pub fn format_response(resp: Response, print_special: bool) -> bool {
     true
 }
 
-fn print_row(r: Row) {
+fn print_row(r: Row, pretty_format: bool) {
     print!("(");
     let mut columns = r.into_values().into_iter().peekable();
     while let Some(cell) = columns.next() {
-        print_value(cell, false);
+        print_value(cell, false, pretty_format);
         if columns.peek().is_some() {
             print!(", ");
         }
@@ -71,10 +86,10 @@ fn print_row(r: Row) {
     print!(")");
 }
 
-fn print_value(v: Value, print_special: bool) {
+fn print_value(v: Value, print_special: bool, pretty_format: bool) {
     match v {
-        Value::Null => print!("{}", "null".grey().italic()),
-        Value::String(s) => print_string(&s, print_special),
+        Value::Null => pprint!(pretty_format, "null".grey().italic()),
+        Value::String(s) => print_string(&s, print_special, pretty_format),
         Value::Binary(b) => print_binary(&b),
         Value::Bool(b) => print!("{b}"),
         Value::UInt8(i) => print!("{i}"),
@@ -91,7 +106,7 @@ fn print_value(v: Value, print_special: bool) {
             print!("[");
             let mut items = items.into_iter().peekable();
             while let Some(item) = items.next() {
-                print_value(item, print_special);
+                print_value(item, print_special, pretty_format);
                 if items.peek().is_some() {
                     print!(", ");
                 }
@@ -113,22 +128,26 @@ fn print_binary(b: &[u8]) {
     print!("]");
 }
 
-fn print_string(s: &str, print_special: bool) {
-    if print_special {
-        print!("{}", s.italic().grey());
+fn print_string(s: &str, print_special: bool, pretty_format: bool) {
+    if !pretty_format {
+        print!("{s}");
     } else {
-        print!("\"");
-        for ch in s.chars() {
-            if ch == '"' {
-                print!("\\{ch}");
-            } else if ch == '\t' {
-                print!("\\t");
-            } else if ch == '\n' {
-                print!("\\n");
-            } else {
-                print!("{ch}");
+        if print_special {
+            print!("{}", s.italic().grey());
+        } else {
+            print!("\"");
+            for ch in s.chars() {
+                if ch == '"' {
+                    print!("\\{ch}");
+                } else if ch == '\t' {
+                    print!("\\t");
+                } else if ch == '\n' {
+                    print!("\\n");
+                } else {
+                    print!("{ch}");
+                }
             }
+            print!("\"");
         }
-        print!("\"");
     }
 }
