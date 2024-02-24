@@ -144,7 +144,7 @@ fn parse_validate_cli_args_help_and_version() {
     let ret4 = config::check_configuration().unwrap();
     assert_eq!(
         ret3,
-        ConfigReturn::HelpMessage(config::CLI_HELP.to_string())
+        ConfigReturn::HelpMessage(config::TXT_HELP.to_string())
     );
     assert_eq!(
         ret4,

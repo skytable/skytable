@@ -318,3 +318,22 @@ macro_rules! concat_str_to_str {
         concat_str_to_str!(A, $c)
     }};
 }
+
+#[macro_export]
+macro_rules! exit {
+    ($do_it:expr, $code:expr) => {{
+        $do_it;
+        ::std::process::exit($code)
+    }};
+    ($code:expr) => {
+        ::std::process::exit($code)
+    };
+}
+
+#[macro_export]
+macro_rules! exit_fatal {
+    ($do_it:expr) => {{
+        $do_it;
+        $crate::util::exit_error()
+    }};
+}

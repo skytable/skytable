@@ -1,4 +1,4 @@
-skysh 0.8.0-beta.4
+skysh {version}
 Sayan N. <ohsayan@outlook.com>
 The Skytable interactive shell (skysh)
 
@@ -16,14 +16,15 @@ OPTIONS:
     --tls-cert      Set the TLS certificate to use (for TLS endpoints)
 
 NOTES:
+    - skysh will also look for the `{password_env_var}` environment variable
     - When no endpoint is specified, skysh will attempt to connect to the default
-    TCP endpoint `tcp@127.0.0.1:2003`
+    TCP endpoint `{default_tcp_endpoint}`
     - When no user is specified, skysh will attempt to authenticate as root
     - All connections need an username and password. If this is not provided
     via arguments, it will be asked for interactively
     - Endpoints are specified using the Skytable endpoint syntax. For example,
-    the default TCP endpoint is `tcp@127.0.0.1:2003` while the default TLS
-    endpoint is `tls@127.0.0.1:2004`
+    the default TCP endpoint is `{default_tcp_endpoint}` while the default TLS
+    endpoint is `{default_tls_endpoint}`
     - If you choose to use a TLS endpoint, you must provide a certificate.
     Failing to do so will throw an error, as expected
     - All history is stored in the `.sky_history` file. If you wish to delete

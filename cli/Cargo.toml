@@ -4,8 +4,12 @@ version = "0.8.0-beta.4"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 description = "The Skytable Shell (skysh)"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+libsky = { path = "../libsky" }
 
 [dependencies]
 # internal deps

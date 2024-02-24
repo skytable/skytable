@@ -26,7 +26,7 @@
 
 #[macro_use]
 mod macros;
-mod config;
+pub mod config;
 mod core;
 mod data;
 mod error;
@@ -48,11 +48,10 @@ use crate::engine::storage::SELoaded;
 
 use {
     self::{
-        config::{ConfigEndpoint, ConfigEndpointTls, ConfigMode, ConfigReturn, Configuration},
+        config::{ConfigEndpoint, ConfigEndpointTls, ConfigMode, Configuration},
         fractal::context::{self, Subsystem},
     },
     crate::util::os::TerminationSignal,
-    std::process::exit,
     tokio::sync::broadcast,
 };
 
@@ -63,17 +62,10 @@ pub(super) fn set_context_init(msg: &'static str) {
 /// Initialize all drivers, load all data
 ///
 /// WARN: Must be in [`tokio::runtime::Runtime`] context!
-pub fn load_all() -> RuntimeResult<(Configuration, fractal::GlobalStateStart)> {
+pub fn load_all(
+    config: Configuration,
+) -> RuntimeResult<(Configuration, fractal::GlobalStateStart)> {
     // load configuration
-    info!("checking configuration ...");
-    context::set(Subsystem::Init, "loading configuration");
-    let config = match config::check_configuration()? {
-        ConfigReturn::Config(cfg) => cfg,
-        ConfigReturn::HelpMessage(msg) => {
-            eprintln!("{msg}");
-            exit(0x00);
-        }
-    };
     if config.mode == ConfigMode::Dev {
         warn!("running in dev mode");
     }

@@ -5,6 +5,10 @@ name = "skyd"
 version = "0.8.0-beta.4"
 description = "Skytable is a modern NoSQL database powered by BlueQL that aims to deliver performance, scalability and flexibility with data"
 license = "AGPL-3.0"
+build = "build.rs"
+
+[build-dependencies]
+libsky = { path = "../libsky" }
 
 [dependencies]
 # internal deps

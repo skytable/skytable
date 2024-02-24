@@ -36,6 +36,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The URL
 pub const URL: &str = "https://github.com/skytable/skytable";
 
+pub mod env_vars {
+    /// the environment variable to set the password to use with any tool (skysh,sky-bench,..)
+    pub const SKYDB_PASSWORD: &str = "SKYDB_PASSWORD";
+}
+
 pub mod test_utils {
     pub const DEFAULT_USER_NAME: &str = "root";
     pub const DEFAULT_USER_PASS: &str = "mypassword12345678";
@@ -169,4 +174,56 @@ fn extract_arg(
         }
     };
     Ok((arg, value))
+}
+
+/*
+    formatting utils
+*/
+
+pub fn format(body: &str, arguments: HashMap<&'static str, &'static str>, auto: bool) -> String {
+    use regex::Regex;
+    let pattern = r"\{[a-zA-Z_][a-zA-Z_0-9]*\}|\{\}";
+    let re = Regex::new(pattern).unwrap();
+    re.replace_all(body, |caps: &regex::Captures| {
+        let capture: &str = &caps[0];
+        let capture = &capture[1..capture.len() - 1];
+        match capture {
+            "" => {
+                panic!("found an empty format")
+            }
+            "default_tcp_endpoint" if auto => "tcp@127.0.0.1:2003".to_owned(),
+            "default_tls_endpoint" if auto => "tls@127.0.0.1:2004".to_owned(),
+            "password_env_var" if auto => env_vars::SKYDB_PASSWORD.into(),
+            "version" if auto => format!("v{VERSION}"),
+            arbitrary => arguments
+                .get(arbitrary)
+                .expect(&format!("could not find value for argument {}", arbitrary))
+                .to_string(),
+        }
+    })
+    .to_string()
+}
+
+pub mod build_scripts {
+    use std::{
+        collections::HashMap,
+        env,
+        fs::{self, File},
+        io::{self, Write},
+        path::Path,
+    };
+    pub fn format_help_txt(
+        binary_name: &str,
+        help_text_path: &str,
+        arguments: HashMap<&'static str, &'static str>,
+    ) -> io::Result<()> {
+        let help_msg = fs::read_to_string(help_text_path)?;
+        let content = super::format(&help_msg, arguments, true);
+        // write
+        let out_dir = env::var("OUT_DIR").unwrap();
+        let dest_path = Path::new(&out_dir).join(binary_name);
+        let mut f = File::create(&dest_path)?;
+        f.write_all(content.as_bytes())?;
+        Ok(())
+    }
 }

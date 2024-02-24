@@ -30,16 +30,16 @@ use {
         event::{self, Event, KeyCode, KeyEvent},
         terminal,
     },
-    libsky::CliAction,
+    libsky::{env_vars, CliAction},
     std::{
         collections::HashMap,
-        fs,
+        env, fs,
         io::{self, Write},
         process::exit,
     },
 };
 
-const TXT_HELP: &str = include_str!("../help_text/help");
+const TXT_HELP: &str = include_str!(concat!(env!("OUT_DIR"), "/skysh"));
 
 #[derive(Debug)]
 pub struct ClientConfig {
@@ -148,7 +148,13 @@ pub fn parse() -> CliResult<Task> {
     };
     let password = match args.remove("--password") {
         Some(p) => p,
-        None => read_password("Enter password: ")?,
+        None => {
+            // let us check the environment variable to see if anything was set
+            match env::var(env_vars::SKYDB_PASSWORD) {
+                Ok(v) => v,
+                Err(_) => read_password("Enter password: ")?,
+            }
+        }
     };
     if args.is_empty() {
         Ok(Task::OpenShell(ClientConfig::new(

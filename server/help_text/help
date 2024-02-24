@@ -1,0 +1,40 @@
+███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████
+██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██
+███████ █████     ████      ██    ███████ ██████  ██      █████
+     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██
+███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████
+
+Skytable {version} | https://github.com/skytable/skytable
+
+Sayan N. <ohsayan@outlook.com>
+Skytable database server
+
+Usage: skyd [OPTION]...
+
+skyd is the Skytable database server daemon and can be used to serve database requests.
+
+Flags:
+  -h, --help                    Display this help menu and exit.
+  -v, --version                 Display the version number and exit.
+
+Options:
+  --config <path>               Set configuration options using the config file
+  --tlscert <path>              Specify the path to the TLS certificate.
+  --tlskey <path>               Specify the path to the TLS private key.
+  --endpoint <definition>       Designate an endpoint. Format: protocol@host:port.
+                                This option can be repeated to define multiple endpoints.
+  --service-window <seconds>    Set the time window for the background service in seconds.
+  --auth <plugin_name>          Identify the authentication plugin by name.
+  --mode <dev/prod>             Set the operational mode. Note: This option is mandatory.
+  --auth-plugin <plugin>        Set the auth plugin. `pwd` is a supported option
+  --auth-root-password <pass>   Set the root password
+
+Examples:
+  skyd --auth-root-password "password12345678"
+
+Notes:
+  - If no `--mode` is provided, we default to `dev`
+  - You must provide `--auth-root-password` to set the default root password
+  - To use TLS, you must provide both `--tlscert` and `--tlskey`
+
+For further assistance, refer to the official documentation here: https://docs.skytable.org

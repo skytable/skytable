@@ -42,10 +42,7 @@ extern crate log;
 pub mod util;
 mod engine;
 
-use {
-    crate::util::exit_error,
-    libsky::{URL, VERSION},
-};
+use libsky::{URL, VERSION};
 
 #[cfg(all(not(target_env = "msvc"), not(miri)))]
 #[global_allocator]
@@ -65,14 +62,24 @@ type IoResult<T> = std::io::Result<T>;
 const SKY_PID_FILE: &str = ".sky_pid";
 
 fn main() {
+    use crate::engine::config::ConfigReturn;
     Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
-    println!("{TEXT}\nSkytable v{VERSION} | {URL}\n");
-    entrypoint()
+    let config = match engine::config::check_configuration() {
+        Ok(cfg) => match cfg {
+            ConfigReturn::Config(cfg) => cfg,
+            ConfigReturn::HelpMessage(msg) => {
+                exit!(eprintln!("{msg}"), 0x00)
+            }
+        },
+        Err(e) => exit_fatal!(error!("{e}")),
+    };
+    self::entrypoint(config)
 }
 
-fn entrypoint() {
+fn entrypoint(config: engine::config::Configuration) {
+    println!("{TEXT}\nSkytable v{VERSION} | {URL}\n");
     let run = || {
         let f_rt_start = || {
             engine::set_context_init("locking PID file");
@@ -91,7 +98,7 @@ fn entrypoint() {
         let f_glob_init = runtime.block_on(async move {
             engine::set_context_init("binding system signals");
             let signal = util::os::TerminationSignal::init()?;
-            let (config, global) = tokio::task::spawn_blocking(|| engine::load_all())
+            let (config, global) = tokio::task::spawn_blocking(|| engine::load_all(config))
                 .await
                 .unwrap()?;
             engine::RuntimeResult::Ok((signal, config, global))
@@ -117,9 +124,6 @@ fn entrypoint() {
     }
     match result {
         Ok(()) => println!("goodbye"),
-        Err(e) => {
-            error!("{e}");
-            exit_error();
-        }
+        Err(e) => exit_fatal!(error!("{e}")),
     }
 }

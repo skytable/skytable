@@ -333,7 +333,7 @@ impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.source {
             Some(src) => write!(f, "config error in {}: ", src.as_str())?,
-            None => write!(f, "config error: ")?,
+            None => {}
         }
         match &self.kind {
             ConfigErrorKind::Conflict => write!(
@@ -640,37 +640,7 @@ fn arg_decode_rs_window<CS: ConfigurationSource>(
 */
 
 /// CLI help message
-pub(super) const CLI_HELP: &str = "\
-Usage: skyd [OPTION]...
-
-skyd is the Skytable database server daemon and can be used to serve database requests.
-
-Flags:
-  -h, --help                 Display this help menu and exit.
-  -v, --version              Display the version number and exit.
-
-Options:
-  --config <path>             Set configuration options using the config file
-  --tlscert <path>            Specify the path to the TLS certificate.
-  --tlskey <path>             Specify the path to the TLS private key.
-  --endpoint <definition>     Designate an endpoint. Format: protocol@host:port.
-                              This option can be repeated to define multiple endpoints.
-  --service-window <seconds>  Establish the time window for the background service in seconds.
-  --auth <plugin_name>        Identify the authentication plugin by name.
-  --mode <dev/prod>           Set the operational mode. Note: This option is mandatory.
-  --auth-plugin <plugin>      Set the auth plugin. `pwd` is a supported option
-  --auth-root-password <pass> Set the root password
-
-Examples:
-  skyd --mode=dev --auth-root-password \"password12345678\"
-
-Notes:
-  - If no `--mode` is provided, we default to `dev`
-  - You must provide `--auth-root-password` to set the default root password
-  - To use TLS, you must provide both `--tlscert` and `--tlskey`
-
-For further assistance, refer to the official documentation here: https://docs.skytable.org
-";
+pub(super) const TXT_HELP: &str = include_str!(concat!(env!("OUT_DIR"), "/skyd"));
 
 #[derive(Debug, PartialEq)]
 /// Return from parsing CLI configuration
@@ -1128,7 +1098,7 @@ pub fn check_configuration() -> RuntimeResult<ConfigReturn> {
             // no options were provided in the CLI
             None
         }
-        CLIConfigParseReturn::Help => return Ok(ConfigReturn::HelpMessage(CLI_HELP.into())),
+        CLIConfigParseReturn::Help => return Ok(ConfigReturn::HelpMessage(TXT_HELP.into())),
         CLIConfigParseReturn::Version => {
             // just output the version
             return Ok(ConfigReturn::HelpMessage(format!(

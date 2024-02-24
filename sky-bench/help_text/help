@@ -1,4 +1,4 @@
-sky-bench 0.8.0-beta.4
+sky-bench {version}
 Sayan N. <ohsayan@outlook.com>
 Skytable benchmark tool
 
@@ -13,7 +13,7 @@ REQUIRED OPTIONS:
     --password  Provide the password
 
 OPTIONS:
-    --endpoint    Set the endpoint (defaults to tcp@127.0.0.1:2003)
+    --endpoint    Set the endpoint (defaults to {default_tcp_endpoint})
     --threads     Set the number of threads to be used (defaults to logical
                   CPU count)
     --connections Set the number of connections. Defaults to 8 x logical CPU
@@ -25,6 +25,8 @@ OPTIONS:
                   and `fury` is the new experimental engine. Defaults to `fury`
 
 NOTES:
+    - If no password is supplied, we look for the `{password_env_var}`
+      environment variable
     - The user for auth will be 'root' since only 'root' accounts allow the
       creation and deletion of spaces and models
     - A space called 'bench' will be created

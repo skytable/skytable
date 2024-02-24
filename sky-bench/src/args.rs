@@ -26,11 +26,11 @@
 
 use {
     crate::error::{BenchError, BenchResult},
-    libsky::CliAction,
-    std::collections::hash_map::HashMap,
+    libsky::{env_vars, CliAction},
+    std::{collections::hash_map::HashMap, env},
 };
 
-const TXT_HELP: &str = include_str!("../help_text/help");
+const TXT_HELP: &str = include_str!(concat!(env!("OUT_DIR"), "/sky-bench"));
 
 #[derive(Debug)]
 enum TaskInner {
@@ -144,9 +144,15 @@ pub fn parse() -> BenchResult<Task> {
     let passsword = match args.remove("--password") {
         Some(p) => p,
         None => {
-            return Err(BenchError::ArgsErr(
-                "you must provide a value for `--password`".into(),
-            ))
+            // check env?
+            match env::var(env_vars::SKYDB_PASSWORD) {
+                Ok(p) => p,
+                Err(_) => {
+                    return Err(BenchError::ArgsErr(
+                        "you must provide a value for `--password`".into(),
+                    ))
+                }
+            }
         }
     };
     // threads
