@@ -206,7 +206,7 @@ pub struct UIntSpec(FullTag);
 impl UIntSpec {
     pub const LIM_MAX: [u64; 4] = as_array![u8::MAX, u16::MAX, u32::MAX, u64::MAX];
     pub const DEFAULT: Self = Self::UINT64;
-    pub const UINT64: Self = Self(FullTag::new_uint(TagSelector::UInt64));
+    const UINT64: Self = Self(FullTag::new_uint(TagSelector::UInt64));
     pub const unsafe fn from_full(f: FullTag) -> Self {
         Self(f)
     }
@@ -228,7 +228,7 @@ impl SIntSpec {
     pub const LIM_MIN: [i64; 4] = as_array![i8::MIN, i16::MIN, i32::MIN, i64::MIN];
     pub const LIM_MAX: [i64; 4] = as_array![i8::MAX, i16::MAX, i32::MAX, i64::MAX];
     pub const DEFAULT: Self = Self::SINT64;
-    pub const SINT64: Self = Self(FullTag::new_sint(TagSelector::SInt64));
+    const SINT64: Self = Self(FullTag::new_sint(TagSelector::SInt64));
     pub const unsafe fn from_full(f: FullTag) -> Self {
         Self(f)
     }
@@ -251,7 +251,7 @@ impl FloatSpec {
     pub const LIM_MIN: [f64; 2] = as_array![f32::MIN, f64::MIN];
     pub const LIM_MAX: [f64; 2] = as_array![f32::MAX, f64::MAX];
     pub const DEFAULT: Self = Self::F64;
-    pub const F64: Self = Self(FullTag::new_float(TagSelector::Float64));
+    const F64: Self = Self(FullTag::new_float(TagSelector::Float64));
     pub const unsafe fn from_full(f: FullTag) -> Self {
         Self(f)
     }

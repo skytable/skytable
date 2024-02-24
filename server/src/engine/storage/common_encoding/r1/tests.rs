@@ -34,10 +34,12 @@ use {
         data::{
             cell::Datacell,
             dict::{DictEntryGeneric, DictGeneric},
-            tag::TagSelector,
+            tag::{FloatSpec, SIntSpec, TagSelector, UIntSpec},
             uuid::Uuid,
         },
         idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
+        mem::BufferedScanner,
+        storage::common_encoding::r1::obj::cell::StorageCellTypeID,
     },
 };
 
@@ -118,4 +120,120 @@ fn space() {
         super::enc::full::<obj::SpaceLayoutRef>(obj::SpaceLayoutRef::from((&space, space.props())));
     let dec = super::dec::full::<obj::SpaceLayoutRef>(&enc).unwrap();
     assert_eq!(space, dec);
+}
+
+#[test]
+fn dc_encode_decode() {
+    fn enc_dec(dc: &Datacell) {
+        let mut encoded = vec![];
+        super::obj::cell::encode(&mut encoded, &dc);
+        let mut scanner = BufferedScanner::new(&encoded);
+        let tag = scanner
+            .try_next_byte()
+            .map(StorageCellTypeID::try_from_raw)
+            .unwrap()
+            .unwrap();
+        let dc_restored: Datacell = unsafe {
+            super::obj::cell::decode_element::<Datacell, BufferedScanner>(&mut scanner, tag)
+                .unwrap()
+        };
+        assert_eq!(dc, &dc_restored);
+        assert_eq!(dc.tag(), dc_restored.tag());
+    }
+    let dc_tests = [
+        // null
+        Datacell::null(),
+        // bool
+        Datacell::new_bool(true),
+        Datacell::new_bool(false),
+        // uint
+        // uint (8)
+        Datacell::new_uint(u8::MIN as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt8.into_full())
+        }),
+        Datacell::new_uint(u8::MAX as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt8.into_full())
+        }),
+        // uint (16)
+        Datacell::new_uint(u16::MIN as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt16.into_full())
+        }),
+        Datacell::new_uint(u16::MAX as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt16.into_full())
+        }),
+        // uint (32)
+        Datacell::new_uint(u32::MIN as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt32.into_full())
+        }),
+        Datacell::new_uint(u32::MAX as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt32.into_full())
+        }),
+        // uint (64)
+        Datacell::new_uint(u64::MIN as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt64.into_full())
+        }),
+        Datacell::new_uint(u64::MAX as _, unsafe {
+            UIntSpec::from_full(TagSelector::UInt64.into_full())
+        }),
+        // sint
+        // sint (8)
+        Datacell::new_sint(i8::MIN as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt8.into_full())
+        }),
+        Datacell::new_sint(i8::MAX as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt8.into_full())
+        }),
+        // sint (16)
+        Datacell::new_sint(i16::MIN as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt16.into_full())
+        }),
+        Datacell::new_sint(i16::MAX as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt16.into_full())
+        }),
+        // sint (32)
+        Datacell::new_sint(i32::MIN as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt32.into_full())
+        }),
+        Datacell::new_sint(i32::MAX as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt32.into_full())
+        }),
+        // sint (64)
+        Datacell::new_sint(i64::MIN as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt64.into_full())
+        }),
+        Datacell::new_sint(i64::MAX as _, unsafe {
+            SIntSpec::from_full(TagSelector::SInt64.into_full())
+        }),
+        // float
+        // float (32)
+        Datacell::new_float(f32::MIN as _, unsafe {
+            FloatSpec::from_full(TagSelector::Float32.into_full())
+        }),
+        Datacell::new_float(f32::MAX as _, unsafe {
+            FloatSpec::from_full(TagSelector::Float32.into_full())
+        }),
+        // float (64)
+        Datacell::new_float(f64::MIN as _, unsafe {
+            FloatSpec::from_full(TagSelector::Float64.into_full())
+        }),
+        Datacell::new_float(f64::MAX as _, unsafe {
+            FloatSpec::from_full(TagSelector::Float64.into_full())
+        }),
+        // bin
+        Datacell::new_bin(b"".to_vec().into_boxed_slice()),
+        Datacell::new_bin(b"abcdefghijkl".to_vec().into_boxed_slice()),
+        // str
+        Datacell::new_str("".to_owned().into_boxed_str()),
+        Datacell::new_str("abcdefghijkl".to_owned().into_boxed_str()),
+        // list
+        Datacell::new_list(vec![]),
+    ];
+    for value in dc_tests {
+        enc_dec(&value)
+    }
+    let mut dc = Datacell::new_list(vec![]);
+    for _ in 0..100 {
+        enc_dec(&dc);
+        dc = Datacell::new_list(vec![dc.clone()]);
+    }
 }
