@@ -86,7 +86,7 @@ All changes in this project will be noted in this file.
 
 #### Benchmark tool
 
-- New benchmark engines to enable more efficient load testing
+- New benchmark engines to enable more efficient and real-world load testing
 - New benchmark engines use far lesser memory
 - New engines can handle midway benchmark crashes
 

@@ -2,7 +2,7 @@
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 name = "sky-bench"
-version = "0.8.0-beta.4"
+version = "0.8.0"
 description = "The Skytable benchmark tool can be used to benchmark Skytable installations"
 build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,6 +17,6 @@ libsky = { path = "../libsky" }
 # external deps
 crossbeam-channel = "0.5.11"
 num_cpus = "1.16.0"
-env_logger = "0.11.1"
+env_logger = "0.11.2"
 log = "0.4.20"
 tokio = { version = "1.36.0", features = ["full"] }
