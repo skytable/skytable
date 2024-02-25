@@ -239,7 +239,7 @@ dependencies = [
 [[package]]
 name = "cc"
 version = "1.0.87"
-source = "git+https://github.com/rust-lang/cc-rs#46eedd0134d2a2a2eda9837542bce28205e67f03"
+source = "git+https://github.com/rust-lang/cc-rs?rev=46eedd0#46eedd0134d2a2a2eda9837542bce28205e67f03"
 
 [[package]]
 name = "cfg-if"
@@ -1318,7 +1318,7 @@ name = "skyd"
 version = "0.8.0"
 dependencies = [
  "bytes",
- "cc 1.0.87 (git+https://github.com/rust-lang/cc-rs)",
+ "cc 1.0.87 (git+https://github.com/rust-lang/cc-rs?rev=46eedd0)",
  "chrono",
  "crc",
  "crossbeam-epoch",
