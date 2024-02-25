@@ -7,3 +7,6 @@ opt-level = 3
 codegen-units = 1
 lto = "fat"
 strip = "debuginfo"
+
+[patch.crates-io]
+cc = { git = "https://github.com/rust-lang/cc-rs" }
