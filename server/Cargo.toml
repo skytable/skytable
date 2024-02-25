@@ -9,6 +9,7 @@ build = "build.rs"
 
 [build-dependencies]
 libsky = { path = "../libsky" }
+cc = {git = "https://github.com/rust-lang/cc-rs"}
 
 [dependencies]
 # internal deps

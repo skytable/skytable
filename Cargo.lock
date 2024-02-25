@@ -124,7 +124,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2089b7e3f35b9dd2d0ed921ead4f6d318c27680d4a5bd167b3ee120edb105837"
 dependencies = [
  "addr2line",
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "cfg-if",
  "libc",
  "miniz_oxide",
@@ -222,7 +222,7 @@ version = "0.1.11+1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "736a955f3fa7875102d57c82b8cac37ec45224a07fd32d58f9f7a186b6cd4cdc"
 dependencies = [
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc",
  "pkg-config",
 ]
@@ -235,6 +235,11 @@ checksum = "3286b845d0fccbdd15af433f61c5970e711987036cb468f437ff6badd70f4e24"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "cc"
+version = "1.0.87"
+source = "git+https://github.com/rust-lang/cc-rs#46eedd0134d2a2a2eda9837542bce28205e67f03"
 
 [[package]]
 name = "cfg-if"
@@ -638,7 +643,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -672,7 +677,7 @@ version = "0.5.4+5.3.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c1946e1cea1788cbfde01c993b52a10e2da07f4bac608228d1bed20bfebf2"
 dependencies = [
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc",
 ]
 
@@ -879,7 +884,7 @@ version = "300.2.3+3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cff92b6f71555b61bb9315f7c64da3ca43d87531622120fea0195fc761b4843"
 dependencies = [
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -888,7 +893,7 @@ version = "0.9.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dda2b0f344e78efc2facf7d195d098df0dd72151b26ab98da807afc26c198dff"
 dependencies = [
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc",
  "openssl-src",
  "pkg-config",
@@ -1313,6 +1318,7 @@ name = "skyd"
 version = "0.8.0"
 dependencies = [
  "bytes",
+ "cc 1.0.87 (git+https://github.com/rust-lang/cc-rs)",
  "chrono",
  "crc",
  "crossbeam-epoch",
@@ -1864,6 +1870,6 @@ version = "2.0.9+zstd.1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e16efa8a874a0481a574084d34cc26fdb3b99627480f785888deb6386506656"
 dependencies = [
- "cc",
+ "cc 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "pkg-config",
 ]
