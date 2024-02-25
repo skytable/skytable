@@ -57,7 +57,10 @@ pub mod safe_interfaces {
     loader impl
 */
 
-pub use v2::impls::{gns_log::GNSDriver, mdl_journal::ModelDriver};
+pub use v2::impls::{
+    gns_log::GNSDriver,
+    mdl_journal::{BatchStats, ModelDriver},
+};
 
 pub struct SELoaded {
     pub gns: GlobalNS,

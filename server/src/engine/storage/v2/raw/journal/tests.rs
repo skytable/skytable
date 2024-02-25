@@ -55,7 +55,10 @@ use {
         util::compiler::TaggedEnum,
     },
     sky_macros::TaggedEnum,
-    std::cell::{Ref, RefCell, RefMut},
+    std::{
+        cell::{Ref, RefCell, RefMut},
+        rc::Rc,
+    },
 };
 
 // event definitions
@@ -99,7 +102,7 @@ impl<TE: IsTestEvent> RawJournalAdapterEvent<EventLogAdapter<TestDBAdapter>> for
     fn md(&self) -> u64 {
         Self::EVCODE.dscr_u64()
     }
-    fn write_buffered(self, buf: &mut Vec<u8>) {
+    fn write_buffered(self, buf: &mut Vec<u8>, _: ()) {
         TE::encode(self, buf)
     }
 }
@@ -296,6 +299,7 @@ impl<'a> RawJournalAdapterEvent<BatchAdapter<BatchDBAdapter>> for BatchDBFlush<'
             Fs::File,
             <BatchAdapter<BatchDBAdapter> as super::raw::RawJournalAdapter>::Spec,
         >,
+        ctx: Rc<RefCell<BatchContext>>,
     ) -> RuntimeResult<()> {
         // write: [expected commit][body][actual commit]
         // for this dummy impl, we're expecting to write the full dataset but we're going to actually write the part
@@ -315,10 +319,16 @@ impl<'a> RawJournalAdapterEvent<BatchAdapter<BatchDBAdapter>> for BatchDBFlush<'
             // early exit!
             f.dtrack_write(&[BatchEventType::EarlyExit.dscr()])?;
         }
+        ctx.borrow_mut().actual_write = actual.len();
         // actual commit
         f.dtrack_write(&(actual.len() as u64).to_le_bytes())?;
         Ok(())
     }
+}
+
+#[derive(Debug, Default)]
+pub struct BatchContext {
+    actual_write: usize,
 }
 
 pub struct BatchDBAdapter;
@@ -328,6 +338,7 @@ impl BatchAdapterSpec for BatchDBAdapter {
     type BatchType = BatchType;
     type EventType = BatchEventType;
     type BatchMetadata = ();
+    type CommitContext = Rc<RefCell<BatchContext>>;
     type BatchState = BatchState;
     fn initialize_batch_state(_: &Self::GlobalState) -> Self::BatchState {
         BatchState {

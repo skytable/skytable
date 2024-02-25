@@ -92,6 +92,7 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
     type GlobalState = <EL as EventLogSpec>::GlobalState;
     type Context<'a> = () where Self: 'a;
     type EventMeta = <EL as EventLogSpec>::EventMeta;
+    type CommitContext = ();
     fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
@@ -106,12 +107,13 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
         &mut self,
         w: &mut TrackedWriter<Fs::File, Self::Spec>,
         ev: E,
+        ctx: (),
     ) -> RuntimeResult<()>
     where
         E: RawJournalAdapterEvent<Self>,
     {
         let mut pl = vec![];
-        ev.write_buffered(&mut pl);
+        ev.write_buffered(&mut pl, ctx);
         let plen = (pl.len() as u64).to_le_bytes();
         let mut checksum = SCrc64::new();
         checksum.update(&plen);
@@ -207,6 +209,8 @@ pub trait BatchAdapterSpec {
     type BatchMetadata;
     /// batch state
     type BatchState;
+    /// commit context
+    type CommitContext;
     /// return true if the given event tag indicates an early exit
     fn is_early_exit(event_type: &Self::EventType) -> bool;
     /// initialize the batch state
@@ -245,6 +249,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
     type GlobalState = <BA as BatchAdapterSpec>::GlobalState;
     type Context<'a> = () where Self: 'a;
     type EventMeta = <BA as BatchAdapterSpec>::BatchType;
+    type CommitContext = <BA as BatchAdapterSpec>::CommitContext;
     fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
@@ -259,11 +264,12 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
         &mut self,
         w: &mut TrackedWriter<Fs::File, Self::Spec>,
         ev: E,
+        ctx: Self::CommitContext,
     ) -> RuntimeResult<()>
     where
         E: RawJournalAdapterEvent<Self>,
     {
-        ev.write_direct::<Fs>(w)?;
+        ev.write_direct::<Fs>(w, ctx)?;
         let checksum = w.reset_partial();
         w.tracked_write(&checksum.to_le_bytes())
     }

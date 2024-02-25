@@ -131,21 +131,12 @@ impl SystemDatabase {
             return Err(QueryError::SysAuthError);
         }
         let password_hash = rcrypt::hash(password, rcrypt::DEFAULT_COST).unwrap();
-        match global
-            .gns_driver()
-            .lock()
-            .driver()
-            .commit_event(CreateUserTxn::new(&username, &password_hash))
-        {
-            Ok(()) => {
-                users.insert(username, User::new(password_hash.into_boxed_slice()));
-                Ok(())
-            }
-            Err(e) => {
-                error!("failed to create user: {e}");
-                return Err(QueryError::SysTransactionalError);
-            }
-        }
+        global.gns_driver().lock().driver_context(
+            |drv| drv.commit_event(CreateUserTxn::new(&username, &password_hash)),
+            || {},
+        )?;
+        users.insert(username, User::new(password_hash.into_boxed_slice()));
+        Ok(())
     }
     pub fn alter_user(
         &self,
@@ -156,21 +147,12 @@ impl SystemDatabase {
         match self.users.write().get_mut(username) {
             Some(user) => {
                 let password_hash = rcrypt::hash(password, rcrypt::DEFAULT_COST).unwrap();
-                match global
-                    .gns_driver()
-                    .lock()
-                    .driver()
-                    .commit_event(AlterUserTxn::new(username, &password_hash))
-                {
-                    Ok(()) => {
-                        user.phash = password_hash.into_boxed_slice();
-                        Ok(())
-                    }
-                    Err(e) => {
-                        error!("failed to alter user: {e}");
-                        Err(QueryError::SysTransactionalError)
-                    }
-                }
+                global.gns_driver().lock().driver_context(
+                    |drv| drv.commit_event(AlterUserTxn::new(username, &password_hash)),
+                    || {},
+                )?;
+                user.phash = password_hash.into_boxed_slice();
+                Ok(())
             }
             None => Err(QueryError::SysAuthError),
         }
@@ -180,20 +162,11 @@ impl SystemDatabase {
         if !users.contains_key(username) {
             return Err(QueryError::SysAuthError);
         }
-        match global
+        global
             .gns_driver()
             .lock()
-            .driver()
-            .commit_event(DropUserTxn::new(username))
-        {
-            Ok(()) => {
-                let _ = users.remove(username);
-                Ok(())
-            }
-            Err(e) => {
-                error!("failed to remove user: {e}");
-                Err(QueryError::SysTransactionalError)
-            }
-        }
+            .driver_context(|drv| drv.commit_event(DropUserTxn::new(username)), || {})?;
+        let _ = users.remove(username);
+        Ok(())
     }
 }

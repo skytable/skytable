@@ -36,7 +36,7 @@ use {
         fractal::drivers::FractalModelDriver,
         storage::{
             safe_interfaces::{paths_v1, FSInterface, NullFS, StdModelBatch, VirtualFS},
-            GNSDriver, ModelDriver,
+            BatchStats, GNSDriver, ModelDriver,
         },
         RuntimeResult,
     },
@@ -152,7 +152,7 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
                     .unwrap()
                     .batch_driver()
                     .lock()
-                    .commit_event(StdModelBatch::new(mdl, count))
+                    .commit_with_ctx(StdModelBatch::new(mdl, count), BatchStats::new())
                     .unwrap();
             }
         }

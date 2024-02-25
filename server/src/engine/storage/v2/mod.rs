@@ -25,7 +25,7 @@
 */
 
 use {
-    self::impls::mdl_journal::FullModel,
+    self::impls::mdl_journal::{BatchStats, FullModel},
     super::{
         common::interface::{fs_imp::LocalFS, fs_traits::FSInterface},
         v1, SELoaded,
@@ -88,7 +88,7 @@ pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
             model_id.entity(),
             model,
         ))?;
-        model_driver.commit_event(FullModel::new(model))?;
+        model_driver.commit_with_ctx(FullModel::new(model), BatchStats::new())?;
         model_drivers.add_driver(
             ModelUniqueID::new(model_id.space(), model_id.entity(), model.get_uuid()),
             model_driver,

@@ -215,10 +215,11 @@ pub trait RawJournalAdapterEvent<CA: RawJournalAdapter>: Sized {
     fn write_direct<Fs: FSInterface>(
         self,
         _: &mut TrackedWriter<Fs::File, <CA as RawJournalAdapter>::Spec>,
+        _: <CA as RawJournalAdapter>::CommitContext,
     ) -> RuntimeResult<()> {
         unimplemented!()
     }
-    fn write_buffered(self, _: &mut Vec<u8>) {
+    fn write_buffered<'a>(self, _: &mut Vec<u8>, _: <CA as RawJournalAdapter>::CommitContext) {
         unimplemented!()
     }
 }
@@ -239,6 +240,8 @@ pub trait RawJournalAdapter: Sized {
     type Context<'a>
     where
         Self: 'a;
+    /// any external context to use during commit. can be used by events
+    type CommitContext;
     /// a type representing the event kind
     type EventMeta;
     /// initialize this adapter
@@ -250,10 +253,11 @@ pub trait RawJournalAdapter: Sized {
     /// parse event metadata
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta>;
     /// commit event (direct preference)
-    fn commit_direct<'a, Fs: FSInterface, E>(
+    fn commit_direct<Fs: FSInterface, E>(
         &mut self,
         _: &mut TrackedWriter<Fs::File, Self::Spec>,
         _: E,
+        _: Self::CommitContext,
     ) -> RuntimeResult<()>
     where
         E: RawJournalAdapterEvent<Self>,
@@ -261,7 +265,7 @@ pub trait RawJournalAdapter: Sized {
         unimplemented!()
     }
     /// commit event (buffered)
-    fn commit_buffered<'a, E>(&mut self, _: &mut Vec<u8>, _: E)
+    fn commit_buffered<E>(&mut self, _: &mut Vec<u8>, _: E, _: Self::CommitContext)
     where
         E: RawJournalAdapterEvent<Self>,
     {
@@ -499,13 +503,10 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
         }
         Ok(me)
     }
-    /// Commit a new event to the journal
-    ///
-    /// This will auto-flush the buffer and sync metadata as soon as the [`RawJournalAdapter::commit`] method returns,
-    /// unless otherwise configured.
-    pub fn commit_event<'a, E: RawJournalAdapterEvent<J>>(
+    pub fn commit_with_ctx<'a, E: RawJournalAdapterEvent<J>>(
         &mut self,
         event: E,
+        ctx: J::CommitContext,
     ) -> RuntimeResult<()> {
         self.txn_context(|me, txn_id| {
             let ev_md = event.md();
@@ -522,7 +523,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
                     buf.extend(&txn_id.to_le_bytes());
                     buf.extend(&ev_md.to_le_bytes());
                     jtrace_writer!(CommitServerEventWroteMetadata);
-                    j.commit_buffered(&mut buf, event);
+                    j.commit_buffered(&mut buf, event, ctx);
                     log_file.tracked_write_through_buffer(&buf)?;
                 }
                 CommitPreference::Direct => {
@@ -532,7 +533,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
                     log_file.tracked_write(&ev_md.to_le_bytes())?;
                     jtrace_writer!(CommitServerEventWroteMetadata);
                     // now hand over control to adapter impl
-                    J::commit_direct::<Fs, _>(j, log_file, event)?;
+                    J::commit_direct::<Fs, _>(j, log_file, event, ctx)?;
                 }
             }
             jtrace_writer!(CommitServerEventAdapterCompleted);
@@ -543,6 +544,16 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
             }
             Ok(())
         })
+    }
+    /// Commit a new event to the journal
+    ///
+    /// This will auto-flush the buffer and sync metadata as soon as the [`RawJournalAdapter::commit`] method returns,
+    /// unless otherwise configured.
+    pub fn commit_event<'a, E: RawJournalAdapterEvent<J>>(&mut self, event: E) -> RuntimeResult<()>
+    where
+        J::CommitContext: Default,
+    {
+        self.commit_with_ctx(event, Default::default())
     }
 }
 

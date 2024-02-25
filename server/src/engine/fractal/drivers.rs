@@ -26,9 +26,12 @@
 
 use {
     super::{util, ModelUniqueID},
-    crate::engine::{
-        error::RuntimeResult,
-        storage::{safe_interfaces::FSInterface, GNSDriver, ModelDriver},
+    crate::{
+        engine::{
+            error::{QueryError, QueryResult, RuntimeResult},
+            storage::{safe_interfaces::FSInterface, GNSDriver, ModelDriver},
+        },
+        util::compiler,
     },
     parking_lot::{Mutex, RwLock},
     std::{collections::HashMap, sync::Arc},
@@ -36,7 +39,6 @@ use {
 
 /// GNS driver
 pub struct FractalGNSDriver<Fs: FSInterface> {
-    #[allow(unused)]
     status: util::Status,
     pub(super) txn_driver: GNSDriver<Fs>,
 }
@@ -48,8 +50,23 @@ impl<Fs: FSInterface> FractalGNSDriver<Fs> {
             txn_driver: txn_driver,
         }
     }
-    pub fn driver(&mut self) -> &mut GNSDriver<Fs> {
-        &mut self.txn_driver
+    pub fn driver_context<T>(
+        &mut self,
+        f: impl Fn(&mut GNSDriver<Fs>) -> RuntimeResult<T>,
+        on_failure: impl Fn(),
+    ) -> QueryResult<T> {
+        if self.status.is_iffy() {
+            return Err(QueryError::SysServerError);
+        }
+        match f(&mut self.txn_driver) {
+            Ok(v) => Ok(v),
+            Err(e) => compiler::cold_call(|| {
+                error!("GNS driver failed with: {e}");
+                self.status.set_iffy();
+                on_failure();
+                Err(QueryError::SysServerError)
+            }),
+        }
     }
 }
 
@@ -86,17 +103,19 @@ impl<Fs: FSInterface> ModelDrivers<Fs> {
 
 /// Model driver
 pub struct FractalModelDriver<Fs: FSInterface> {
-    #[allow(unused)]
-    hooks: Arc<FractalModelHooks>,
+    status: Arc<util::Status>,
     batch_driver: Mutex<ModelDriver<Fs>>,
 }
 
 impl<Fs: FSInterface> FractalModelDriver<Fs> {
     pub(in crate::engine::fractal) fn init(batch_driver: ModelDriver<Fs>) -> Self {
         Self {
-            hooks: Arc::new(FractalModelHooks::new()),
+            status: Arc::new(util::Status::new_okay()),
             batch_driver: Mutex::new(batch_driver),
         }
+    }
+    pub fn status(&self) -> &util::Status {
+        &self.status
     }
     /// Returns a reference to the batch persist driver
     pub fn batch_driver(&self) -> &Mutex<ModelDriver<Fs>> {
@@ -104,15 +123,5 @@ impl<Fs: FSInterface> FractalModelDriver<Fs> {
     }
     pub fn close(self) -> RuntimeResult<()> {
         ModelDriver::close_driver(&mut self.batch_driver.into_inner())
-    }
-}
-
-/// Model hooks
-#[derive(Debug)]
-pub struct FractalModelHooks;
-
-impl FractalModelHooks {
-    fn new() -> Self {
-        Self
     }
 }

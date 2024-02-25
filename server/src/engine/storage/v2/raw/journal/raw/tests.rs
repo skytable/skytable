@@ -134,7 +134,7 @@ impl<T: SimpleDBEvent> RawJournalAdapterEvent<SimpleDBJournal> for T {
     fn md(&self) -> u64 {
         T::OPC as _
     }
-    fn write_buffered(self, buf: &mut Vec<u8>) {
+    fn write_buffered(self, buf: &mut Vec<u8>, _: ()) {
         T::write_buffered(self, buf)
     }
 }
@@ -150,6 +150,7 @@ impl RawJournalAdapter for SimpleDBJournal {
     type Spec = SystemDatabaseV1;
     type GlobalState = SimpleDB;
     type EventMeta = EventMeta;
+    type CommitContext = ();
     type Context<'a> = () where Self: 'a;
     fn initialize(_: &JournalInitializer) -> Self {
         Self
@@ -171,8 +172,9 @@ impl RawJournalAdapter for SimpleDBJournal {
         &mut self,
         buf: &mut Vec<u8>,
         event: E,
+        ctx: (),
     ) {
-        event.write_buffered(buf)
+        event.write_buffered(buf, ctx)
     }
     fn decode_apply<'a, Fs: FSInterface>(
         gs: &Self::GlobalState,

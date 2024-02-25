@@ -60,7 +60,11 @@ use {
     },
     crossbeam_epoch::{pin, Guard},
     sky_macros::TaggedEnum,
-    std::collections::{hash_map::Entry as HMEntry, HashMap},
+    std::{
+        cell::RefCell,
+        collections::{hash_map::Entry as HMEntry, HashMap},
+        rc::Rc,
+    },
 };
 
 pub type ModelDriver<Fs> = BatchDriver<ModelDataAdapter, Fs>;
@@ -216,6 +220,7 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
             Fs::File,
             <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
         >,
+        batch_stat: &mut BatchStats,
     ) -> RuntimeResult<usize> {
         /*
             go over each delta, check if inconsistent and apply if not. if any delta sync fails, we enqueue the delta again.
@@ -237,6 +242,7 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
                 Err(e) => {
                     // errored, so push this back in; we have written and flushed all prior deltas
                     me.model.delta_state().append_new_data_delta(delta, me.g);
+                    batch_stat.set_actual(i);
                     return Err(e);
                 }
             }
@@ -310,11 +316,13 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
             Fs::File,
             <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
         >,
+        ctx: Rc<RefCell<BatchStats>>,
     ) -> RuntimeResult<()> {
         // [expected commit]
         writer.dtrack_write(&self.1.u64_bytes_le())?;
         let g = pin();
-        let actual_commit = BatchWriter::<Fs>::write_batch(self.0, &g, self.1, writer)?;
+        let actual_commit =
+            BatchWriter::<Fs>::write_batch(self.0, &g, self.1, writer, &mut ctx.borrow_mut())?;
         if actual_commit != self.1 {
             // early exit
             writer.dtrack_write(&[EventType::EarlyExit.dscr()])?;
@@ -341,6 +349,7 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for FullModel<'a> {
             Fs::File,
             <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
         >,
+        _: Rc<RefCell<BatchStats>>,
     ) -> RuntimeResult<()> {
         let g = pin();
         let mut row_writer: RowWriter<'_, Fs> = RowWriter { f };
@@ -410,6 +419,25 @@ impl DecodedBatchEvent {
     }
 }
 
+pub struct BatchStats {
+    actual_commit: usize,
+}
+
+impl BatchStats {
+    pub fn new() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self { actual_commit: 0 }))
+    }
+    pub fn into_inner(me: Rc<RefCell<Self>>) -> Self {
+        RefCell::into_inner(Rc::into_inner(me).unwrap())
+    }
+    fn set_actual(&mut self, new: usize) {
+        self.actual_commit = new;
+    }
+    pub fn get_actual(&self) -> usize {
+        self.actual_commit
+    }
+}
+
 impl BatchAdapterSpec for ModelDataAdapter {
     type Spec = ModelDataBatchAofV1;
     type GlobalState = Model;
@@ -417,6 +445,7 @@ impl BatchAdapterSpec for ModelDataAdapter {
     type EventType = EventType;
     type BatchMetadata = BatchMetadata;
     type BatchState = BatchRestoreState;
+    type CommitContext = Rc<RefCell<BatchStats>>;
     fn is_early_exit(event_type: &Self::EventType) -> bool {
         EventType::EarlyExit.eq(event_type)
     }

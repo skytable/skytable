@@ -176,16 +176,14 @@ impl Space {
                     space.get_uuid(),
                 ))?;
                 // commit txn
-                match global.gns_driver().lock().driver().commit_event(txn) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        // tell fractal to clean it up sometime
+                global.gns_driver().lock().driver_context(
+                    |drv| drv.commit_event(txn),
+                    || {
                         global.taskmgr_post_standard_priority(Task::new(
                             GenericTask::delete_space_dir(&space_name, space.get_uuid()),
-                        ));
-                        return Err(e.into());
-                    }
-                }
+                        ))
+                    },
+                )?;
             }
             // update global state
             let _ = spaces.st_insert(space_name, space);
@@ -223,7 +221,11 @@ impl Space {
                     &patch,
                 );
                 // commit
-                global.gns_driver().lock().driver().commit_event(txn)?;
+                // commit txn
+                global
+                    .gns_driver()
+                    .lock()
+                    .driver_context(|drv| drv.commit_event(txn), || {})?;
             }
             // merge
             dict::rmerge_data_with_patch(space.props_mut(), patch);
@@ -258,7 +260,10 @@ impl Space {
                     let txn =
                         txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global.gns_driver().lock().driver().commit_event(txn)?;
+                    global
+                        .gns_driver()
+                        .lock()
+                        .driver_context(|drv| drv.commit_event(txn), || {})?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
@@ -305,7 +310,10 @@ impl Space {
                     let txn =
                         txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global.gns_driver().lock().driver().commit_event(txn)?;
+                    global
+                        .gns_driver()
+                        .lock()
+                        .driver_context(|drv| drv.commit_event(txn), || {})?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),

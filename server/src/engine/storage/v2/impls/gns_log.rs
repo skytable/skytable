@@ -107,7 +107,7 @@ impl<T: GNSEvent> JournalAdapterEvent<EventLogAdapter<GNSEventLog>> for T {
     fn md(&self) -> u64 {
         <T as GNSTransaction>::CODE.dscr_u64()
     }
-    fn write_buffered(self, b: &mut Vec<u8>) {
+    fn write_buffered(self, b: &mut Vec<u8>, _: ()) {
         T::encode_event(self, b)
     }
 }

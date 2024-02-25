@@ -294,10 +294,9 @@ impl Model {
                     model.get_uuid(),
                 )?;
                 // commit txn
-                match txn_driver.driver().commit_event(txn) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        // failed to commit, request cleanup
+                txn_driver.driver_context(
+                    |drv| drv.commit_event(txn),
+                    || {
                         global.taskmgr_post_standard_priority(Task::new(
                             GenericTask::delete_model_dir(
                                 &space_name,
@@ -305,10 +304,9 @@ impl Model {
                                 &model_name,
                                 model.get_uuid(),
                             ),
-                        ));
-                        return Err(e.into());
-                    }
-                }
+                        ))
+                    },
+                )?;
             }
             // update global state
             let _ = space.models_mut().insert(model_name.into());
@@ -358,7 +356,10 @@ impl Model {
                     model.delta_state().schema_current_version().value_u64(),
                 ));
                 // commit txn
-                global.gns_driver().lock().driver().commit_event(txn)?;
+                global
+                    .gns_driver()
+                    .lock()
+                    .driver_context(|drv| drv.commit_event(txn), || {})?;
                 // request cleanup
                 global.purge_model_driver(
                     space_name,
