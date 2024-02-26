@@ -19,7 +19,7 @@ rcrypt = "0.4.0"
 bytes = "1.5.0"
 env_logger = "0.11.2"
 log = "0.4.20"
-openssl = { version = "0.10.63", features = ["vendored"] }
+openssl = { version = "0.10.64", features = ["vendored"] }
 crossbeam-epoch = { version = "0.9.18" }
 parking_lot = "0.12.1"
 serde = { version = "1.0.197", features = ["derive"] }
