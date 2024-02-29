@@ -46,7 +46,10 @@ use {
     crate::{
         engine::{
             error::{RuntimeResult, StorageError},
-            storage::common::{interface::fs_traits::FSInterface, sdss},
+            storage::common::{
+                interface::fs::{BufferedReader, File},
+                sdss,
+            },
         },
         util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
     },
@@ -55,16 +58,12 @@ use {
 
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
-pub fn load_journal<
-    TA: JournalAdapter,
-    Fs: FSInterface,
-    F: sdss::sdss_r1::FileSpecV1<DecodeArgs = ()>,
->(
+pub fn load_journal<TA: JournalAdapter, F: sdss::sdss_r1::FileSpecV1<DecodeArgs = ()>>(
     log_file_name: &str,
     gs: &TA::GlobalState,
-) -> RuntimeResult<JournalWriter<Fs, TA>> {
-    let (file, _) = SDSSFileIO::<Fs>::open::<F>(log_file_name)?;
-    let (file, last_txn_id) = JournalReader::<TA, Fs>::scroll(file, gs)?;
+) -> RuntimeResult<JournalWriter<TA>> {
+    let (file, _) = SDSSFileIO::open::<F>(log_file_name)?;
+    let (file, last_txn_id) = JournalReader::<TA>::scroll(file, gs)?;
     JournalWriter::new(file, last_txn_id, false)
 }
 
@@ -174,19 +173,19 @@ impl JournalEntryMetadata {
     }
 }
 
-pub struct JournalReader<TA, Fs: FSInterface> {
-    log_file: SDSSFileIO<Fs>,
+pub struct JournalReader<TA> {
+    log_file: SDSSFileIO<BufferedReader>,
     evid: u64,
     closed: bool,
     remaining_bytes: u64,
     _m: PhantomData<TA>,
 }
 
-impl<TA: JournalAdapter, Fs: FSInterface> JournalReader<TA, Fs> {
-    pub fn new(log_file: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
+impl<TA: JournalAdapter> JournalReader<TA> {
+    pub fn new(log_file: SDSSFileIO<File>) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()? - Header::SIZE as u64;
         Ok(Self {
-            log_file,
+            log_file: log_file.into_buffered_reader(),
             evid: 0,
             closed: false,
             remaining_bytes: log_size,
@@ -296,22 +295,22 @@ impl<TA: JournalAdapter, Fs: FSInterface> JournalReader<TA, Fs> {
     }
     /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
     pub fn scroll(
-        file: SDSSFileIO<Fs>,
+        file: SDSSFileIO<File>,
         gs: &TA::GlobalState,
-    ) -> RuntimeResult<(SDSSFileIO<Fs>, u64)> {
+    ) -> RuntimeResult<(SDSSFileIO<File>, u64)> {
         let mut slf = Self::new(file)?;
         while !slf.end_of_file() {
             slf.rapply_next_event(gs)?;
         }
         if slf.closed {
-            Ok((slf.log_file, slf.evid))
+            Ok((slf.log_file.downgrade_reader(), slf.evid))
         } else {
             Err(StorageError::JournalCorrupted.into())
         }
     }
 }
 
-impl<TA, Fs: FSInterface> JournalReader<TA, Fs> {
+impl<TA> JournalReader<TA> {
     fn _incr_evid(&mut self) {
         self.evid += 1;
     }
@@ -326,7 +325,7 @@ impl<TA, Fs: FSInterface> JournalReader<TA, Fs> {
     }
 }
 
-impl<TA, Fs: FSInterface> JournalReader<TA, Fs> {
+impl<TA> JournalReader<TA> {
     fn logfile_read_into_buffer(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
         if !self.has_remaining_bytes(buf.len() as _) {
             // do this right here to avoid another syscall
@@ -338,17 +337,17 @@ impl<TA, Fs: FSInterface> JournalReader<TA, Fs> {
     }
 }
 
-pub struct JournalWriter<Fs: FSInterface, TA> {
+pub struct JournalWriter<TA> {
     /// the txn log file
-    log_file: SDSSFileIO<Fs>,
+    log_file: SDSSFileIO<File>,
     /// the id of the **next** journal
     id: u64,
     _m: PhantomData<TA>,
     closed: bool,
 }
 
-impl<Fs: FSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
-    pub fn new(mut log_file: SDSSFileIO<Fs>, last_txn_id: u64, new: bool) -> RuntimeResult<Self> {
+impl<TA: JournalAdapter> JournalWriter<TA> {
+    pub fn new(mut log_file: SDSSFileIO<File>, last_txn_id: u64, new: bool) -> RuntimeResult<Self> {
         let log_size = log_file.file_length()?;
         log_file.seek_from_start(log_size)?; // avoid jumbling with headers
         let mut slf = Self {
@@ -365,12 +364,12 @@ impl<Fs: FSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
     }
 }
 
-impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
+impl<TA> JournalWriter<TA> {
     pub fn append_journal_reopen(&mut self) -> RuntimeResult<()> {
         let id = self._incr_id() as u128;
-        self.log_file.fsynced_write(
+        e!(self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_REOPENED, 0, 0).encoded(),
-        )
+        ))
     }
     pub fn __close_mut(&mut self) -> RuntimeResult<()> {
         self.closed = true;
@@ -385,7 +384,7 @@ impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
     }
 }
 
-impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
+impl<TA> JournalWriter<TA> {
     fn _incr_id(&mut self) -> u64 {
         let current = self.id;
         self.id += 1;
@@ -393,7 +392,7 @@ impl<Fs: FSInterface, TA> JournalWriter<Fs, TA> {
     }
 }
 
-impl<Fs: FSInterface, TA> Drop for JournalWriter<Fs, TA> {
+impl<TA> Drop for JournalWriter<TA> {
     fn drop(&mut self) {
         assert!(self.closed, "log not closed");
     }

@@ -33,7 +33,7 @@ use {
         mem::unsafe_apis::memcpy,
         storage::common::{
             checksum::SCrc64,
-            interface::fs_traits::{FSInterface, FileInterface},
+            interface::fs::File,
             sdss::sdss_r1::{
                 rw::{SdssFile, TrackedReader, TrackedWriter},
                 FileSpecV1,
@@ -49,13 +49,11 @@ use {
 */
 
 /// Create a new journal
-pub fn create_journal<J: RawJournalAdapter, Fs: FSInterface>(
-    log_path: &str,
-) -> RuntimeResult<RawJournalWriter<J, Fs>>
+pub fn create_journal<J: RawJournalAdapter>(log_path: &str) -> RuntimeResult<RawJournalWriter<J>>
 where
     J::Spec: FileSpecV1<EncodeArgs = ()>,
 {
-    let log = SdssFile::create::<Fs>(log_path)?;
+    let log = SdssFile::create(log_path)?;
     RawJournalWriter::new(
         JournalInitializer::new(<J::Spec as FileSpecV1>::SIZE as u64, SCrc64::new(), 0, 0),
         log,
@@ -63,15 +61,15 @@ where
 }
 
 /// Open an existing journal
-pub fn open_journal<J: RawJournalAdapter, Fs: FSInterface>(
+pub fn open_journal<J: RawJournalAdapter>(
     log_path: &str,
     gs: &J::GlobalState,
-) -> RuntimeResult<RawJournalWriter<J, Fs>>
+) -> RuntimeResult<RawJournalWriter<J>>
 where
     J::Spec: FileSpecV1<DecodeArgs = ()>,
 {
-    let log = SdssFile::<_, J::Spec>::open::<Fs>(log_path)?;
-    let (initializer, file) = RawJournalReader::<J, Fs>::scroll(log, gs)?;
+    let log = SdssFile::<J::Spec>::open(log_path)?;
+    let (initializer, file) = RawJournalReader::<J>::scroll(log, gs)?;
     RawJournalWriter::new(initializer, file)
 }
 
@@ -212,9 +210,9 @@ macro_rules! jtrace_reader {
 
 pub trait RawJournalAdapterEvent<CA: RawJournalAdapter>: Sized {
     fn md(&self) -> u64;
-    fn write_direct<Fs: FSInterface>(
+    fn write_direct(
         self,
-        _: &mut TrackedWriter<Fs::File, <CA as RawJournalAdapter>::Spec>,
+        _: &mut TrackedWriter<File, <CA as RawJournalAdapter>::Spec>,
         _: <CA as RawJournalAdapter>::CommitContext,
     ) -> RuntimeResult<()> {
         unimplemented!()
@@ -247,15 +245,13 @@ pub trait RawJournalAdapter: Sized {
     /// initialize this adapter
     fn initialize(j_: &JournalInitializer) -> Self;
     /// get a write context
-    fn enter_context<'a, Fs: FSInterface>(
-        adapter: &'a mut RawJournalWriter<Self, Fs>,
-    ) -> Self::Context<'a>;
+    fn enter_context<'a>(adapter: &'a mut RawJournalWriter<Self>) -> Self::Context<'a>;
     /// parse event metadata
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta>;
     /// commit event (direct preference)
-    fn commit_direct<Fs: FSInterface, E>(
+    fn commit_direct<E>(
         &mut self,
-        _: &mut TrackedWriter<Fs::File, Self::Spec>,
+        _: &mut TrackedWriter<File, Self::Spec>,
         _: E,
         _: Self::CommitContext,
     ) -> RuntimeResult<()>
@@ -272,13 +268,10 @@ pub trait RawJournalAdapter: Sized {
         unimplemented!()
     }
     /// decode and apply the event
-    fn decode_apply<'a, Fs: FSInterface>(
+    fn decode_apply<'a>(
         gs: &Self::GlobalState,
         meta: Self::EventMeta,
-        file: &mut TrackedReader<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        file: &mut TrackedReader<Self::Spec>,
     ) -> RuntimeResult<()>;
 }
 
@@ -473,9 +466,9 @@ pub(super) enum DriverEventKind {
 */
 
 /// A low-level journal writer
-pub struct RawJournalWriter<J: RawJournalAdapter, Fs: FSInterface> {
+pub struct RawJournalWriter<J: RawJournalAdapter> {
     j: J,
-    log_file: TrackedWriter<<Fs as FSInterface>::File, <J as RawJournalAdapter>::Spec>,
+    log_file: TrackedWriter<File, <J as RawJournalAdapter>::Spec>,
     txn_id: u64,
     known_txn_id: u64,
     known_txn_offset: u64, // if offset is 0, txn id is unset
@@ -483,9 +476,9 @@ pub struct RawJournalWriter<J: RawJournalAdapter, Fs: FSInterface> {
 
 const SERVER_EV_MASK: u64 = 1 << (u64::BITS - 1);
 
-impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
+impl<J: RawJournalAdapter> RawJournalWriter<J> {
     /// Initialize a new [`RawJournalWriter`] using a [`JournalInitializer`]
-    pub fn new(j_: JournalInitializer, file: SdssFile<Fs::File, J::Spec>) -> RuntimeResult<Self> {
+    pub fn new(j_: JournalInitializer, file: SdssFile<J::Spec>) -> RuntimeResult<Self> {
         let mut me = Self {
             log_file: TrackedWriter::with_cursor_and_checksum(file, j_.cursor(), j_.checksum()),
             known_txn_id: j_.last_txn_id(),
@@ -533,7 +526,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
                     log_file.tracked_write(&ev_md.to_le_bytes())?;
                     jtrace_writer!(CommitServerEventWroteMetadata);
                     // now hand over control to adapter impl
-                    J::commit_direct::<Fs, _>(j, log_file, event, ctx)?;
+                    J::commit_direct(j, log_file, event, ctx)?;
                 }
             }
             jtrace_writer!(CommitServerEventAdapterCompleted);
@@ -557,7 +550,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
     }
 }
 
-impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
+impl<J: RawJournalAdapter> RawJournalWriter<J> {
     fn txn_context<T>(
         &mut self,
         f: impl FnOnce(&mut Self, u128) -> RuntimeResult<T>,
@@ -609,11 +602,8 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalWriter<J, Fs> {
     }
 }
 
-pub struct RawJournalReader<J: RawJournalAdapter, Fs: FSInterface> {
-    tr: TrackedReader<
-        <<Fs as FSInterface>::File as FileInterface>::BufReader,
-        <J as RawJournalAdapter>::Spec,
-    >,
+pub struct RawJournalReader<J: RawJournalAdapter> {
+    tr: TrackedReader<<J as RawJournalAdapter>::Spec>,
     txn_id: u64,
     last_txn_id: u64,
     last_txn_offset: u64,
@@ -636,14 +626,11 @@ impl JournalStats {
     }
 }
 
-impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
+impl<J: RawJournalAdapter> RawJournalReader<J> {
     pub fn scroll(
-        file: SdssFile<<Fs as FSInterface>::File, <J as RawJournalAdapter>::Spec>,
+        file: SdssFile<<J as RawJournalAdapter>::Spec>,
         gs: &J::GlobalState,
-    ) -> RuntimeResult<(
-        JournalInitializer,
-        SdssFile<<Fs as FSInterface>::File, J::Spec>,
-    )> {
+    ) -> RuntimeResult<(JournalInitializer, SdssFile<J::Spec>)> {
         let reader = TrackedReader::with_cursor(
             file,
             <<J as RawJournalAdapter>::Spec as FileSpecV1>::SIZE as u64,
@@ -660,16 +647,13 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
                     // NB: the last txn offset is important because it indicates that the log is new
                     me.last_txn_offset,
                 );
-                let file = me.tr.into_inner::<Fs::File>()?;
+                let file = me.tr.into_inner();
                 return Ok((initializer, file));
             }
         }
     }
     fn new(
-        reader: TrackedReader<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            <J as RawJournalAdapter>::Spec,
-        >,
+        reader: TrackedReader<<J as RawJournalAdapter>::Spec>,
         txn_id: u64,
         last_txn_id: u64,
         last_txn_offset: u64,
@@ -692,7 +676,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
     }
 }
 
-impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
+impl<J: RawJournalAdapter> RawJournalReader<J> {
     fn _apply_next_event_and_stop(&mut self, gs: &J::GlobalState) -> RuntimeResult<bool> {
         let txn_id = u128::from_le_bytes(self.tr.read_block()?);
         let meta = u64::from_le_bytes(self.tr.read_block()?);
@@ -715,7 +699,7 @@ impl<J: RawJournalAdapter, Fs: FSInterface> RawJournalReader<J, Fs> {
                     // now parse the actual event
                     let Self { tr: reader, .. } = self;
                     // we do not consider a parsed event a success signal; so we must actually apply it
-                    match J::decode_apply::<Fs>(gs, meta, reader) {
+                    match J::decode_apply(gs, meta, reader) {
                         Ok(()) => {
                             jtrace_reader!(ServerEventAppliedSuccess);
                             Self::__refresh_known_txn(self);

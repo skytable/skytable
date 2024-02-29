@@ -30,7 +30,6 @@
 //! traits that provide an unified API for all file systems irrespective of their base impl
 //!
 
-pub mod fs_imp;
+pub mod fs;
 #[cfg(test)]
-pub mod fs_test;
-pub mod fs_traits;
+mod vfs;

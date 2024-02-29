@@ -27,7 +27,6 @@
 //! Implementations of the Skytable Disk Storage Subsystem (SDSS)
 
 use {
-    self::safe_interfaces::LocalFS,
     super::{
         config::Configuration, core::GlobalNS, fractal::context, fractal::ModelDrivers,
         RuntimeResult,
@@ -42,13 +41,8 @@ pub mod v1;
 pub mod v2;
 
 pub mod safe_interfaces {
-    #[cfg(test)]
-    pub use super::common::interface::fs_test::{NullFS, VirtualFS};
     pub use super::{
-        common::{
-            interface::{fs_imp::LocalFS, fs_traits::FSInterface},
-            paths_v1,
-        },
+        common::{interface::fs::FileSystem, paths_v1},
         v2::impls::mdl_journal::StdModelBatch,
     };
 }
@@ -64,8 +58,8 @@ pub use v2::impls::{
 
 pub struct SELoaded {
     pub gns: GlobalNS,
-    pub gns_driver: v2::impls::gns_log::GNSDriver<LocalFS>,
-    pub model_drivers: ModelDrivers<LocalFS>,
+    pub gns_driver: v2::impls::gns_log::GNSDriver,
+    pub model_drivers: ModelDrivers,
 }
 
 pub fn load(cfg: &Configuration) -> RuntimeResult<SELoaded> {

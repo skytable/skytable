@@ -31,7 +31,7 @@ use {
 
 #[test]
 fn simple_select_wildcard() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_simple_select_wildcard");
     assert_eq!(
         super::exec_select(
             &global,
@@ -46,7 +46,7 @@ fn simple_select_wildcard() {
 
 #[test]
 fn simple_select_specified_same_order() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_simple_select_specified_same_order");
     assert_eq!(
         super::exec_select(
             &global,
@@ -61,7 +61,8 @@ fn simple_select_specified_same_order() {
 
 #[test]
 fn simple_select_specified_reversed_order() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global =
+        TestGlobal::new_with_driver_id_instant_update("dml_select_simple_select_specified_reversed_order");
     assert_eq!(
         super::exec_select(
             &global,
@@ -76,7 +77,7 @@ fn simple_select_specified_reversed_order() {
 
 #[test]
 fn select_null() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_null");
     assert_eq!(
         super::exec_select(
             &global,
@@ -91,7 +92,7 @@ fn select_null() {
 
 #[test]
 fn select_nonexisting() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_nonexisting");
     assert_eq!(
         super::exec_select(
             &global,
@@ -110,7 +111,7 @@ fn select_nonexisting() {
 
 #[test]
 fn select_all_wildcard() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_all_wildcard");
     let ret = super::exec_select_all(
         &global,
         "create model myspace.mymodel(username: string, password: string)",
@@ -137,7 +138,7 @@ fn select_all_wildcard() {
 
 #[test]
 fn select_all_onefield() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_all_onefield");
     let ret = super::exec_select_all(
         &global,
         "create model myspace.mymodel(username: string, password: string)",

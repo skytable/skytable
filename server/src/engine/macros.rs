@@ -410,7 +410,6 @@ macro_rules! local_mut {
     }};
 }
 
-#[cfg(test)]
 macro_rules! local_ref {
     ($ident:ident, $call:expr) => {{
         #[inline(always)]
@@ -447,4 +446,17 @@ macro_rules! array {
         $(#[allow(non_snake_case)]mod$name{pub(super)const LEN:usize={let mut i=0;$(let _=$expr;i+=1;)*i+=0;i};}
         $(#[$attr])*$vis const$name:[$ty;$name::LEN]=[$($expr),*];)*
     }
+}
+
+macro_rules! e {
+    ($e:expr) => {{
+        #[inline(always)]
+        fn r<T, E1, E2>(r: Result<T, E1>) -> Result<T, E2>
+        where
+            E2: From<E1>,
+        {
+            r.map_err(::core::convert::From::from)
+        }
+        r($e)
+    }};
 }

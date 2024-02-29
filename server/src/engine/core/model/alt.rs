@@ -266,18 +266,17 @@ impl Model {
                     AlterAction::Ignore => {}
                     AlterAction::Add(new_fields) => {
                         // TODO(@ohsayan): this impacts lockdown duration; fix it
-                        if G::FS_IS_NON_NULL {
-                            // prepare txn
-                            let txn = gns::model::AlterModelAddTxn::new(
-                                ModelIDRef::new_ref(&space_name, &space, &model_name, model),
-                                &new_fields,
-                            );
-                            // commit txn
-                            global
-                                .gns_driver()
-                                .lock()
-                                .driver_context(|drv| drv.commit_event(txn), || {})?;
-                        }
+
+                        // prepare txn
+                        let txn = gns::model::AlterModelAddTxn::new(
+                            ModelIDRef::new_ref(&space_name, &space, &model_name, model),
+                            &new_fields,
+                        );
+                        // commit txn
+                        global
+                            .gns_driver()
+                            .lock()
+                            .driver_context(|drv| drv.commit_event(txn), || {})?;
                         let mut mutator = model.model_mutator();
                         new_fields
                             .stseq_ord_kv()
@@ -287,36 +286,32 @@ impl Model {
                             });
                     }
                     AlterAction::Remove(removed) => {
-                        if G::FS_IS_NON_NULL {
-                            // prepare txn
-                            let txn = gns::model::AlterModelRemoveTxn::new(
-                                ModelIDRef::new_ref(&space_name, space, &model_name, model),
-                                &removed,
-                            );
-                            // commit txn
-                            global
-                                .gns_driver()
-                                .lock()
-                                .driver_context(|drv| drv.commit_event(txn), || {})?;
-                        }
+                        // prepare txn
+                        let txn = gns::model::AlterModelRemoveTxn::new(
+                            ModelIDRef::new_ref(&space_name, space, &model_name, model),
+                            &removed,
+                        );
+                        // commit txn
+                        global
+                            .gns_driver()
+                            .lock()
+                            .driver_context(|drv| drv.commit_event(txn), || {})?;
                         let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
                             mutator.remove_field(field_id.as_str());
                         });
                     }
                     AlterAction::Update(updated) => {
-                        if G::FS_IS_NON_NULL {
-                            // prepare txn
-                            let txn = gns::model::AlterModelUpdateTxn::new(
-                                ModelIDRef::new_ref(&space_name, space, &model_name, model),
-                                &updated,
-                            );
-                            // commit txn
-                            global
-                                .gns_driver()
-                                .lock()
-                                .driver_context(|drv| drv.commit_event(txn), || {})?;
-                        }
+                        // prepare txn
+                        let txn = gns::model::AlterModelUpdateTxn::new(
+                            ModelIDRef::new_ref(&space_name, space, &model_name, model),
+                            &updated,
+                        );
+                        // commit txn
+                        global
+                            .gns_driver()
+                            .lock()
+                            .driver_context(|drv| drv.commit_event(txn), || {})?;
                         let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {
                             mutator.update_field(field_id.as_ref(), field);

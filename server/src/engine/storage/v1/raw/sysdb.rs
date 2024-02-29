@@ -30,9 +30,7 @@ use {
         core::system_db::SystemDatabase,
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
         error::{RuntimeResult, StorageError},
-        storage::{
-            common::interface::fs_traits::FSInterface, common_encoding::r1, v1::raw::rw::SDSSFileIO,
-        },
+        storage::{common_encoding::r1, v1::raw::rw::SDSSFileIO},
     },
     std::collections::HashMap,
 };
@@ -71,8 +69,8 @@ impl RestoredSystemDatabase {
             settings_version,
         }
     }
-    pub fn restore<Fs: FSInterface>(name: &str) -> RuntimeResult<Self> {
-        let (mut f, _) = SDSSFileIO::<Fs>::open::<SysDBV1>(name)?;
+    pub fn restore(name: &str) -> RuntimeResult<Self> {
+        let (mut f, _) = SDSSFileIO::open::<SysDBV1>(name)?;
         let mut sysdb_data = r1::dec::dict_full::<r1::map::GenericDictSpec>(&f.read_full()?)?;
         // get our auth and sys stores
         let mut auth_store = rkey(

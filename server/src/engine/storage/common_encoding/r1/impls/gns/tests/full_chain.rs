@@ -71,11 +71,11 @@ fn create_space() {
         let uuid;
         // start 1
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             uuid = init_space(&global, "myspace", "{ SAYAN_MAX: 65536 }"); // good lord that doesn't sound like a good variable
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             let spaces = global.state().idx().read();
             let space = spaces.get("myspace").unwrap();
             assert_eq!(
@@ -96,7 +96,7 @@ fn alter_space() {
     with_variable("alter_space_test.global.db-tlog", |log_name| {
         let uuid;
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             uuid = init_space(&global, "myspace", "{}");
             let stmt =
                 lex_insecure("alter space myspace with { env: { SAYAN_MAX: 65536 } }".as_bytes())
@@ -105,7 +105,7 @@ fn alter_space() {
             Space::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             let spaces = global.state().idx().read();
             let space = spaces.get("myspace").unwrap();
             assert_eq!(
@@ -125,14 +125,14 @@ fn alter_space() {
 fn drop_space() {
     with_variable("drop_space_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             let _ = init_space(&global, "myspace", "{}");
             let stmt = lex_insecure("drop space myspace".as_bytes()).unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
             Space::transactional_exec_drop(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             assert!(global.state().idx().read().get("myspace").is_none());
         })
     })
@@ -170,12 +170,12 @@ fn create_model() {
         let _uuid_space;
         let uuid_model;
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             _uuid_space = init_space(&global, "myspace", "{}");
             uuid_model = init_default_model(&global);
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
@@ -202,7 +202,7 @@ fn create_model() {
 fn alter_model_add() {
     with_variable("alter_model_add_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             init_space(&global, "myspace", "{}");
             init_default_model(&global);
             let stmt = lex_insecure(
@@ -213,7 +213,7 @@ fn alter_model_add() {
             Model::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
@@ -232,7 +232,7 @@ fn alter_model_add() {
 fn alter_model_remove() {
     with_variable("alter_model_remove_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             init_space(&global, "myspace", "{}");
             init_model(
                 &global,
@@ -248,7 +248,7 @@ fn alter_model_remove() {
             Model::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
@@ -265,7 +265,7 @@ fn alter_model_remove() {
 fn alter_model_update() {
     with_variable("alter_model_update_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             init_space(&global, "myspace", "{}");
             init_model(
                 &global,
@@ -280,7 +280,7 @@ fn alter_model_update() {
             Model::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
                 .with_model(("myspace", "mymodel").into(), |model| {
@@ -299,7 +299,7 @@ fn alter_model_update() {
 fn drop_model() {
     with_variable("drop_model_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             init_space(&global, "myspace", "{}");
             init_default_model(&global);
             let stmt = lex_insecure(b"drop model myspace.mymodel").unwrap();
@@ -307,7 +307,7 @@ fn drop_model() {
             Model::transactional_exec_drop(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let global = TestGlobal::new_with_driver_id(log_name);
             assert_eq!(
                 global
                     .state()

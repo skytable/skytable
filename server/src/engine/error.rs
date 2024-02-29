@@ -97,6 +97,12 @@ pub enum QueryError {
     QExecNeedLock = 112,
 }
 
+direct_from! {
+    QueryError[_] => {
+        std::io::Error as SysServerError,
+    }
+}
+
 impl From<super::fractal::error::Error> for QueryError {
     fn from(e: super::fractal::error::Error) -> Self {
         match e.kind() {

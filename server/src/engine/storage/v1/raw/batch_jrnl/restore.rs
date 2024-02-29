@@ -38,7 +38,7 @@ use {
         error::{RuntimeResult, StorageError},
         idx::{MTIndex, STIndex, STIndexSeq},
         storage::{
-            common::interface::fs_traits::FSInterface,
+            common::interface::fs::File,
             common_encoding::r1::{
                 obj::cell::{self, StorageCellTypeID},
                 DataSource,
@@ -105,17 +105,17 @@ enum Batch {
     BatchClosed,
 }
 
-pub struct DataBatchRestoreDriver<F: FSInterface> {
-    f: TrackedReader<F>,
+pub struct DataBatchRestoreDriver {
+    f: TrackedReader,
 }
 
-impl<F: FSInterface> DataBatchRestoreDriver<F> {
-    pub fn new(f: SDSSFileIO<F>) -> RuntimeResult<Self> {
+impl DataBatchRestoreDriver {
+    pub fn new(f: SDSSFileIO<File>) -> RuntimeResult<Self> {
         Ok(Self {
-            f: TrackedReader::new(f)?,
+            f: TrackedReader::new(f.into_buffered_reader())?,
         })
     }
-    pub fn into_file(self) -> RuntimeResult<SDSSFileIO<F>> {
+    pub fn into_file(self) -> SDSSFileIO<File> {
         self.f.into_inner_file()
     }
     pub(in crate::engine::storage::v1) fn read_data_batch_into_model(
@@ -129,7 +129,7 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: FSInterface> DataBatchRestoreDriver<F> {
+impl DataBatchRestoreDriver {
     fn read_all_batches_and_for_each(
         &mut self,
         mut f: impl FnMut(NormalBatch) -> RuntimeResult<()>,
@@ -197,7 +197,7 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: FSInterface> DataBatchRestoreDriver<F> {
+impl DataBatchRestoreDriver {
     fn apply_batch(
         m: &Model,
         NormalBatch {
@@ -292,7 +292,7 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: FSInterface> DataBatchRestoreDriver<F> {
+impl DataBatchRestoreDriver {
     fn read_batch_summary(&mut self, finished_early: bool) -> RuntimeResult<u64> {
         if !finished_early {
             // we must read the batch termination signature
@@ -457,7 +457,7 @@ impl BatchStartBlock {
     }
 }
 
-impl<F: FSInterface> DataBatchRestoreDriver<F> {
+impl DataBatchRestoreDriver {
     fn decode_primary_key(&mut self, pk_type: u8) -> RuntimeResult<PrimaryIndexKey> {
         let Some(pk_type) = TagUnique::try_from_raw(pk_type) else {
             return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
@@ -495,7 +495,7 @@ impl<F: FSInterface> DataBatchRestoreDriver<F> {
         let Some(dscr) = StorageCellTypeID::try_from_raw(self.f.read_byte()?) else {
             return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
         };
-        unsafe { cell::decode_element::<Datacell, TrackedReader<F>>(&mut self.f, dscr) }
+        unsafe { cell::decode_element::<Datacell, TrackedReader>(&mut self.f, dscr) }
             .map_err(|e| e.0)
     }
 }
@@ -506,12 +506,18 @@ impl From<crate::engine::fractal::error::Error> for ErrorHack {
         Self(value)
     }
 }
+impl From<std::io::Error> for ErrorHack {
+    fn from(value: std::io::Error) -> Self {
+        Self(value.into())
+    }
+}
 impl From<()> for ErrorHack {
     fn from(_: ()) -> Self {
         Self(StorageError::DataBatchRestoreCorruptedEntry.into())
     }
 }
-impl<F: FSInterface> DataSource for TrackedReader<F> {
+
+impl DataSource for TrackedReader {
     const RELIABLE_SOURCE: bool = false;
     type Error = ErrorHack;
     fn has_remaining(&self, cnt: usize) -> bool {

@@ -278,36 +278,32 @@ impl Model {
                 }
             }
             // since we've locked this down, no one else can parallely create another model in the same space (or remove)
-            if G::FS_IS_NON_NULL {
-                let mut txn_driver = global.gns_driver().lock();
-                // prepare txn
-                let txn = gns::model::CreateModelTxn::new(
-                    SpaceIDRef::new(&space_name, &space),
-                    &model_name,
-                    &model,
-                );
-                // attempt to initialize driver
-                global.initialize_model_driver(
-                    &space_name,
-                    space.get_uuid(),
-                    &model_name,
-                    model.get_uuid(),
-                )?;
-                // commit txn
-                txn_driver.driver_context(
-                    |drv| drv.commit_event(txn),
-                    || {
-                        global.taskmgr_post_standard_priority(Task::new(
-                            GenericTask::delete_model_dir(
-                                &space_name,
-                                space.get_uuid(),
-                                &model_name,
-                                model.get_uuid(),
-                            ),
-                        ))
-                    },
-                )?;
-            }
+            let mut txn_driver = global.gns_driver().lock();
+            // prepare txn
+            let txn = gns::model::CreateModelTxn::new(
+                SpaceIDRef::new(&space_name, &space),
+                &model_name,
+                &model,
+            );
+            // attempt to initialize driver
+            global.initialize_model_driver(
+                &space_name,
+                space.get_uuid(),
+                &model_name,
+                model.get_uuid(),
+            )?;
+            // commit txn
+            txn_driver.driver_context(
+                |drv| drv.commit_event(txn),
+                || {
+                    global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+                        &space_name,
+                        space.get_uuid(),
+                        &model_name,
+                        model.get_uuid(),
+                    )))
+                },
+            )?;
             // update global state
             let _ = space.models_mut().insert(model_name.into());
             let _ = global
@@ -347,28 +343,26 @@ impl Model {
                 return Err(QueryError::QExecDdlNotEmpty);
             }
             // okay this is looking good for us
-            if G::FS_IS_NON_NULL {
-                // prepare txn
-                let txn = gns::model::DropModelTxn::new(ModelIDRef::new(
-                    SpaceIDRef::new(&space_name, &space),
-                    &model_name,
-                    model.get_uuid(),
-                    model.delta_state().schema_current_version().value_u64(),
-                ));
-                // commit txn
-                global
-                    .gns_driver()
-                    .lock()
-                    .driver_context(|drv| drv.commit_event(txn), || {})?;
-                // request cleanup
-                global.purge_model_driver(
-                    space_name,
-                    space.get_uuid(),
-                    model_name,
-                    model.get_uuid(),
-                    false,
-                );
-            }
+            // prepare txn
+            let txn = gns::model::DropModelTxn::new(ModelIDRef::new(
+                SpaceIDRef::new(&space_name, &space),
+                &model_name,
+                model.get_uuid(),
+                model.delta_state().schema_current_version().value_u64(),
+            ));
+            // commit txn
+            global
+                .gns_driver()
+                .lock()
+                .driver_context(|drv| drv.commit_event(txn), || {})?;
+            // request cleanup
+            global.purge_model_driver(
+                space_name,
+                space.get_uuid(),
+                model_name,
+                model.get_uuid(),
+                false,
+            );
             // update global state
             let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
             let _ = space.models_mut().remove(model_name);

@@ -29,7 +29,7 @@ use {
         core::{dml::QueryExecMeta, model::Model, GlobalNS},
         data::uuid::Uuid,
         storage::{
-            safe_interfaces::{paths_v1, FSInterface, LocalFS},
+            safe_interfaces::{paths_v1, FileSystem},
             GNSDriver, ModelDriver,
         },
     },
@@ -70,8 +70,8 @@ pub struct GlobalStateStart {
 /// Must be called iff this is the only thread calling it
 pub unsafe fn load_and_enable_all(
     gns: GlobalNS,
-    gns_driver: GNSDriver<LocalFS>,
-    model_drivers: ModelDrivers<LocalFS>,
+    gns_driver: GNSDriver,
+    model_drivers: ModelDrivers,
 ) -> GlobalStateStart {
     let model_cnt_on_boot = model_drivers.count();
     let gns_driver = drivers::FractalGNSDriver::new(gns_driver);
@@ -97,13 +97,11 @@ pub unsafe fn load_and_enable_all(
 
 /// Something that represents the global state
 pub trait GlobalInstanceLike {
-    type FileSystem: FSInterface;
-    const FS_IS_NON_NULL: bool = Self::FileSystem::NOT_NULL;
     // stat
     fn get_max_delta_size(&self) -> usize;
     // global namespace
     fn state(&self) -> &GlobalNS;
-    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver<Self::FileSystem>>;
+    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver>;
     // model drivers
     fn initialize_model_driver(
         &self,
@@ -148,12 +146,11 @@ pub trait GlobalInstanceLike {
 }
 
 impl GlobalInstanceLike for Global {
-    type FileSystem = LocalFS;
     // ns
     fn state(&self) -> &GlobalNS {
         self._namespace()
     }
-    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver<Self::FileSystem>> {
+    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver> {
         &self.get_state().gns_driver
     }
     // taskmgr
@@ -192,7 +189,7 @@ impl GlobalInstanceLike for Global {
         model_uuid: Uuid,
     ) -> RuntimeResult<()> {
         // create dir
-        LocalFS::fs_create_dir(&paths_v1::model_dir(
+        FileSystem::create_dir(&paths_v1::model_dir(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
         // init driver
@@ -271,16 +268,16 @@ impl Global {
 /// The global state
 struct GlobalState {
     gns: GlobalNS,
-    gns_driver: Mutex<drivers::FractalGNSDriver<LocalFS>>,
-    mdl_driver: ModelDrivers<LocalFS>,
+    gns_driver: Mutex<drivers::FractalGNSDriver>,
+    mdl_driver: ModelDrivers,
     task_mgr: mgr::FractalMgr,
 }
 
 impl GlobalState {
     fn new(
         gns: GlobalNS,
-        gns_driver: drivers::FractalGNSDriver<LocalFS>,
-        mdl_driver: ModelDrivers<LocalFS>,
+        gns_driver: drivers::FractalGNSDriver,
+        mdl_driver: ModelDrivers,
         task_mgr: mgr::FractalMgr,
     ) -> Self {
         Self {
@@ -290,7 +287,7 @@ impl GlobalState {
             task_mgr,
         }
     }
-    pub(self) fn get_mdl_drivers(&self) -> &ModelDrivers<LocalFS> {
+    pub(self) fn get_mdl_drivers(&self) -> &ModelDrivers {
         &self.mdl_driver
     }
     pub(self) fn fractal_mgr(&self) -> &mgr::FractalMgr {

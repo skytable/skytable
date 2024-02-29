@@ -39,10 +39,7 @@ use {
             mem::unsafe_apis,
             storage::{
                 common::{
-                    interface::{
-                        fs_test::VirtualFS,
-                        fs_traits::{FSInterface, FileInterface},
-                    },
+                    interface::fs::File,
                     sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
                 },
                 v2::raw::{
@@ -155,22 +152,18 @@ impl TestDB {
     fn _ref(&self) -> Ref<Vec<String>> {
         self.data.borrow()
     }
-    fn push(
-        &self,
-        log: &mut EventLogDriver<TestDBAdapter, VirtualFS>,
-        key: &str,
-    ) -> RuntimeResult<()> {
+    fn push(&self, log: &mut EventLogDriver<TestDBAdapter>, key: &str) -> RuntimeResult<()> {
         log.commit_event(EventPush(key))?;
         self._mut().push(key.into());
         Ok(())
     }
-    fn pop(&self, log: &mut EventLogDriver<TestDBAdapter, VirtualFS>) -> RuntimeResult<()> {
+    fn pop(&self, log: &mut EventLogDriver<TestDBAdapter>) -> RuntimeResult<()> {
         assert!(!self._ref().is_empty());
         log.commit_event(EventPop)?;
         self._mut().pop().unwrap();
         Ok(())
     }
-    fn clear(&self, log: &mut EventLogDriver<TestDBAdapter, VirtualFS>) -> RuntimeResult<()> {
+    fn clear(&self, log: &mut EventLogDriver<TestDBAdapter>) -> RuntimeResult<()> {
         log.commit_event(EventClear)?;
         self._mut().clear();
         Ok(())
@@ -179,7 +172,7 @@ impl TestDB {
 
 fn open_log() -> (
     TestDB,
-    super::raw::RawJournalWriter<EventLogAdapter<TestDBAdapter>, VirtualFS>,
+    super::raw::RawJournalWriter<EventLogAdapter<TestDBAdapter>>,
 ) {
     let db = TestDB::default();
     let log = open_journal("jrnl", &db).unwrap();
@@ -265,11 +258,7 @@ impl BatchDB {
         self.inner.borrow()
     }
     /// As soon as two changes occur, we sync to disk
-    fn push(
-        &self,
-        driver: &mut BatchDriver<BatchDBAdapter, VirtualFS>,
-        key: &str,
-    ) -> RuntimeResult<()> {
+    fn push(&self, driver: &mut BatchDriver<BatchDBAdapter>, key: &str) -> RuntimeResult<()> {
         let mut me = self._mut();
         me.data.push(key.into());
         let changed = me.data.len() - me.last_flushed_at;
@@ -293,10 +282,10 @@ impl<'a> RawJournalAdapterEvent<BatchAdapter<BatchDBAdapter>> for BatchDBFlush<'
     fn md(&self) -> u64 {
         BatchType::GenericBatch.dscr_u64()
     }
-    fn write_direct<Fs: FSInterface>(
+    fn write_direct(
         self,
         f: &mut TrackedWriter<
-            Fs::File,
+            File,
             <BatchAdapter<BatchDBAdapter> as super::raw::RawJournalAdapter>::Spec,
         >,
         ctx: Rc<RefCell<BatchContext>>,
@@ -348,23 +337,17 @@ impl BatchAdapterSpec for BatchDBAdapter {
     fn is_early_exit(ev: &Self::EventType) -> bool {
         BatchEventType::EarlyExit.eq(ev)
     }
-    fn decode_batch_metadata<Fs: FSInterface>(
+    fn decode_batch_metadata(
         _: &Self::GlobalState,
-        _: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        _: &mut TrackedReaderContext<Self::Spec>,
         _: Self::BatchType,
     ) -> RuntimeResult<Self::BatchMetadata> {
         Ok(())
     }
-    fn update_state_for_new_event<Fs: FSInterface>(
+    fn update_state_for_new_event(
         _: &Self::GlobalState,
         bs: &mut Self::BatchState,
-        f: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        f: &mut TrackedReaderContext<Self::Spec>,
         _: &Self::BatchMetadata,
         event_type: Self::EventType,
     ) -> RuntimeResult<()> {
@@ -421,8 +404,7 @@ fn batch_simple() {
     }
     {
         let db = BatchDB::new();
-        let mut batch_drv =
-            BatchAdapter::<BatchDBAdapter>::open::<VirtualFS>("mybatch", &db).unwrap();
+        let mut batch_drv = BatchAdapter::<BatchDBAdapter>::open("mybatch", &db).unwrap();
         assert_eq!(
             db._ref().data,
             ["key1", "key2", "key3", "key4", "key5", "key6"]

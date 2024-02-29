@@ -35,7 +35,7 @@ use {
             data::uuid::Uuid,
             error::ErrorKind,
             storage::{
-                safe_interfaces::{paths_v1, LocalFS, StdModelBatch},
+                safe_interfaces::{paths_v1, StdModelBatch},
                 BatchStats,
             },
         },
@@ -442,7 +442,7 @@ impl FractalMgr {
     fn try_write_model_data_batch(
         model: &Model,
         observed_size: usize,
-        mdl_driver: &super::drivers::FractalModelDriver<LocalFS>,
+        mdl_driver: &super::drivers::FractalModelDriver,
     ) -> Result<(), (super::error::Error, BatchStats)> {
         if mdl_driver.status().is_iffy() {
             // don't mess this up any further

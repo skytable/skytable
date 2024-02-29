@@ -33,7 +33,7 @@ use crate::engine::{
 
 #[test]
 fn exec_create_space_simple() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id("exec_create_space_simple");
     super::exec_create(&global, "create space myspace", |spc| {
         assert!(spc.models().is_empty())
     })
@@ -42,7 +42,7 @@ fn exec_create_space_simple() {
 
 #[test]
 fn exec_create_space_with_env() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id("exec_create_space_with_env");
     super::exec_create(
         &global,
         r#"
@@ -69,7 +69,7 @@ fn exec_create_space_with_env() {
 
 #[test]
 fn exec_create_space_with_bad_env_type() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id("exec_create_space_with_bad_env_type");
     assert_eq!(
         super::exec_create(&global, "create space myspace with { env: 100 }", |_| {}).unwrap_err(),
         QueryError::QExecDdlInvalidProperties
@@ -78,7 +78,7 @@ fn exec_create_space_with_bad_env_type() {
 
 #[test]
 fn exec_create_space_with_random_property() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id("exec_create_space_with_random_property");
     assert_eq!(
         super::exec_create(
             &global,

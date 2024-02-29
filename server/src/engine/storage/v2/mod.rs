@@ -26,10 +26,7 @@
 
 use {
     self::impls::mdl_journal::{BatchStats, FullModel},
-    super::{
-        common::interface::{fs_imp::LocalFS, fs_traits::FSInterface},
-        v1, SELoaded,
-    },
+    super::{common::interface::fs::FileSystem, v1, SELoaded},
     crate::engine::{
         config::Configuration,
         core::{
@@ -64,14 +61,14 @@ pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
     // create all spaces
     context::set_dmsg("creating all spaces");
     for (space_name, space) in gns.idx().read().iter() {
-        LocalFS::fs_create_dir_all(&paths_v1::space_dir(space_name, space.get_uuid()))?;
+        FileSystem::create_dir_all(&paths_v1::space_dir(space_name, space.get_uuid()))?;
         gns_driver.commit_event(CreateSpaceTxn::new(space.props(), &space_name, space))?;
     }
     // create all models
     context::set_dmsg("creating all models");
     for (model_id, model) in gns.idx_models().read().iter() {
         let space_uuid = gns.idx().read().get(model_id.space()).unwrap().get_uuid();
-        LocalFS::fs_create_dir_all(&paths_v1::model_dir(
+        FileSystem::create_dir_all(&paths_v1::model_dir(
             model_id.space(),
             space_uuid,
             model_id.entity(),
@@ -102,7 +99,7 @@ pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
 }
 
 pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
-    LocalFS::fs_create_dir_all(DATA_DIR)?;
+    FileSystem::create_dir_all(DATA_DIR)?;
     let mut gns_driver = impls::gns_log::GNSDriver::create_gns()?;
     let gns = GlobalNS::empty();
     let password_hash = rcrypt::hash(&config.auth.root_key, rcrypt::DEFAULT_COST).unwrap();

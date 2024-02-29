@@ -37,7 +37,6 @@ use {
                 dml::{ins::InsertStatement, upd::UpdateStatement},
                 tests::lex_insecure,
             },
-            storage::common::interface::fs_test::VirtualFS,
         },
         util::test_utils,
     },
@@ -64,10 +63,7 @@ fn create_test_kv_int(change_count: usize) -> Vec<(u64, String)> {
         .collect()
 }
 
-fn create_model_and_space(
-    global: &TestGlobal<VirtualFS>,
-    create_model: &str,
-) -> QueryResult<EntityID> {
+fn create_model_and_space(global: &TestGlobal, create_model: &str) -> QueryResult<EntityID> {
     let tokens = lex_insecure(create_model.as_bytes()).unwrap();
     let create_model: CreateModel = ast::parse_ast_node_full(&tokens[2..]).unwrap();
     let mdl_name = EntityID::new(
@@ -82,13 +78,13 @@ fn create_model_and_space(
     Model::transactional_exec_create(global, create_model).map(|_| mdl_name)
 }
 
-fn run_insert(global: &TestGlobal<VirtualFS>, insert: &str) -> QueryResult<()> {
+fn run_insert(global: &TestGlobal, insert: &str) -> QueryResult<()> {
     let tokens = lex_insecure(insert.as_bytes()).unwrap();
     let insert: InsertStatement = ast::parse_ast_node_full(&tokens[1..]).unwrap();
     dml::insert(global, insert)
 }
 
-fn run_update(global: &TestGlobal<VirtualFS>, update: &str) -> QueryResult<()> {
+fn run_update(global: &TestGlobal, update: &str) -> QueryResult<()> {
     let tokens = lex_insecure(update.as_bytes()).unwrap();
     let insert: UpdateStatement = ast::parse_ast_node_full(&tokens[1..]).unwrap();
     dml::update(global, insert)
@@ -110,12 +106,12 @@ fn create_and_close(log_name: &str, decl: &str) {
         test_utils::with_variable(log_name, |log_name| {
             // create and close
             {
-                let global = TestGlobal::new_with_vfs_driver(log_name);
+                let global = TestGlobal::new_with_driver_id(log_name);
                 let _ = create_model_and_space(&global, decl).unwrap();
             }
             // open
             {
-                let global = TestGlobal::new_with_vfs_driver(log_name);
+                let global = TestGlobal::new_with_driver_id(log_name);
                 drop(global);
             }
         })
@@ -135,7 +131,7 @@ fn run_sample_inserts<K, V>(
             // create, insert and close
             let mdl_name;
             {
-                let mut global = TestGlobal::new_with_vfs_driver(log_name);
+                let mut global = TestGlobal::new_with_driver_id(log_name);
                 global.set_max_data_pressure(key_values.len());
                 mdl_name = create_model_and_space(&global, decl).unwrap();
                 for (username, password) in key_values.iter() {
@@ -144,7 +140,7 @@ fn run_sample_inserts<K, V>(
             }
             // reopen and verify 100 times
             test_utils::multi_run(100, || {
-                let global = TestGlobal::new_with_vfs_driver(log_name);
+                let global = TestGlobal::new_with_driver_id(log_name);
                 global.load_model_drivers().unwrap();
                 global
                     .state()
@@ -189,7 +185,7 @@ fn run_sample_updates<K, V>(
             let mdl_name;
             {
                 // insert n values
-                let mut global = TestGlobal::new_with_vfs_driver(log_name);
+                let mut global = TestGlobal::new_with_driver_id(log_name);
                 global.set_max_data_pressure(n);
                 mdl_name = create_model_and_space(&global, decl).unwrap();
                 for (username, password) in key_values.iter() {
@@ -204,7 +200,7 @@ fn run_sample_updates<K, V>(
                 // now update values
                 let mut actual_position = 0;
                 for _ in 0..reopen_count {
-                    let mut global = TestGlobal::new_with_vfs_driver(log_name);
+                    let mut global = TestGlobal::new_with_driver_id(log_name);
                     global.set_max_data_pressure(changes_per_cycle);
                     global.load_model_drivers().unwrap();
                     let mut j = 0;
@@ -220,7 +216,7 @@ fn run_sample_updates<K, V>(
                 assert_eq!(actual_position, n);
             }
             {
-                let global = TestGlobal::new_with_vfs_driver(log_name);
+                let global = TestGlobal::new_with_driver_id(log_name);
                 global.load_model_drivers().unwrap();
                 for (txn_id, (username, password)) in key_values
                     .iter()

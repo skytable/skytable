@@ -146,7 +146,7 @@ mod exec {
 
     #[test]
     fn simple() {
-        let global = TestGlobal::new_with_tmp_nullfs_driver();
+        let global = TestGlobal::new_with_driver_id("exec_simple_create");
         exec_create_new_space(
             &global,
             "create model myspace.mymodel(username: string, password: binary)",

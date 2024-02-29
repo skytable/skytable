@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::storage::safe_interfaces::paths_v1;
+use crate::engine::storage::safe_interfaces::{paths_v1, FileSystem};
 
 use super::EntityIDRef;
 
@@ -35,7 +35,6 @@ use {
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::STIndex,
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
-        storage::safe_interfaces::FSInterface,
         txn::{self, SpaceIDRef},
     },
     std::collections::HashSet,
@@ -167,24 +166,20 @@ impl Space {
                 }
             }
             // commit txn
-            if G::FS_IS_NON_NULL {
-                // prepare txn
-                let txn = txn::gns::space::CreateSpaceTxn::new(space.props(), &space_name, &space);
-                // try to create space for...the space
-                G::FileSystem::fs_create_dir_all(&paths_v1::space_dir(
-                    &space_name,
-                    space.get_uuid(),
-                ))?;
-                // commit txn
-                global.gns_driver().lock().driver_context(
-                    |drv| drv.commit_event(txn),
-                    || {
-                        global.taskmgr_post_standard_priority(Task::new(
-                            GenericTask::delete_space_dir(&space_name, space.get_uuid()),
-                        ))
-                    },
-                )?;
-            }
+            // prepare txn
+            let txn = txn::gns::space::CreateSpaceTxn::new(space.props(), &space_name, &space);
+            // try to create space for...the space
+            FileSystem::create_dir_all(&paths_v1::space_dir(&space_name, space.get_uuid()))?;
+            // commit txn
+            global.gns_driver().lock().driver_context(
+                |drv| drv.commit_event(txn),
+                || {
+                    global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
+                        &space_name,
+                        space.get_uuid(),
+                    )))
+                },
+            )?;
             // update global state
             let _ = spaces.st_insert(space_name, space);
             if if_not_exists {
@@ -214,19 +209,15 @@ impl Space {
                 Some(patch) => patch,
                 None => return Err(QueryError::QExecDdlInvalidProperties),
             };
-            if G::FS_IS_NON_NULL {
-                // prepare txn
-                let txn = txn::gns::space::AlterSpaceTxn::new(
-                    SpaceIDRef::new(&space_name, space),
-                    &patch,
-                );
-                // commit
-                // commit txn
-                global
-                    .gns_driver()
-                    .lock()
-                    .driver_context(|drv| drv.commit_event(txn), || {})?;
-            }
+            // prepare txn
+            let txn =
+                txn::gns::space::AlterSpaceTxn::new(SpaceIDRef::new(&space_name, space), &patch);
+            // commit
+            // commit txn
+            global
+                .gns_driver()
+                .lock()
+                .driver_context(|drv| drv.commit_event(txn), || {})?;
             // merge
             dict::rmerge_data_with_patch(space.props_mut(), patch);
             // the `env` key may have been popped, so put it back (setting `env: null` removes the env key and we don't want to waste time enforcing this in the
@@ -255,20 +246,18 @@ impl Space {
                     }
                 };
                 // commit drop
-                if G::FS_IS_NON_NULL {
-                    // prepare txn
-                    let txn =
-                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
-                    // commit txn
-                    global
-                        .gns_driver()
-                        .lock()
-                        .driver_context(|drv| drv.commit_event(txn), || {})?;
-                    // request cleanup
-                    global.taskmgr_post_standard_priority(Task::new(
-                        GenericTask::delete_space_dir(&space_name, space.get_uuid()),
-                    ));
-                }
+                // prepare txn
+                let txn = txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
+                // commit txn
+                global
+                    .gns_driver()
+                    .lock()
+                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                // request cleanup
+                global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
+                    &space_name,
+                    space.get_uuid(),
+                )));
                 let space_uuid = space.get_uuid();
                 for model in space.models.into_iter() {
                     let e: EntityIDRef<'static> = unsafe {
@@ -305,20 +294,18 @@ impl Space {
                     return Err(QueryError::QExecDdlNotEmpty);
                 }
                 // okay, it's empty; good riddance
-                if G::FS_IS_NON_NULL {
-                    // prepare txn
-                    let txn =
-                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
-                    // commit txn
-                    global
-                        .gns_driver()
-                        .lock()
-                        .driver_context(|drv| drv.commit_event(txn), || {})?;
-                    // request cleanup
-                    global.taskmgr_post_standard_priority(Task::new(
-                        GenericTask::delete_space_dir(&space_name, space.get_uuid()),
-                    ));
-                }
+                // prepare txn
+                let txn = txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
+                // commit txn
+                global
+                    .gns_driver()
+                    .lock()
+                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                // request cleanup
+                global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
+                    &space_name,
+                    space.get_uuid(),
+                )));
                 let _ = spaces.st_delete(space_name.as_str());
                 if if_exists {
                     Ok(Some(true))

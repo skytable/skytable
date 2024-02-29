@@ -35,7 +35,7 @@ use {
         error::ErrorKind,
         fractal::drivers::FractalModelDriver,
         storage::{
-            safe_interfaces::{paths_v1, FSInterface, NullFS, StdModelBatch, VirtualFS},
+            safe_interfaces::{paths_v1, FileSystem, StdModelBatch},
             BatchStats, GNSDriver, ModelDriver,
         },
         RuntimeResult,
@@ -45,18 +45,18 @@ use {
 };
 
 /// A `test` mode global implementation
-pub struct TestGlobal<Fs: FSInterface = VirtualFS> {
+pub struct TestGlobal {
     gns: GlobalNS,
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
     #[allow(unused)]
     max_delta_size: usize,
-    txn_driver: Mutex<FractalGNSDriver<Fs>>,
-    model_drivers: RwLock<HashMap<ModelUniqueID, super::drivers::FractalModelDriver<Fs>>>,
+    txn_driver: Mutex<FractalGNSDriver>,
+    model_drivers: RwLock<HashMap<ModelUniqueID, super::drivers::FractalModelDriver>>,
     max_data_pressure: usize,
 }
 
-impl<Fs: FSInterface> TestGlobal<Fs> {
-    fn new(gns: GlobalNS, max_delta_size: usize, txn_driver: GNSDriver<Fs>) -> Self {
+impl TestGlobal {
+    fn new(gns: GlobalNS, max_delta_size: usize, txn_driver: GNSDriver) -> Self {
         Self {
             gns,
             lp_queue: RwLock::default(),
@@ -96,7 +96,12 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
     }
 }
 
-impl<Fs: FSInterface> TestGlobal<Fs> {
+impl TestGlobal {
+    pub fn new_with_driver_id_instant_update(log_name: &str) -> Self {
+        let mut me = Self::new_with_driver_id(log_name);
+        me.set_max_data_pressure(1);
+        me
+    }
     pub fn new_with_driver_id(log_name: &str) -> Self {
         let gns = GlobalNS::empty();
         let driver = match GNSDriver::create_gns_with_name(log_name) {
@@ -116,27 +121,11 @@ impl<Fs: FSInterface> TestGlobal<Fs> {
     }
 }
 
-impl TestGlobal<VirtualFS> {
-    pub fn new_with_vfs_driver(log_name: &str) -> Self {
-        Self::new_with_driver_id(log_name)
-    }
-}
-
-impl TestGlobal<NullFS> {
-    pub fn new_with_nullfs_driver(log_name: &str) -> Self {
-        Self::new_with_driver_id(log_name)
-    }
-    pub fn new_with_tmp_nullfs_driver() -> Self {
-        Self::new_with_nullfs_driver("")
-    }
-}
-
-impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
-    type FileSystem = Fs;
+impl GlobalInstanceLike for TestGlobal {
     fn state(&self) -> &GlobalNS {
         &self.gns
     }
-    fn gns_driver(&self) -> &Mutex<FractalGNSDriver<Self::FileSystem>> {
+    fn gns_driver(&self) -> &Mutex<FractalGNSDriver> {
         &self.txn_driver
     }
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
@@ -190,7 +179,7 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         model_uuid: Uuid,
     ) -> crate::engine::error::RuntimeResult<()> {
         // create model dir
-        Fs::fs_create_dir(&paths_v1::model_dir(
+        FileSystem::create_dir_all(&paths_v1::model_dir(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
         let driver = ModelDriver::create_model_driver(&paths_v1::model_path(
@@ -204,7 +193,7 @@ impl<Fs: FSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     }
 }
 
-impl<Fs: FSInterface> Drop for TestGlobal<Fs> {
+impl Drop for TestGlobal {
     fn drop(&mut self) {
         let mut txn_driver = self.txn_driver.lock();
         GNSDriver::close_driver(&mut txn_driver.txn_driver).unwrap();

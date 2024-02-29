@@ -30,7 +30,7 @@ use crate::engine::{
 
 #[test]
 fn simple() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_update_simple");
     assert_eq!(
         super::exec_update(
             &global,
@@ -49,7 +49,7 @@ fn simple() {
 
 #[test]
 fn with_null() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_update_with_null");
     assert_eq!(
         super::exec_update(
             &global,
@@ -66,7 +66,7 @@ fn with_null() {
 
 #[test]
 fn with_list() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_update_with_list");
     assert_eq!(
         super::exec_update(
             &global,
@@ -86,7 +86,7 @@ fn with_list() {
 
 #[test]
 fn fail_operation_on_null() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_update_fail_operation_on_null");
     assert_eq!(
         super::exec_update(
             &global,
@@ -106,7 +106,7 @@ fn fail_operation_on_null() {
 
 #[test]
 fn fail_unknown_fields() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_update_fail_unknown_fields");
     assert_eq!(
         super::exec_update(
             &global,
@@ -132,7 +132,7 @@ fn fail_unknown_fields() {
 
 #[test]
 fn fail_typedef_violation() {
-    let global = TestGlobal::new_with_tmp_nullfs_driver();
+    let global = TestGlobal::new_with_driver_id_instant_update("dml_update_fail_typedef_violation");
     assert_eq!(
         super::exec_update(
             &global,

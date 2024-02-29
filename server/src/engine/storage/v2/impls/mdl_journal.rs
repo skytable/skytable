@@ -42,7 +42,7 @@ use {
             idx::{MTIndex, STIndex, STIndexSeq},
             storage::{
                 common::{
-                    interface::fs_traits::{FSInterface, FileInterface},
+                    interface::fs::File,
                     sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
                 },
                 common_encoding::r1,
@@ -67,14 +67,14 @@ use {
     },
 };
 
-pub type ModelDriver<Fs> = BatchDriver<ModelDataAdapter, Fs>;
-impl<Fs: FSInterface> ModelDriver<Fs> {
+pub type ModelDriver = BatchDriver<ModelDataAdapter>;
+impl ModelDriver {
     pub fn open_model_driver(mdl: &Model, model_data_file_path: &str) -> RuntimeResult<Self> {
-        journal::open_journal::<_, Fs>(model_data_file_path, mdl)
+        journal::open_journal(model_data_file_path, mdl)
     }
     /// Create a new event log
     pub fn create_model_driver(model_data_file_path: &str) -> RuntimeResult<Self> {
-        journal::create_journal::<_, Fs>(model_data_file_path)
+        journal::create_journal(model_data_file_path)
     }
 }
 
@@ -109,11 +109,11 @@ pub enum EventType {
     a little messy.
 */
 
-struct RowWriter<'b, Fs: FSInterface> {
-    f: &'b mut TrackedWriter<Fs::File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
+struct RowWriter<'b> {
+    f: &'b mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
 }
 
-impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
+impl<'b> RowWriter<'b> {
     /// write global row information:
     /// - pk tag
     /// - schema version
@@ -128,8 +128,9 @@ impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
                 .value_u64()
                 .u64_bytes_le(),
         )?;
-        self.f
-            .dtrack_write(&(model.fields().st_len() - 1).u64_bytes_le())
+        e!(self
+            .f
+            .dtrack_write(&(model.fields().st_len() - 1).u64_bytes_le()))
     }
     /// write row metadata:
     /// - change type
@@ -204,22 +205,19 @@ impl<'b, Fs: FSInterface> RowWriter<'b, Fs> {
     }
 }
 
-struct BatchWriter<'a, 'b, Fs: FSInterface> {
+struct BatchWriter<'a, 'b> {
     model: &'a Model,
-    row_writer: RowWriter<'b, Fs>,
+    row_writer: RowWriter<'b>,
     g: &'a Guard,
     sync_count: usize,
 }
 
-impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
+impl<'a, 'b> BatchWriter<'a, 'b> {
     fn write_batch(
         model: &'a Model,
         g: &'a Guard,
         expected: usize,
-        f: &'b mut TrackedWriter<
-            Fs::File,
-            <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
-        >,
+        f: &'b mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
         batch_stat: &mut BatchStats,
     ) -> RuntimeResult<usize> {
         /*
@@ -252,10 +250,7 @@ impl<'a, 'b, Fs: FSInterface> BatchWriter<'a, 'b, Fs> {
     fn new(
         model: &'a Model,
         g: &'a Guard,
-        f: &'b mut TrackedWriter<
-            Fs::File,
-            <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
-        >,
+        f: &'b mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
     ) -> RuntimeResult<Self> {
         let mut row_writer = RowWriter { f };
         row_writer.write_row_global_metadata(model)?;
@@ -310,10 +305,10 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
     fn md(&self) -> u64 {
         BatchType::Standard.dscr_u64()
     }
-    fn write_direct<Fs: FSInterface>(
+    fn write_direct(
         self,
         writer: &mut TrackedWriter<
-            Fs::File,
+            File,
             <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
         >,
         ctx: Rc<RefCell<BatchStats>>,
@@ -322,12 +317,12 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
         writer.dtrack_write(&self.1.u64_bytes_le())?;
         let g = pin();
         let actual_commit =
-            BatchWriter::<Fs>::write_batch(self.0, &g, self.1, writer, &mut ctx.borrow_mut())?;
+            BatchWriter::write_batch(self.0, &g, self.1, writer, &mut ctx.borrow_mut())?;
         if actual_commit != self.1 {
             // early exit
             writer.dtrack_write(&[EventType::EarlyExit.dscr()])?;
         }
-        writer.dtrack_write(&actual_commit.u64_bytes_le())
+        e!(writer.dtrack_write(&actual_commit.u64_bytes_le()))
     }
 }
 
@@ -343,16 +338,13 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for FullModel<'a> {
     fn md(&self) -> u64 {
         BatchType::Standard.dscr_u64()
     }
-    fn write_direct<Fs: FSInterface>(
+    fn write_direct(
         self,
-        f: &mut TrackedWriter<
-            Fs::File,
-            <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
-        >,
+        f: &mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
         _: Rc<RefCell<BatchStats>>,
     ) -> RuntimeResult<()> {
         let g = pin();
-        let mut row_writer: RowWriter<'_, Fs> = RowWriter { f };
+        let mut row_writer: RowWriter<'_> = RowWriter { f };
         let index = self.0.primary_index().__raw_index();
         let current_row_count = index.mt_len();
         // expect commit == current row count
@@ -452,21 +444,17 @@ impl BatchAdapterSpec for ModelDataAdapter {
     fn initialize_batch_state(_: &Self::GlobalState) -> Self::BatchState {
         BatchRestoreState { events: Vec::new() }
     }
-    fn decode_batch_metadata<Fs: FSInterface>(
+    fn decode_batch_metadata(
         _: &Self::GlobalState,
-        f: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        f: &mut TrackedReaderContext<Self::Spec>,
         batch_type: Self::BatchType,
     ) -> RuntimeResult<Self::BatchMetadata> {
         // [pk tag][schema version][column cnt]
         match batch_type {
             BatchType::Standard => {}
         }
-        let pk_tag = f.read_block().and_then(|[b]| {
-            TagUnique::try_from_raw(b).ok_or(StorageError::RawJournalCorrupted.into())
-        })?;
+        let pk_tag = TagUnique::try_from_raw(f.read_block().map(|[b]| b)?)
+            .ok_or(StorageError::RawJournalCorrupted)?;
         let schema_version = u64::from_le_bytes(f.read_block()?);
         let column_count = u64::from_le_bytes(f.read_block()?);
         Ok(BatchMetadata {
@@ -475,20 +463,17 @@ impl BatchAdapterSpec for ModelDataAdapter {
             column_count,
         })
     }
-    fn update_state_for_new_event<Fs: FSInterface>(
+    fn update_state_for_new_event(
         _: &Self::GlobalState,
         bs: &mut Self::BatchState,
-        f: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        f: &mut TrackedReaderContext<Self::Spec>,
         batch_info: &Self::BatchMetadata,
         event_type: Self::EventType,
     ) -> RuntimeResult<()> {
         // get txn id
         let txn_id = u64::from_le_bytes(f.read_block()?);
         // get pk
-        let pk = restore_impls::decode_primary_key::<Fs, Self::Spec>(f, batch_info.pk_tag)?;
+        let pk = restore_impls::decode_primary_key::<Self::Spec>(f, batch_info.pk_tag)?;
         match event_type {
             EventType::Delete => {
                 bs.events.push(DecodedBatchEvent::new(
@@ -500,7 +485,7 @@ impl BatchAdapterSpec for ModelDataAdapter {
             EventType::Insert | EventType::Update => {
                 // insert or update
                 // prepare row
-                let row = restore_impls::decode_row_data::<Fs>(batch_info, f)?;
+                let row = restore_impls::decode_row_data(batch_info, f)?;
                 if event_type == EventType::Insert {
                     bs.events.push(DecodedBatchEvent::new(
                         txn_id,
@@ -641,10 +626,7 @@ mod restore_impls {
             data::{cell::Datacell, tag::TagUnique},
             error::StorageError,
             storage::{
-                common::{
-                    interface::fs_traits::{FSInterface, FileInterface, FileInterfaceRead},
-                    sdss::sdss_r1::{rw::TrackedReaderContext, FileSpecV1},
-                },
+                common::sdss::sdss_r1::{rw::TrackedReaderContext, FileSpecV1},
                 common_encoding::r1::{
                     obj::cell::{self, StorageCellTypeID},
                     DataSource,
@@ -658,8 +640,8 @@ mod restore_impls {
     /// Primary key decode impl
     ///
     /// NB: We really need to make this generic, but for now we can settle for this
-    pub fn decode_primary_key<Fs: FSInterface, S: FileSpecV1>(
-        f: &mut TrackedReaderContext<<<Fs as FSInterface>::File as FileInterface>::BufReader, S>,
+    pub fn decode_primary_key<S: FileSpecV1>(
+        f: &mut TrackedReaderContext<S>,
         pk_type: TagUnique,
     ) -> RuntimeResult<PrimaryIndexKey> {
         Ok(match pk_type {
@@ -691,12 +673,9 @@ mod restore_impls {
             },
         })
     }
-    pub fn decode_row_data<Fs: FSInterface>(
+    pub fn decode_row_data(
         batch_info: &BatchMetadata,
-        f: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            ModelDataBatchAofV1,
-        >,
+        f: &mut TrackedReaderContext<ModelDataBatchAofV1>,
     ) -> Result<Vec<Datacell>, crate::engine::fractal::error::Error> {
         let mut row = vec![];
         let mut this_col_cnt = batch_info.column_count;
@@ -721,12 +700,17 @@ mod restore_impls {
             Self(value)
         }
     }
+    impl From<std::io::Error> for ErrorHack {
+        fn from(value: std::io::Error) -> Self {
+            Self(value.into())
+        }
+    }
     impl From<()> for ErrorHack {
         fn from(_: ()) -> Self {
             Self(StorageError::DataBatchRestoreCorruptedEntry.into())
         }
     }
-    impl<'a, F: FileInterfaceRead> DataSource for TrackedReaderContext<'a, F, ModelDataBatchAofV1> {
+    impl<'a> DataSource for TrackedReaderContext<'a, ModelDataBatchAofV1> {
         const RELIABLE_SOURCE: bool = false;
         type Error = ErrorHack;
         fn has_remaining(&self, cnt: usize) -> bool {

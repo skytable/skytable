@@ -33,7 +33,6 @@ use {
         engine::{
             core::GlobalNS,
             storage::{
-                common::interface::fs_traits::FSInterface,
                 common_encoding::r1::impls::gns::GNSEvent,
                 v2::raw::journal::{self, EventLogDriver, JournalAdapterEvent},
             },
@@ -56,19 +55,19 @@ use {
     GNS event log impl
 */
 
-pub type GNSDriver<Fs> = EventLogDriver<GNSEventLog, Fs>;
+pub type GNSDriver = EventLogDriver<GNSEventLog>;
 pub struct GNSEventLog;
 
-impl<Fs: FSInterface> GNSDriver<Fs> {
+impl GNSDriver {
     const FILE_PATH: &'static str = "gns.db-tlog";
     pub fn open_gns_with_name(name: &str, gs: &GlobalNS) -> RuntimeResult<Self> {
-        journal::open_journal::<_, Fs>(name, gs)
+        journal::open_journal(name, gs)
     }
     pub fn open_gns(gs: &GlobalNS) -> RuntimeResult<Self> {
         Self::open_gns_with_name(Self::FILE_PATH, gs)
     }
     pub fn create_gns_with_name(name: &str) -> RuntimeResult<Self> {
-        journal::create_journal::<_, Fs>(name)
+        journal::create_journal(name)
     }
     /// Create a new event log
     pub fn create_gns() -> RuntimeResult<Self> {

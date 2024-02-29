@@ -24,28 +24,27 @@
  *
 */
 
-use std::collections::HashMap;
-
-use crate::engine::{
-    core::{EntityIDRef, GlobalNS},
-    error::RuntimeResult,
-    fractal::{error::ErrorContext, ModelUniqueID},
-    storage::{
-        common::{interface::fs_imp::LocalFS, paths_v1},
-        v1::raw::{
-            batch_jrnl,
-            journal::{raw as raw_journal, GNSAdapter},
-            spec,
+use {
+    crate::engine::{
+        core::{EntityIDRef, GlobalNS},
+        error::RuntimeResult,
+        fractal::{error::ErrorContext, ModelUniqueID},
+        storage::{
+            common::paths_v1,
+            v1::raw::{
+                batch_jrnl,
+                journal::{raw as raw_journal, GNSAdapter},
+                spec,
+            },
         },
     },
+    std::collections::HashMap,
 };
 
 pub fn load_gns() -> RuntimeResult<GlobalNS> {
     let gns = GlobalNS::empty();
-    let gns_txn_driver = raw_journal::load_journal::<GNSAdapter, LocalFS, spec::GNSTransactionLogV1>(
-        super::GNS_PATH,
-        &gns,
-    )?;
+    let gns_txn_driver =
+        raw_journal::load_journal::<GNSAdapter, spec::GNSTransactionLogV1>(super::GNS_PATH, &gns)?;
     let mut model_drivers = HashMap::new();
     let mut driver_guard = || {
         let mut models = gns.idx_models().write();
@@ -58,9 +57,9 @@ pub fn load_gns() -> RuntimeResult<GlobalNS> {
                     .unwrap();
                 let path =
                     paths_v1::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                let persist_driver = batch_jrnl::reinit::<LocalFS>(&path, model).inherit_set_dmsg(
-                    format!("failed to restore model data from journal in `{path}`"),
-                )?;
+                let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(format!(
+                    "failed to restore model data from journal in `{path}`"
+                ))?;
                 unsafe {
                     // UNSAFE(@ohsayan): all pieces of data are upgraded by now, so vacuum
                     model.model_mutator().vacuum_stashed();

@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::storage::common::interface::fs::File;
+
 use {
     self::raw::{CommitPreference, RawJournalAdapterEvent, RawJournalWriter},
     crate::{
@@ -31,7 +33,6 @@ use {
             error::StorageError,
             storage::common::{
                 checksum::SCrc64,
-                interface::fs_traits::{FSInterface, FileInterface},
                 sdss::sdss_r1::{
                     rw::{TrackedReader, TrackedReaderContext, TrackedWriter},
                     FileSpecV1,
@@ -62,7 +63,7 @@ pub use raw::{
 */
 
 /// An event log driver
-pub type EventLogDriver<EL, Fs> = RawJournalWriter<EventLogAdapter<EL>, Fs>;
+pub type EventLogDriver<EL> = RawJournalWriter<EventLogAdapter<EL>>;
 /// The event log adapter
 pub struct EventLogAdapter<EL: EventLogSpec>(PhantomData<EL>);
 type DispatchFn<G> = fn(&G, Vec<u8>) -> RuntimeResult<()>;
@@ -96,16 +97,13 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
     fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
-    fn enter_context<'a, Fs: FSInterface>(
-        _: &'a mut RawJournalWriter<Self, Fs>,
-    ) -> Self::Context<'a> {
-    }
+    fn enter_context<'a>(_: &'a mut RawJournalWriter<Self>) -> Self::Context<'a> {}
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
         <<EL as EventLogSpec>::EventMeta as TaggedEnum>::try_from_raw(meta as u8)
     }
-    fn commit_direct<'a, Fs: FSInterface, E>(
+    fn commit_direct<'a, E>(
         &mut self,
-        w: &mut TrackedWriter<Fs::File, Self::Spec>,
+        w: &mut TrackedWriter<File, Self::Spec>,
         ev: E,
         ctx: (),
     ) -> RuntimeResult<()>
@@ -124,15 +122,12 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
         */
         w.tracked_write(&checksum)?;
         w.tracked_write(&plen)?;
-        w.tracked_write(&pl)
+        e!(w.tracked_write(&pl))
     }
-    fn decode_apply<'a, Fs: FSInterface>(
+    fn decode_apply<'a>(
         gs: &Self::GlobalState,
         meta: Self::EventMeta,
-        file: &mut TrackedReader<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        file: &mut TrackedReader<Self::Spec>,
     ) -> RuntimeResult<()> {
         let expected_checksum = u64::from_le_bytes(file.read_block()?);
         let plen = u64::from_le_bytes(file.read_block()?);
@@ -163,31 +158,28 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
 */
 
 /// Batch journal driver
-pub type BatchDriver<BA, Fs> = RawJournalWriter<BatchAdapter<BA>, Fs>;
+pub type BatchDriver<BA> = RawJournalWriter<BatchAdapter<BA>>;
 /// Batch journal adapter
 pub struct BatchAdapter<BA: BatchAdapterSpec>(PhantomData<BA>);
 
 #[cfg(test)]
 impl<BA: BatchAdapterSpec> BatchAdapter<BA> {
     /// Open a new batch journal
-    pub fn open<Fs: FSInterface>(
-        name: &str,
-        gs: &BA::GlobalState,
-    ) -> RuntimeResult<BatchDriver<BA, Fs>>
+    pub fn open(name: &str, gs: &BA::GlobalState) -> RuntimeResult<BatchDriver<BA>>
     where
         BA::Spec: FileSpecV1<DecodeArgs = ()>,
     {
-        raw::open_journal::<BatchAdapter<BA>, Fs>(name, gs)
+        raw::open_journal::<BatchAdapter<BA>>(name, gs)
     }
     /// Create a new batch journal
-    pub fn create<Fs: FSInterface>(name: &str) -> RuntimeResult<BatchDriver<BA, Fs>>
+    pub fn create(name: &str) -> RuntimeResult<BatchDriver<BA>>
     where
         BA::Spec: FileSpecV1<EncodeArgs = ()>,
     {
-        raw::create_journal::<BatchAdapter<BA>, Fs>(name)
+        raw::create_journal::<BatchAdapter<BA>>(name)
     }
     /// Close a batch journal
-    pub fn close<Fs: FSInterface>(me: &mut BatchDriver<BA, Fs>) -> RuntimeResult<()> {
+    pub fn close(me: &mut BatchDriver<BA>) -> RuntimeResult<()> {
         RawJournalWriter::close_driver(me)
     }
 }
@@ -216,22 +208,16 @@ pub trait BatchAdapterSpec {
     /// initialize the batch state
     fn initialize_batch_state(gs: &Self::GlobalState) -> Self::BatchState;
     /// decode batch start metadata
-    fn decode_batch_metadata<Fs: FSInterface>(
+    fn decode_batch_metadata(
         gs: &Self::GlobalState,
-        f: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        f: &mut TrackedReaderContext<Self::Spec>,
         meta: Self::BatchType,
     ) -> RuntimeResult<Self::BatchMetadata>;
     /// decode new event and update state. if called, it is guaranteed that the event is not an early exit
-    fn update_state_for_new_event<Fs: FSInterface>(
+    fn update_state_for_new_event(
         gs: &Self::GlobalState,
         bs: &mut Self::BatchState,
-        f: &mut TrackedReaderContext<
-            <<Fs as FSInterface>::File as FileInterface>::BufReader,
-            Self::Spec,
-        >,
+        f: &mut TrackedReaderContext<Self::Spec>,
         batch_info: &Self::BatchMetadata,
         event_type: Self::EventType,
     ) -> RuntimeResult<()>;
@@ -253,30 +239,27 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
     fn initialize(_: &raw::JournalInitializer) -> Self {
         Self(PhantomData)
     }
-    fn enter_context<'a, Fs: FSInterface>(
-        _: &'a mut RawJournalWriter<Self, Fs>,
-    ) -> Self::Context<'a> {
-    }
+    fn enter_context<'a>(_: &'a mut RawJournalWriter<Self>) -> Self::Context<'a> {}
     fn parse_event_meta(meta: u64) -> Option<Self::EventMeta> {
         <<BA as BatchAdapterSpec>::BatchType as TaggedEnum>::try_from_raw(meta as u8)
     }
-    fn commit_direct<'a, Fs: FSInterface, E>(
+    fn commit_direct<'a, E>(
         &mut self,
-        w: &mut TrackedWriter<Fs::File, Self::Spec>,
+        w: &mut TrackedWriter<File, Self::Spec>,
         ev: E,
         ctx: Self::CommitContext,
     ) -> RuntimeResult<()>
     where
         E: RawJournalAdapterEvent<Self>,
     {
-        ev.write_direct::<Fs>(w, ctx)?;
+        ev.write_direct(w, ctx)?;
         let checksum = w.reset_partial();
-        w.tracked_write(&checksum.to_le_bytes())
+        e!(w.tracked_write(&checksum.to_le_bytes()))
     }
-    fn decode_apply<'a, Fs: FSInterface>(
+    fn decode_apply<'a>(
         gs: &Self::GlobalState,
         meta: Self::EventMeta,
-        f: &mut TrackedReader<<<Fs as FSInterface>::File as FileInterface>::BufReader, Self::Spec>,
+        f: &mut TrackedReader<Self::Spec>,
     ) -> RuntimeResult<()> {
         let mut f = f.context();
         {
@@ -284,7 +267,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
             // read batch size
             let _stored_expected_commit_size = u64::from_le_bytes(f.read_block()?);
             // read custom metadata
-            let batch_md = <BA as BatchAdapterSpec>::decode_batch_metadata::<Fs>(gs, &mut f, meta)?;
+            let batch_md = <BA as BatchAdapterSpec>::decode_batch_metadata(gs, &mut f, meta)?;
             // now read in every event
             let mut real_commit_size = 0;
             let mut batch_state = <BA as BatchAdapterSpec>::initialize_batch_state(gs);
@@ -292,16 +275,16 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
                 if real_commit_size == _stored_expected_commit_size {
                     break;
                 }
-                let event_type = f.read_block().and_then(|[b]| {
-                    <<BA as BatchAdapterSpec>::EventType as TaggedEnum>::try_from_raw(b)
-                        .ok_or(StorageError::RawJournalCorrupted.into())
-                })?;
+                let event_type = <<BA as BatchAdapterSpec>::EventType as TaggedEnum>::try_from_raw(
+                    f.read_block().map(|[b]| b)?,
+                )
+                .ok_or(StorageError::RawJournalCorrupted)?;
                 // is this an early exit marker? if so, exit
                 if <BA as BatchAdapterSpec>::is_early_exit(&event_type) {
                     break;
                 }
                 // update batch state
-                BA::update_state_for_new_event::<Fs>(
+                BA::update_state_for_new_event(
                     gs,
                     &mut batch_state,
                     &mut f,

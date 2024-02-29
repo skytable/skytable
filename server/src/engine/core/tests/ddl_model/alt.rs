@@ -358,7 +358,7 @@ mod exec {
     };
     #[test]
     fn simple_add() {
-        let global = TestGlobal::new_with_tmp_nullfs_driver();
+        let global = TestGlobal::new_with_driver_id("simple_add");
         super::exec_plan(
             &global,
             true,
@@ -388,7 +388,7 @@ mod exec {
     }
     #[test]
     fn simple_remove() {
-        let global = TestGlobal::new_with_tmp_nullfs_driver();
+        let global = TestGlobal::new_with_driver_id("simple_remove");
         super::exec_plan(
             &global,
             true,
@@ -413,7 +413,7 @@ mod exec {
     }
     #[test]
     fn simple_update() {
-        let global = TestGlobal::new_with_tmp_nullfs_driver();
+        let global = TestGlobal::new_with_driver_id("simple_update");
         super::exec_plan(
             &global,
             true,
@@ -431,7 +431,7 @@ mod exec {
     }
     #[test]
     fn failing_alter_nullable_switch_need_lock() {
-        let global = TestGlobal::new_with_tmp_nullfs_driver();
+        let global = TestGlobal::new_with_driver_id("failing_alter_nullable_switch_need_lock");
         assert_eq!(
             super::exec_plan(
                 &global,

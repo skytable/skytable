@@ -24,56 +24,52 @@
  *
 */
 
-use {
-    crate::{
-        engine::{
-            error::RuntimeResult,
-            storage::common::{
-                checksum::SCrc64,
-                interface::fs_traits::{
-                    FSInterface, FileInterface, FileInterfaceExt, FileInterfaceRead,
-                    FileInterfaceWrite, FileInterfaceWriteExt,
-                },
-                sdss,
+use crate::{
+    engine::{
+        storage::common::{
+            checksum::SCrc64,
+            interface::fs::{
+                BufferedReader, BufferedWriter, File, FileExt, FileRead, FileWrite, FileWriteExt,
             },
+            sdss,
         },
-        util::os::SysIOError,
+        RuntimeResult,
     },
-    std::marker::PhantomData,
+    util::os::SysIOError,
+    IoResult,
 };
 
-pub struct TrackedWriter<Fs: FSInterface> {
-    file: SDSSFileIO<Fs, <Fs::File as FileInterface>::BufWriter>,
+pub struct TrackedWriter {
+    file: SDSSFileIO<BufferedWriter>,
     _cs: SCrc64,
 }
 
-impl<Fs: FSInterface> TrackedWriter<Fs> {
-    pub fn new(f: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
+impl TrackedWriter {
+    pub fn new(f: SDSSFileIO<File>) -> IoResult<Self> {
         Ok(Self {
-            file: f.into_buffered_writer()?,
+            file: f.into_buffered_writer(),
             _cs: SCrc64::new(),
         })
     }
-    pub fn sync_into_inner(self) -> RuntimeResult<SDSSFileIO<Fs>> {
+    pub fn sync_into_inner(self) -> IoResult<SDSSFileIO<File>> {
         self.file.downgrade_writer()
     }
 }
 
 /// [`SDSSFileLenTracked`] simply maintains application level length and checksum tracking to avoid frequent syscalls because we
 /// do not expect (even though it's very possible) users to randomly modify file lengths while we're reading them
-pub struct TrackedReader<Fs: FSInterface> {
-    f: SDSSFileIO<Fs, <Fs::File as FileInterface>::BufReader>,
+pub struct TrackedReader {
+    f: SDSSFileIO<BufferedReader>,
     len: u64,
     cursor: u64,
     cs: SCrc64,
 }
 
-impl<Fs: FSInterface> TrackedReader<Fs> {
+impl TrackedReader {
     /// Important: this will only look at the data post the current cursor!
-    pub fn new(mut f: SDSSFileIO<Fs>) -> RuntimeResult<Self> {
+    pub fn new(mut f: SDSSFileIO<BufferedReader>) -> IoResult<Self> {
         let len = f.file_length()?;
         let pos = f.file_cursor()?;
-        let f = f.into_buffered_reader()?;
         Ok(Self {
             f,
             len,
@@ -90,10 +86,10 @@ impl<Fs: FSInterface> TrackedReader<Fs> {
     pub fn has_left(&self, v: u64) -> bool {
         self.remaining() >= v
     }
-    pub fn tracked_read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
+    pub fn tracked_read(&mut self, buf: &mut [u8]) -> IoResult<()> {
         self.untracked_read(buf).map(|_| self.cs.update(buf))
     }
-    pub fn read_byte(&mut self) -> RuntimeResult<u8> {
+    pub fn read_byte(&mut self) -> IoResult<u8> {
         let mut buf = [0u8; 1];
         self.tracked_read(&mut buf).map(|_| buf[0])
     }
@@ -102,7 +98,7 @@ impl<Fs: FSInterface> TrackedReader<Fs> {
         core::mem::swap(&mut crc, &mut self.cs);
         crc.finish()
     }
-    pub fn untracked_read(&mut self, buf: &mut [u8]) -> RuntimeResult<()> {
+    pub fn untracked_read(&mut self, buf: &mut [u8]) -> IoResult<()> {
         if self.remaining() >= buf.len() as u64 {
             match self.f.read_buffer(buf) {
                 Ok(()) => {
@@ -112,94 +108,89 @@ impl<Fs: FSInterface> TrackedReader<Fs> {
                 Err(e) => return Err(e),
             }
         } else {
-            Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into())
+            Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into_inner())
         }
     }
-    pub fn into_inner_file(self) -> RuntimeResult<SDSSFileIO<Fs>> {
+    pub fn into_inner_file(self) -> SDSSFileIO<File> {
         self.f.downgrade_reader()
     }
-    pub fn read_block<const N: usize>(&mut self) -> RuntimeResult<[u8; N]> {
+    pub fn read_block<const N: usize>(&mut self) -> IoResult<[u8; N]> {
         if !self.has_left(N as _) {
-            return Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into());
+            return Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into_inner());
         }
         let mut buf = [0; N];
         self.tracked_read(&mut buf)?;
         Ok(buf)
     }
-    pub fn read_u64_le(&mut self) -> RuntimeResult<u64> {
+    pub fn read_u64_le(&mut self) -> IoResult<u64> {
         Ok(u64::from_le_bytes(self.read_block()?))
     }
 }
 
 #[derive(Debug)]
-pub struct SDSSFileIO<Fs: FSInterface, F = <Fs as FSInterface>::File> {
+pub struct SDSSFileIO<F> {
     f: F,
-    _fs: PhantomData<Fs>,
+}
+impl<F> SDSSFileIO<F> {
+    pub fn new(f: F) -> Self {
+        Self { f }
+    }
 }
 
-impl<Fs: FSInterface> SDSSFileIO<Fs> {
-    pub fn open<F: sdss::sdss_r1::FileSpecV1<DecodeArgs = ()>>(
+impl SDSSFileIO<File> {
+    pub fn open<S: sdss::sdss_r1::FileSpecV1<DecodeArgs = ()>>(
         fpath: &str,
-    ) -> RuntimeResult<(Self, F::Metadata)> {
-        let mut f = Self::_new(Fs::fs_fopen_rw(fpath)?);
-        let v = F::read_metadata(&mut f.f, ())?;
+    ) -> RuntimeResult<(Self, S::Metadata)> {
+        let mut f = Self::_new(File::open(fpath)?);
+        let v = S::read_metadata(&mut f.f, ())?;
         Ok((f, v))
     }
-    pub fn into_buffered_reader(
-        self,
-    ) -> RuntimeResult<SDSSFileIO<Fs, <Fs::File as FileInterface>::BufReader>> {
-        self.f.upgrade_to_buffered_reader().map(SDSSFileIO::_new)
+    pub fn into_buffered_reader(self) -> SDSSFileIO<BufferedReader> {
+        SDSSFileIO::new(self.f.into_buffered_reader())
     }
-    pub fn into_buffered_writer(
-        self,
-    ) -> RuntimeResult<SDSSFileIO<Fs, <Fs::File as FileInterface>::BufWriter>> {
-        self.f.upgrade_to_buffered_writer().map(SDSSFileIO::_new)
+    pub fn into_buffered_writer(self) -> SDSSFileIO<BufferedWriter> {
+        SDSSFileIO::new(self.f.into_buffered_writer())
     }
 }
 
-impl<Fs: FSInterface> SDSSFileIO<Fs, <Fs::File as FileInterface>::BufReader> {
-    pub fn downgrade_reader(self) -> RuntimeResult<SDSSFileIO<Fs, Fs::File>> {
-        let me = <Fs::File as FileInterface>::downgrade_reader(self.f)?;
-        Ok(SDSSFileIO::_new(me))
+impl SDSSFileIO<BufferedReader> {
+    pub fn downgrade_reader(self) -> SDSSFileIO<File> {
+        SDSSFileIO::_new(self.f.into_inner())
     }
 }
 
-impl<Fs: FSInterface> SDSSFileIO<Fs, <Fs::File as FileInterface>::BufWriter> {
-    pub fn downgrade_writer(self) -> RuntimeResult<SDSSFileIO<Fs>> {
-        let me = <Fs::File as FileInterface>::downgrade_writer(self.f)?;
-        Ok(SDSSFileIO::_new(me))
+impl SDSSFileIO<BufferedWriter> {
+    pub fn downgrade_writer(self) -> IoResult<SDSSFileIO<File>> {
+        self.f.into_inner().map(SDSSFileIO::_new)
     }
 }
 
-impl<Fs: FSInterface, F> SDSSFileIO<Fs, F> {
+impl<F> SDSSFileIO<F> {
     fn _new(f: F) -> Self {
-        Self {
-            f,
-            _fs: PhantomData,
-        }
+        Self { f }
     }
 }
 
-impl<Fs: FSInterface, F: FileInterfaceRead> SDSSFileIO<Fs, F> {
-    pub fn read_buffer(&mut self, buffer: &mut [u8]) -> RuntimeResult<()> {
+impl<F: FileRead> SDSSFileIO<F> {
+    pub fn read_buffer(&mut self, buffer: &mut [u8]) -> IoResult<()> {
         self.f.fread_exact(buffer)
     }
 }
 
-impl<Fs: FSInterface, F: FileInterfaceExt> SDSSFileIO<Fs, F> {
-    pub fn file_cursor(&mut self) -> RuntimeResult<u64> {
-        self.f.fext_cursor()
+impl<F: FileExt> SDSSFileIO<F> {
+    pub fn file_cursor(&mut self) -> IoResult<u64> {
+        self.f.f_cursor()
     }
-    pub fn file_length(&self) -> RuntimeResult<u64> {
-        self.f.fext_length()
+    pub fn file_length(&self) -> IoResult<u64> {
+        self.f.f_len()
     }
-    pub fn seek_from_start(&mut self, by: u64) -> RuntimeResult<()> {
-        self.f.fext_seek_ahead_from_start_by(by)
+    pub fn seek_from_start(&mut self, by: u64) -> IoResult<()> {
+        self.f.f_seek_start(by)
     }
 }
 
-impl<Fs: FSInterface, F: FileInterfaceRead + FileInterfaceExt> SDSSFileIO<Fs, F> {
-    pub fn read_full(&mut self) -> RuntimeResult<Vec<u8>> {
+impl<F: FileRead + FileExt> SDSSFileIO<F> {
+    pub fn read_full(&mut self) -> IoResult<Vec<u8>> {
         let len = self.file_length()? - self.file_cursor()?;
         let mut buf = vec![0; len as usize];
         self.read_buffer(&mut buf)?;
@@ -207,9 +198,9 @@ impl<Fs: FSInterface, F: FileInterfaceRead + FileInterfaceExt> SDSSFileIO<Fs, F>
     }
 }
 
-impl<Fs: FSInterface, F: FileInterfaceWrite + FileInterfaceWriteExt> SDSSFileIO<Fs, F> {
-    pub fn fsynced_write(&mut self, data: &[u8]) -> RuntimeResult<()> {
-        self.f.fw_write_all(data)?;
-        self.f.fwext_sync_all()
+impl<F: FileWrite + FileWriteExt> SDSSFileIO<F> {
+    pub fn fsynced_write(&mut self, data: &[u8]) -> IoResult<()> {
+        self.f.fwrite_all(data)?;
+        self.f.fsync_all()
     }
 }

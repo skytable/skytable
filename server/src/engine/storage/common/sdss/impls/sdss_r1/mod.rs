@@ -34,13 +34,18 @@ pub mod rw;
 
 use {
     super::super::super::{
-        interface::fs_traits::{FileInterfaceRead, FileInterfaceWrite},
         static_meta::{HostArch, HostEndian, HostOS, HostPointerWidth, SDSS_MAGIC_8B},
         versions::{self, DriverVersion, FileSpecifierVersion, HeaderVersion, ServerVersion},
     },
     crate::{
-        engine::{error::StorageError, mem::unsafe_apis::memcpy, RuntimeResult},
+        engine::{
+            error::StorageError,
+            mem::unsafe_apis::memcpy,
+            storage::common::interface::fs::{FileRead, FileWrite},
+            RuntimeResult,
+        },
         util::os,
+        IoResult,
     },
     std::{
         mem::{transmute, ManuallyDrop},
@@ -412,17 +417,14 @@ pub trait FileSpecV1 {
     ) -> RuntimeResult<Self::Metadata>;
     /// read and validate metadata (only override if you need to)
     fn read_metadata(
-        f: &mut impl FileInterfaceRead,
+        f: &mut impl FileRead,
         v_args: Self::DecodeArgs,
     ) -> RuntimeResult<Self::Metadata> {
         let md = HeaderV1::decode(f.fread_exact_block()?)?;
         Self::validate_metadata(md, v_args)
     }
     /// write metadata
-    fn write_metadata(
-        f: &mut impl FileInterfaceWrite,
-        args: Self::EncodeArgs,
-    ) -> RuntimeResult<Self::Metadata>;
+    fn write_metadata(f: &mut impl FileWrite, args: Self::EncodeArgs) -> IoResult<Self::Metadata>;
     fn metadata_to_block(args: Self::EncodeArgs) -> RuntimeResult<Vec<u8>> {
         let mut v = Vec::new();
         Self::write_metadata(&mut v, args)?;
@@ -479,15 +481,12 @@ impl<Sfs: SimpleFileSpecV1> FileSpecV1 for Sfs {
             Err(StorageError::HeaderDecodeVersionMismatch.into())
         }
     }
-    fn write_metadata(
-        f: &mut impl FileInterfaceWrite,
-        _: Self::EncodeArgs,
-    ) -> RuntimeResult<Self::Metadata> {
+    fn write_metadata(f: &mut impl FileWrite, _: Self::EncodeArgs) -> IoResult<Self::Metadata> {
         let (md, block) = HeaderV1::<Self::HeaderSpec>::encode_return(
             Self::FILE_CLASS,
             Self::FILE_SPECIFIER,
             Self::FILE_SPECFIER_VERSION,
         );
-        f.fw_write_all(&block).map(|_| md)
+        f.fwrite_all(&block).map(|_| md)
     }
 }

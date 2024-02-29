@@ -29,18 +29,18 @@ use {
     crate::engine::{
         error::{RuntimeResult, StorageError},
         storage::{
-            common::interface::fs_traits::FSInterface,
+            common::interface::fs::File,
             v1::raw::rw::{SDSSFileIO, TrackedWriter},
         },
     },
 };
 
-pub struct DataBatchPersistDriver<Fs: FSInterface> {
-    f: TrackedWriter<Fs>,
+pub struct DataBatchPersistDriver {
+    f: TrackedWriter,
 }
 
-impl<Fs: FSInterface> DataBatchPersistDriver<Fs> {
-    pub fn new(mut file: SDSSFileIO<Fs>, is_new: bool) -> RuntimeResult<Self> {
+impl DataBatchPersistDriver {
+    pub fn new(mut file: SDSSFileIO<File>, is_new: bool) -> RuntimeResult<Self> {
         if !is_new {
             file.fsynced_write(&[MARKER_BATCH_REOPEN])?;
         }
