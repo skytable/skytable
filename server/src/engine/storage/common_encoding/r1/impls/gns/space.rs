@@ -28,7 +28,7 @@ use {
     super::GNSEvent,
     crate::{
         engine::{
-            core::{space::Space, EntityIDRef, GlobalNS},
+            core::{space::Space, EntityIDRef, GNSData},
             data::DictGeneric,
             error::{RuntimeResult, TransactionError},
             idx::STIndex,
@@ -102,7 +102,7 @@ impl<'a> GNSEvent for CreateSpaceTxn<'a> {
     type RestoreType = CreateSpaceTxnRestorePL;
     fn update_global_state(
         CreateSpaceTxnRestorePL { space_name, space }: CreateSpaceTxnRestorePL,
-        gns: &crate::engine::core::GlobalNS,
+        gns: &crate::engine::core::GNSData,
     ) -> RuntimeResult<()> {
         let mut spaces = gns.idx().write();
         if spaces.st_insert(space_name, space.into()) {
@@ -180,7 +180,7 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
             space_id,
             space_meta,
         }: Self::RestoreType,
-        gns: &crate::engine::core::GlobalNS,
+        gns: &crate::engine::core::GNSData,
     ) -> RuntimeResult<()> {
         let mut gns = gns.idx().write();
         match gns.st_get_mut(&space_id.name) {
@@ -229,7 +229,7 @@ impl<'a> GNSEvent for DropSpaceTxn<'a> {
     type RestoreType = super::SpaceIDRes;
     fn update_global_state(
         super::SpaceIDRes { uuid, name }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         let mut wgns = gns.idx().write();
         let mut wmodel = gns.idx_models().write();

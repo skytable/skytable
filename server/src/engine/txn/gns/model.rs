@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::model::{Field, Model},
+    core::model::{Field, ModelData},
     idx::{IndexST, IndexSTSeqCns},
     ql::lex::Ident,
     txn::{ModelIDRef, SpaceIDRef},
@@ -44,11 +44,11 @@ impl_gns_event!(
 pub struct CreateModelTxn<'a> {
     space_id: SpaceIDRef<'a>,
     model_name: &'a str,
-    model: &'a Model,
+    model: &'a ModelData,
 }
 
 impl<'a> CreateModelTxn<'a> {
-    pub const fn new(space_id: SpaceIDRef<'a>, model_name: &'a str, model: &'a Model) -> Self {
+    pub const fn new(space_id: SpaceIDRef<'a>, model_name: &'a str, model: &'a ModelData) -> Self {
         Self {
             space_id,
             model_name,
@@ -61,7 +61,7 @@ impl<'a> CreateModelTxn<'a> {
     pub fn model_name(&self) -> &str {
         self.model_name
     }
-    pub fn model(&self) -> &Model {
+    pub fn model(&self) -> &ModelData {
         self.model
     }
 }

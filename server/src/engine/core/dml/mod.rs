@@ -31,7 +31,7 @@ mod upd;
 
 use crate::{
     engine::{
-        core::model::Model,
+        core::model::ModelData,
         data::{lit::Lit, tag::DataTag},
         error::{QueryError, QueryResult},
         ql::dml::WhereClause,
@@ -53,7 +53,7 @@ pub use {
     upd::update_resp,
 };
 
-impl Model {
+impl ModelData {
     pub(self) fn resolve_where<'a>(
         &self,
         where_clause: &mut WhereClause<'a>,

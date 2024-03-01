@@ -40,13 +40,17 @@ mod util;
 pub(super) mod tests;
 // re-exports
 pub use self::util::{EntityID, EntityIDRef};
+
 // imports
 use {
-    self::{dml::QueryExecMeta, model::Model},
-    super::fractal::GlobalInstanceLike,
+    self::{
+        dml::QueryExecMeta,
+        model::{Model, ModelData},
+    },
     crate::engine::{
         core::space::Space,
         error::{QueryError, QueryResult},
+        fractal::{FractalGNSDriver, GlobalInstanceLike},
         idx::IndexST,
     },
     parking_lot::RwLock,
@@ -57,14 +61,32 @@ use {
 /// but something better is in the offing
 type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub struct GlobalNS {
+    data: GNSData,
+    driver: FractalGNSDriver,
+}
+
+impl GlobalNS {
+    pub fn new(data: GNSData, driver: FractalGNSDriver) -> Self {
+        Self { data, driver }
+    }
+    pub fn namespace(&self) -> &GNSData {
+        &self.data
+    }
+    pub fn gns_driver(&self) -> &FractalGNSDriver {
+        &self.driver
+    }
+}
+
+#[derive(Debug)]
+pub struct GNSData {
     idx_mdl: RWLIdx<EntityID, Model>,
     idx: RWLIdx<Box<str>, Space>,
     sys_db: system_db::SystemDatabase,
 }
 
-impl GlobalNS {
+impl GNSData {
     pub fn empty() -> Self {
         Self {
             idx_mdl: RWLIdx::default(),
@@ -104,7 +126,7 @@ impl GlobalNS {
         f: F,
     ) -> QueryResult<T>
     where
-        F: FnOnce(&Space, &mut Model) -> QueryResult<T>,
+        F: FnOnce(&Space, &mut ModelData) -> QueryResult<T>,
     {
         let mut mdl_idx = self.idx_mdl.write();
         let Some(model) = mdl_idx.get_mut(&entity) else {
@@ -112,17 +134,17 @@ impl GlobalNS {
         };
         let space_read = self.idx.read();
         let space = space_read.get(entity.space()).unwrap();
-        f(space, model)
+        f(space, model.data_mut())
     }
     pub fn with_model<'a, T, F>(&self, entity: EntityIDRef<'a>, f: F) -> QueryResult<T>
     where
-        F: FnOnce(&Model) -> QueryResult<T>,
+        F: FnOnce(&ModelData) -> QueryResult<T>,
     {
         let mdl_idx = self.idx_mdl.read();
         let Some(model) = mdl_idx.get(&entity) else {
             return Err(QueryError::QExecObjectNotFound);
         };
-        f(model)
+        f(model.data())
     }
     pub fn idx_models(&self) -> &RWLIdx<EntityID, Model> {
         &self.idx_mdl
@@ -151,13 +173,19 @@ pub(self) fn with_model_for_data_update<'a, F>(
     f: F,
 ) -> QueryResult<()>
 where
-    F: FnOnce(&Model) -> QueryResult<QueryExecMeta>,
+    F: FnOnce(&ModelData) -> QueryResult<QueryExecMeta>,
 {
-    let mdl_idx = global.state().idx_mdl.read();
+    let mdl_idx = global.state().namespace().idx_mdl.read();
     let Some(model) = mdl_idx.get(&entity) else {
         return Err(QueryError::QExecObjectNotFound);
     };
-    let r = f(model)?;
-    model::DeltaState::guard_delta_overflow(global, entity.space(), entity.entity(), model, r);
+    let r = f(model.data())?;
+    model::DeltaState::guard_delta_overflow(
+        global,
+        entity.space(),
+        entity.entity(),
+        model.data(),
+        r,
+    );
     Ok(())
 }

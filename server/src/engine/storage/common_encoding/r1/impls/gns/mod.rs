@@ -27,7 +27,7 @@
 use {
     crate::{
         engine::{
-            core::GlobalNS,
+            core::GNSData,
             data::uuid::Uuid,
             error::{RuntimeResult, StorageError},
             mem::BufferedScanner,
@@ -68,7 +68,7 @@ where
     fn encode_event(commit: Self, buf: &mut Vec<u8>) {
         r1::enc::full_into_buffer::<Self>(buf, commit)
     }
-    fn decode_apply(gns: &GlobalNS, data: Vec<u8>) -> RuntimeResult<()> {
+    fn decode_apply(gns: &GNSData, data: Vec<u8>) -> RuntimeResult<()> {
         let mut scanner = BufferedScanner::new(&data);
         Self::decode_and_update_global_state(&mut scanner, gns)?;
         if scanner.eof() {
@@ -79,7 +79,7 @@ where
     }
     fn decode_and_update_global_state(
         scanner: &mut BufferedScanner,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         Self::update_global_state(Self::decode(scanner)?, gns)
     }
@@ -88,7 +88,7 @@ where
         r1::dec::full_from_scanner::<Self>(scanner).map_err(|e| e.into())
     }
     /// Update the global state from the restored event
-    fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> RuntimeResult<()>;
+    fn update_global_state(restore: Self::RestoreType, gns: &GNSData) -> RuntimeResult<()>;
 }
 
 #[derive(Debug, PartialEq)]

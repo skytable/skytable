@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::{model::Model, space::Space},
+    core::{model::ModelData, space::Space},
     data::uuid::Uuid,
 };
 
@@ -63,7 +63,7 @@ impl<'a> ModelIDRef<'a> {
         space_name: &'a str,
         space: &'a Space,
         model_name: &'a str,
-        model: &'a Model,
+        model: &'a ModelData,
     ) -> ModelIDRef<'a> {
         ModelIDRef::new(
             SpaceIDRef::new(space_name, space),

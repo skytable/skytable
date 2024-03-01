@@ -24,8 +24,6 @@
  *
 */
 
-use crate::engine::storage::common::interface::fs::File;
-
 use {
     self::raw::{CommitPreference, RawJournalAdapterEvent, RawJournalWriter},
     crate::{
@@ -65,6 +63,7 @@ pub use raw::{
 /// An event log driver
 pub type EventLogDriver<EL> = RawJournalWriter<EventLogAdapter<EL>>;
 /// The event log adapter
+#[derive(Debug)]
 pub struct EventLogAdapter<EL: EventLogSpec>(PhantomData<EL>);
 type DispatchFn<G> = fn(&G, Vec<u8>) -> RuntimeResult<()>;
 
@@ -103,7 +102,7 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
     }
     fn commit_direct<'a, E>(
         &mut self,
-        w: &mut TrackedWriter<File, Self::Spec>,
+        w: &mut TrackedWriter<Self::Spec>,
         ev: E,
         ctx: (),
     ) -> RuntimeResult<()>
@@ -160,6 +159,7 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
 /// Batch journal driver
 pub type BatchDriver<BA> = RawJournalWriter<BatchAdapter<BA>>;
 /// Batch journal adapter
+#[derive(Debug)]
 pub struct BatchAdapter<BA: BatchAdapterSpec>(PhantomData<BA>);
 
 #[cfg(test)]
@@ -245,7 +245,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
     }
     fn commit_direct<'a, E>(
         &mut self,
-        w: &mut TrackedWriter<File, Self::Spec>,
+        w: &mut TrackedWriter<Self::Spec>,
         ev: E,
         ctx: Self::CommitContext,
     ) -> RuntimeResult<()>

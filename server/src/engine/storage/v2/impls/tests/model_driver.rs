@@ -27,7 +27,7 @@
 use {
     crate::{
         engine::{
-            core::{dml, index::RowData, model::Model, space::Space, EntityID, EntityIDRef},
+            core::{dml, index::RowData, model::ModelData, space::Space, EntityID, EntityIDRef},
             data::lit::Lit,
             error::QueryResult,
             fractal::{test_utils::TestGlobal, GlobalInstanceLike},
@@ -75,7 +75,7 @@ fn create_model_and_space(global: &TestGlobal, create_model: &str) -> QueryResul
     let create_space_tokens = lex_insecure(create_space_str.as_bytes()).unwrap();
     let create_space: CreateSpace = ast::parse_ast_node_full(&create_space_tokens[2..]).unwrap();
     Space::transactional_exec_create(global, create_space)?;
-    Model::transactional_exec_create(global, create_model).map(|_| mdl_name)
+    ModelData::transactional_exec_create(global, create_model).map(|_| mdl_name)
 }
 
 fn run_insert(global: &TestGlobal, insert: &str) -> QueryResult<()> {
@@ -144,6 +144,7 @@ fn run_sample_inserts<K, V>(
                 global.load_model_drivers().unwrap();
                 global
                     .state()
+                    .namespace()
                     .with_model(
                         EntityIDRef::new(mdl_name.space(), mdl_name.entity()),
                         |model| {
@@ -225,6 +226,7 @@ fn run_sample_updates<K, V>(
                 {
                     global
                         .state()
+                        .namespace()
                         .with_model(
                             EntityIDRef::new(mdl_name.space(), mdl_name.entity()),
                             |model| {

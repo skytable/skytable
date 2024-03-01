@@ -32,7 +32,7 @@ use {
     crate::engine::{
         core::{
             index::{DcFieldIndex, PrimaryIndexKey, Row},
-            model::{delta::DeltaVersion, Model},
+            model::{delta::DeltaVersion, ModelData},
         },
         data::{cell::Datacell, tag::TagUnique},
         error::{RuntimeResult, StorageError},
@@ -120,7 +120,7 @@ impl DataBatchRestoreDriver {
     }
     pub(in crate::engine::storage::v1) fn read_data_batch_into_model(
         &mut self,
-        model: &Model,
+        model: &ModelData,
     ) -> RuntimeResult<()> {
         self.read_all_batches_and_for_each(|batch| {
             // apply the batch
@@ -199,7 +199,7 @@ impl DataBatchRestoreDriver {
 
 impl DataBatchRestoreDriver {
     fn apply_batch(
-        m: &Model,
+        m: &ModelData,
         NormalBatch {
             events,
             schema_version,

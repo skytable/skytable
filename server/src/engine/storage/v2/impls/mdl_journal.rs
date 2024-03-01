@@ -31,7 +31,7 @@ use {
                 index::{DcFieldIndex, PrimaryIndexKey, Row, RowData},
                 model::{
                     delta::{DataDelta, DataDeltaKind, DeltaVersion},
-                    Model,
+                    ModelData,
                 },
             },
             data::{
@@ -41,10 +41,7 @@ use {
             error::StorageError,
             idx::{MTIndex, STIndex, STIndexSeq},
             storage::{
-                common::{
-                    interface::fs::File,
-                    sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
-                },
+                common::sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
                 common_encoding::r1,
                 v2::raw::{
                     journal::{
@@ -69,7 +66,7 @@ use {
 
 pub type ModelDriver = BatchDriver<ModelDataAdapter>;
 impl ModelDriver {
-    pub fn open_model_driver(mdl: &Model, model_data_file_path: &str) -> RuntimeResult<Self> {
+    pub fn open_model_driver(mdl: &ModelData, model_data_file_path: &str) -> RuntimeResult<Self> {
         journal::open_journal(model_data_file_path, mdl)
     }
     /// Create a new event log
@@ -79,6 +76,7 @@ impl ModelDriver {
 }
 
 /// The model data adapter (abstract journal adapter impl)
+#[derive(Debug)]
 pub struct ModelDataAdapter;
 
 #[derive(Debug, PartialEq, Clone, Copy, TaggedEnum)]
@@ -110,7 +108,7 @@ pub enum EventType {
 */
 
 struct RowWriter<'b> {
-    f: &'b mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
+    f: &'b mut TrackedWriter<<BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
 }
 
 impl<'b> RowWriter<'b> {
@@ -118,7 +116,7 @@ impl<'b> RowWriter<'b> {
     /// - pk tag
     /// - schema version
     /// - column count
-    fn write_row_global_metadata(&mut self, model: &Model) -> RuntimeResult<()> {
+    fn write_row_global_metadata(&mut self, model: &ModelData) -> RuntimeResult<()> {
         self.f
             .dtrack_write(&[model.p_tag().tag_unique().value_u8()])?;
         self.f.dtrack_write(
@@ -191,7 +189,7 @@ impl<'b> RowWriter<'b> {
         Ok(())
     }
     /// Encode row data
-    fn write_row_data(&mut self, model: &Model, row_data: &RowData) -> RuntimeResult<()> {
+    fn write_row_data(&mut self, model: &ModelData, row_data: &RowData) -> RuntimeResult<()> {
         for field_name in model.fields().stseq_ord_key() {
             match row_data.fields().get(field_name) {
                 Some(cell) => {
@@ -206,7 +204,7 @@ impl<'b> RowWriter<'b> {
 }
 
 struct BatchWriter<'a, 'b> {
-    model: &'a Model,
+    model: &'a ModelData,
     row_writer: RowWriter<'b>,
     g: &'a Guard,
     sync_count: usize,
@@ -214,10 +212,10 @@ struct BatchWriter<'a, 'b> {
 
 impl<'a, 'b> BatchWriter<'a, 'b> {
     fn write_batch(
-        model: &'a Model,
+        model: &'a ModelData,
         g: &'a Guard,
         expected: usize,
-        f: &'b mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
+        f: &'b mut TrackedWriter<<BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
         batch_stat: &mut BatchStats,
     ) -> RuntimeResult<usize> {
         /*
@@ -248,9 +246,9 @@ impl<'a, 'b> BatchWriter<'a, 'b> {
         Ok(me.sync_count)
     }
     fn new(
-        model: &'a Model,
+        model: &'a ModelData,
         g: &'a Guard,
-        f: &'b mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
+        f: &'b mut TrackedWriter<<BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
     ) -> RuntimeResult<Self> {
         let mut row_writer = RowWriter { f };
         row_writer.write_row_global_metadata(model)?;
@@ -293,10 +291,10 @@ impl<'a, 'b> BatchWriter<'a, 'b> {
 }
 
 /// A standard model batch where atmost the given number of keys are flushed
-pub struct StdModelBatch<'a>(&'a Model, usize);
+pub struct StdModelBatch<'a>(&'a ModelData, usize);
 
 impl<'a> StdModelBatch<'a> {
-    pub fn new(model: &'a Model, observed_len: usize) -> Self {
+    pub fn new(model: &'a ModelData, observed_len: usize) -> Self {
         Self(model, observed_len)
     }
 }
@@ -307,10 +305,7 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
     }
     fn write_direct(
         self,
-        writer: &mut TrackedWriter<
-            File,
-            <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec,
-        >,
+        writer: &mut TrackedWriter<<BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
         ctx: Rc<RefCell<BatchStats>>,
     ) -> RuntimeResult<()> {
         // [expected commit]
@@ -326,10 +321,10 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for StdModelBatch<'
     }
 }
 
-pub struct FullModel<'a>(&'a Model);
+pub struct FullModel<'a>(&'a ModelData);
 
 impl<'a> FullModel<'a> {
-    pub fn new(model: &'a Model) -> Self {
+    pub fn new(model: &'a ModelData) -> Self {
         Self(model)
     }
 }
@@ -340,7 +335,7 @@ impl<'a> JournalAdapterEvent<BatchAdapter<ModelDataAdapter>> for FullModel<'a> {
     }
     fn write_direct(
         self,
-        f: &mut TrackedWriter<File, <BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
+        f: &mut TrackedWriter<<BatchAdapter<ModelDataAdapter> as RawJournalAdapter>::Spec>,
         _: Rc<RefCell<BatchStats>>,
     ) -> RuntimeResult<()> {
         let g = pin();
@@ -432,7 +427,7 @@ impl BatchStats {
 
 impl BatchAdapterSpec for ModelDataAdapter {
     type Spec = ModelDataBatchAofV1;
-    type GlobalState = Model;
+    type GlobalState = ModelData;
     type BatchType = BatchType;
     type EventType = EventType;
     type BatchMetadata = BatchMetadata;

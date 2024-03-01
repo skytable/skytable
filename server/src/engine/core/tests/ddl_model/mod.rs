@@ -29,16 +29,16 @@ mod crt;
 mod layer;
 
 use crate::engine::{
-    core::{model::Model, EntityIDRef},
+    core::{model::ModelData, EntityIDRef},
     error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{ast::parse_ast_node_full, ddl::crt::CreateModel, tests::lex_insecure},
 };
 
-fn create(s: &str) -> QueryResult<Model> {
+fn create(s: &str) -> QueryResult<ModelData> {
     let tok = lex_insecure(s.as_bytes()).unwrap();
     let create_model = parse_ast_node_full(&tok[2..]).unwrap();
-    Model::process_create(create_model)
+    ModelData::process_create(create_model)
 }
 
 pub fn exec_create(
@@ -52,9 +52,10 @@ pub fn exec_create(
     if create_new_space {
         global
             .state()
+            .namespace()
             .create_empty_test_space(create_model.model_name.space())
     }
-    Model::transactional_exec_create(global, create_model).map(|_| name)
+    ModelData::transactional_exec_create(global, create_model).map(|_| name)
 }
 
 pub fn exec_create_new_space(
@@ -68,9 +69,9 @@ fn with_model(
     global: &impl GlobalInstanceLike,
     space_id: &str,
     model_name: &str,
-    f: impl Fn(&Model),
+    f: impl Fn(&ModelData),
 ) {
-    let models = global.state().idx_models().read();
+    let models = global.state().namespace().idx_models().read();
     let model = models.get(&EntityIDRef::new(space_id, model_name)).unwrap();
-    f(model)
+    f(model.data())
 }

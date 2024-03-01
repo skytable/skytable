@@ -29,12 +29,13 @@ use {
     crate::{
         engine::{
             core::{
-                model::{Field, Model},
+                model::{Field, Model, ModelData},
                 space::Space,
-                EntityID, EntityIDRef, GlobalNS,
+                EntityID, EntityIDRef, GNSData,
             },
             data::uuid::Uuid,
             error::{RuntimeResult, StorageError, TransactionError},
+            fractal::FractalModelDriver,
             idx::{IndexSTSeqCns, STIndex, STIndexSeq},
             mem::BufferedScanner,
             storage::common_encoding::r1::{self, map, obj, PersistObject},
@@ -126,7 +127,7 @@ impl<'a> PersistObject for ModelID<'a> {
 }
 
 fn with_space<T>(
-    gns: &GlobalNS,
+    gns: &GNSData,
     space_id: &super::SpaceIDRes,
     f: impl FnOnce(&Space) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
@@ -141,7 +142,7 @@ fn with_space<T>(
 }
 
 fn with_space_mut<T>(
-    gns: &GlobalNS,
+    gns: &GNSData,
     space_id: &super::SpaceIDRes,
     mut f: impl FnMut(&mut Space) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
@@ -156,10 +157,10 @@ fn with_space_mut<T>(
 }
 
 fn with_model_mut<T>(
-    gns: &GlobalNS,
+    gns: &GNSData,
     space_id: &super::SpaceIDRes,
     model_id: &ModelIDRes,
-    f: impl FnOnce(&mut Model) -> RuntimeResult<T>,
+    f: impl FnOnce(&mut ModelData) -> RuntimeResult<T>,
 ) -> RuntimeResult<T> {
     with_space(gns, space_id, |_| {
         let mut models = gns.idx_models().write();
@@ -167,11 +168,11 @@ fn with_model_mut<T>(
         else {
             return Err(TransactionError::OnRestoreDataMissing.into());
         };
-        if model.get_uuid() != model_id.model_uuid {
+        if model.data().get_uuid() != model_id.model_uuid {
             // this should have been handled by an earlier transaction
             return Err(TransactionError::OnRestoreDataConflictMismatch.into());
         }
-        f(model)
+        f(model.data_mut())
     })
 }
 
@@ -184,7 +185,7 @@ fn with_model_mut<T>(
 pub struct CreateModelTxnRestorePL {
     pub(super) space_id: super::SpaceIDRes,
     pub(super) model_name: Box<str>,
-    pub(super) model: Model,
+    pub(super) model: ModelData,
 }
 
 pub struct CreateModelTxnMD {
@@ -258,9 +259,9 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
         CreateModelTxnRestorePL {
             space_id,
             model_name,
-            model,
+            model: model_data,
         }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         /*
             NOTE(@ohsayan):
@@ -278,7 +279,10 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
             return Err(TransactionError::OnRestoreDataConflictAlreadyExists.into());
         }
         if models
-            .insert(EntityID::new(&space_id.name, &model_name), model)
+            .insert(
+                EntityID::new(&space_id.name, &model_name),
+                Model::new(model_data, FractalModelDriver::uninitialized()),
+            )
             .is_some()
         {
             return Err(TransactionError::OnRestoreDataConflictMismatch.into());
@@ -355,7 +359,7 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
             model_id,
             new_fields,
         }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         with_model_mut(gns, &model_id.space_id, &model_id, |model| {
             let mut mutator = model.model_mutator();
@@ -445,7 +449,7 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
             model_id,
             removed_fields,
         }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         with_model_mut(gns, &model_id.space_id, &model_id, |model| {
             let mut mutator = model.model_mutator();
@@ -526,7 +530,7 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
             model_id,
             updated_fields,
         }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         with_model_mut(gns, &model_id.space_id, &model_id, |model| {
             let mut mutator = model.model_mutator();
@@ -585,7 +589,7 @@ impl<'a> GNSEvent for DropModelTxn<'a> {
             model_uuid,
             model_version: _,
         }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         with_space_mut(gns, &space_id, |space| {
             let mut models = gns.idx_models().write();
@@ -596,7 +600,7 @@ impl<'a> GNSEvent for DropModelTxn<'a> {
             else {
                 return Err(TransactionError::OnRestoreDataMissing.into());
             };
-            if removed_model.get_uuid() != model_uuid {
+            if removed_model.data().get_uuid() != model_uuid {
                 return Err(TransactionError::OnRestoreDataConflictMismatch.into());
             }
             Ok(())

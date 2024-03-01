@@ -29,7 +29,7 @@ use crate::engine::{
         self,
         dml::QueryExecMeta,
         index::{DcFieldIndex, PrimaryIndexKey, Row},
-        model::{delta::DataDeltaKind, Model},
+        model::{delta::DataDeltaKind, ModelData},
     },
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
@@ -67,7 +67,7 @@ pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> Quer
 
 // TODO(@ohsayan): optimize null case
 fn prepare_insert(
-    model: &Model,
+    model: &ModelData,
     insert: InsertData,
 ) -> QueryResult<(PrimaryIndexKey, DcFieldIndex)> {
     let fields = model.fields();

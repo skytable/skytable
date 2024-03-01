@@ -26,7 +26,7 @@
 
 use {
     crate::engine::{
-        core::{EntityIDRef, GlobalNS},
+        core::{EntityIDRef, GNSData},
         error::RuntimeResult,
         fractal::{error::ErrorContext, ModelUniqueID},
         storage::{
@@ -41,8 +41,8 @@ use {
     std::collections::HashMap,
 };
 
-pub fn load_gns() -> RuntimeResult<GlobalNS> {
-    let gns = GlobalNS::empty();
+pub fn load_gns() -> RuntimeResult<GNSData> {
+    let gns = GNSData::empty();
     let gns_txn_driver =
         raw_journal::load_journal::<GNSAdapter, spec::GNSTransactionLogV1>(super::GNS_PATH, &gns)?;
     let mut model_drivers = HashMap::new();
@@ -55,17 +55,21 @@ pub fn load_gns() -> RuntimeResult<GlobalNS> {
                 let model = models
                     .get_mut(&EntityIDRef::new(&space_name, &model_name))
                     .unwrap();
-                let path =
-                    paths_v1::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                let persist_driver = batch_jrnl::reinit(&path, model).inherit_set_dmsg(format!(
-                    "failed to restore model data from journal in `{path}`"
-                ))?;
+                let path = paths_v1::model_path(
+                    space_name,
+                    space_uuid,
+                    model_name,
+                    model.data().get_uuid(),
+                );
+                let persist_driver = batch_jrnl::reinit(&path, model.data()).inherit_set_dmsg(
+                    format!("failed to restore model data from journal in `{path}`"),
+                )?;
                 unsafe {
                     // UNSAFE(@ohsayan): all pieces of data are upgraded by now, so vacuum
-                    model.model_mutator().vacuum_stashed();
+                    model.data_mut().model_mutator().vacuum_stashed();
                 }
                 let _ = model_drivers.insert(
-                    ModelUniqueID::new(space_name, model_name, model.get_uuid()),
+                    ModelUniqueID::new(space_name, model_name, model.data().get_uuid()),
                     persist_driver,
                 );
             }

@@ -71,15 +71,11 @@ pub fn load_all(
     }
     info!("starting storage engine");
     context::set_origin(Subsystem::Storage);
-    let SELoaded {
-        gns,
-        gns_driver,
-        model_drivers,
-    } = storage::load(&config)?;
+    let SELoaded { gns } = storage::load(&config)?;
     info!("storage engine ready. initializing system");
     let global = unsafe {
         // UNSAFE(@ohsayan): the only call we ever make
-        fractal::load_and_enable_all(gns, gns_driver, model_drivers)
+        fractal::load_and_enable_all(gns)
     };
     Ok((config, global))
 }

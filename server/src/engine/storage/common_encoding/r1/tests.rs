@@ -28,7 +28,7 @@ use {
     super::obj,
     crate::engine::{
         core::{
-            model::{Field, Layer, Model},
+            model::{Field, Layer, ModelData},
             space::Space,
         },
         data::{
@@ -98,7 +98,7 @@ fn fieldmap() {
 #[test]
 fn model() {
     let uuid = Uuid::new();
-    let model = Model::new_restore(
+    let model = ModelData::new_restore(
         uuid,
         "username".into(),
         TagSelector::String.into_full(),

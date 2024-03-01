@@ -24,11 +24,8 @@
  *
 */
 
-use crate::engine::storage::safe_interfaces::{paths_v1, FileSystem};
-
-use super::EntityIDRef;
-
 use {
+    super::EntityIDRef,
     crate::engine::{
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
         error::{QueryError, QueryResult},
@@ -157,7 +154,7 @@ impl Space {
             if_not_exists,
         } = Self::process_create(space)?;
         // lock the global namespace
-        global.state().ddl_with_spaces_write(|spaces| {
+        global.state().namespace().ddl_with_spaces_write(|spaces| {
             if spaces.st_contains(&space_name) {
                 if if_not_exists {
                     return Ok(Some(false));
@@ -169,9 +166,9 @@ impl Space {
             // prepare txn
             let txn = txn::gns::space::CreateSpaceTxn::new(space.props(), &space_name, &space);
             // try to create space for...the space
-            FileSystem::create_dir_all(&paths_v1::space_dir(&space_name, space.get_uuid()))?;
+            global.initialize_space(&space_name, space.get_uuid())?;
             // commit txn
-            global.gns_driver().lock().driver_context(
+            global.state().gns_driver().driver_context(
                 |drv| drv.commit_event(txn),
                 || {
                     global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
@@ -197,36 +194,41 @@ impl Space {
             updated_props,
         }: AlterSpace,
     ) -> QueryResult<()> {
-        global.state().ddl_with_space_mut(&space_name, |space| {
-            match updated_props.get(Self::KEY_ENV) {
-                Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
-                Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
-                None if updated_props.is_empty() => return Ok(()),
-                _ => return Err(QueryError::QExecDdlInvalidProperties),
-            }
-            // create patch
-            let patch = match dict::rprepare_metadata_patch(space.props(), updated_props) {
-                Some(patch) => patch,
-                None => return Err(QueryError::QExecDdlInvalidProperties),
-            };
-            // prepare txn
-            let txn =
-                txn::gns::space::AlterSpaceTxn::new(SpaceIDRef::new(&space_name, space), &patch);
-            // commit
-            // commit txn
-            global
-                .gns_driver()
-                .lock()
-                .driver_context(|drv| drv.commit_event(txn), || {})?;
-            // merge
-            dict::rmerge_data_with_patch(space.props_mut(), patch);
-            // the `env` key may have been popped, so put it back (setting `env: null` removes the env key and we don't want to waste time enforcing this in the
-            // merge algorithm)
-            let _ = space
-                .props_mut()
-                .st_insert(Self::KEY_ENV.into(), DictEntryGeneric::Map(into_dict!()));
-            Ok(())
-        })
+        global
+            .state()
+            .namespace()
+            .ddl_with_space_mut(&space_name, |space| {
+                match updated_props.get(Self::KEY_ENV) {
+                    Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
+                    Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
+                    None if updated_props.is_empty() => return Ok(()),
+                    _ => return Err(QueryError::QExecDdlInvalidProperties),
+                }
+                // create patch
+                let patch = match dict::rprepare_metadata_patch(space.props(), updated_props) {
+                    Some(patch) => patch,
+                    None => return Err(QueryError::QExecDdlInvalidProperties),
+                };
+                // prepare txn
+                let txn = txn::gns::space::AlterSpaceTxn::new(
+                    SpaceIDRef::new(&space_name, space),
+                    &patch,
+                );
+                // commit
+                // commit txn
+                global
+                    .state()
+                    .gns_driver()
+                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                // merge
+                dict::rmerge_data_with_patch(space.props_mut(), patch);
+                // the `env` key may have been popped, so put it back (setting `env: null` removes the env key and we don't want to waste time enforcing this in the
+                // merge algorithm)
+                let _ = space
+                    .props_mut()
+                    .st_insert(Self::KEY_ENV.into(), DictEntryGeneric::Map(into_dict!()));
+                Ok(())
+            })
     }
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
@@ -237,51 +239,53 @@ impl Space {
         }: DropSpace,
     ) -> QueryResult<Option<bool>> {
         if force {
-            global.state().ddl_with_all_mut(|spaces, models| {
-                let Some(space) = spaces.remove(space_name.as_str()) else {
-                    if if_exists {
-                        return Ok(Some(false));
-                    } else {
-                        return Err(QueryError::QExecObjectNotFound);
-                    }
-                };
-                // commit drop
-                // prepare txn
-                let txn = txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
-                // commit txn
-                global
-                    .gns_driver()
-                    .lock()
-                    .driver_context(|drv| drv.commit_event(txn), || {})?;
-                // request cleanup
-                global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
-                    &space_name,
-                    space.get_uuid(),
-                )));
-                let space_uuid = space.get_uuid();
-                for model in space.models.into_iter() {
-                    let e: EntityIDRef<'static> = unsafe {
-                        // UNSAFE(@ohsayan): I want to try what the borrow checker has been trying
-                        core::mem::transmute(EntityIDRef::new(space_name.as_str(), &model))
+            global
+                .state()
+                .namespace()
+                .ddl_with_all_mut(|spaces, models| {
+                    let Some(space) = spaces.remove(space_name.as_str()) else {
+                        if if_exists {
+                            return Ok(Some(false));
+                        } else {
+                            return Err(QueryError::QExecObjectNotFound);
+                        }
                     };
-                    let mdl = models.st_delete_return(&e).unwrap();
-                    global.purge_model_driver(
-                        &space_name,
-                        space_uuid,
-                        &model,
-                        mdl.get_uuid(),
-                        true,
-                    );
-                }
-                let _ = spaces.st_delete(space_name.as_str());
-                if if_exists {
-                    Ok(Some(true))
-                } else {
-                    Ok(None)
-                }
-            })
+                    // commit drop
+                    // prepare txn
+                    let txn =
+                        txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
+                    // commit txn
+                    global
+                        .state()
+                        .gns_driver()
+                        .driver_context(|drv| drv.commit_event(txn), || {})?;
+                    // request cleanup
+                    global.taskmgr_post_standard_priority(Task::new(
+                        GenericTask::delete_space_dir(&space_name, space.get_uuid()),
+                    ));
+                    let space_uuid = space.get_uuid();
+                    for model in space.models.into_iter() {
+                        let e: EntityIDRef<'static> = unsafe {
+                            // UNSAFE(@ohsayan): I want to try what the borrow checker has been trying
+                            core::mem::transmute(EntityIDRef::new(space_name.as_str(), &model))
+                        };
+                        let mdl = models.st_delete_return(&e).unwrap();
+                        global.purge_model_driver(
+                            &space_name,
+                            space_uuid,
+                            &model,
+                            mdl.data().get_uuid(),
+                        );
+                    }
+                    let _ = spaces.st_delete(space_name.as_str());
+                    if if_exists {
+                        Ok(Some(true))
+                    } else {
+                        Ok(None)
+                    }
+                })
         } else {
-            global.state().ddl_with_spaces_write(|spaces| {
+            global.state().namespace().ddl_with_spaces_write(|spaces| {
                 let Some(space) = spaces.get(space_name.as_str()) else {
                     if if_exists {
                         return Ok(Some(false));
@@ -298,8 +302,8 @@ impl Space {
                 let txn = txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                 // commit txn
                 global
+                    .state()
                     .gns_driver()
-                    .lock()
                     .driver_context(|drv| drv.commit_event(txn), || {})?;
                 // request cleanup
                 global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(

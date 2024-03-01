@@ -38,10 +38,7 @@ use {
             error::StorageError,
             mem::unsafe_apis,
             storage::{
-                common::{
-                    interface::fs::File,
-                    sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
-                },
+                common::sdss::sdss_r1::rw::{TrackedReaderContext, TrackedWriter},
                 v2::raw::{
                     journal::raw::{create_journal, open_journal, RawJournalWriter},
                     spec::{ModelDataBatchAofV1, SystemDatabaseV1},
@@ -285,7 +282,6 @@ impl<'a> RawJournalAdapterEvent<BatchAdapter<BatchDBAdapter>> for BatchDBFlush<'
     fn write_direct(
         self,
         f: &mut TrackedWriter<
-            File,
             <BatchAdapter<BatchDBAdapter> as super::raw::RawJournalAdapter>::Spec,
         >,
         ctx: Rc<RefCell<BatchContext>>,

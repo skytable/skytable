@@ -27,7 +27,7 @@
 use {
     self::raw::JournalAdapter,
     crate::engine::{
-        core::GlobalNS, error::TransactionError, mem::BufferedScanner,
+        core::GNSData, error::TransactionError, mem::BufferedScanner,
         storage::common_encoding::r1::impls::gns::GNSEvent, txn::gns, RuntimeResult,
     },
 };
@@ -47,7 +47,7 @@ pub struct GNSAdapter;
 impl JournalAdapter for GNSAdapter {
     const RECOVERY_PLUGIN: bool = true;
     type JournalEvent = GNSSuperEvent;
-    type GlobalState = GlobalNS;
+    type GlobalState = GNSData;
     type Error = crate::engine::fractal::error::Error;
     fn encode(GNSSuperEvent(b): Self::JournalEvent) -> Box<[u8]> {
         b
@@ -58,7 +58,7 @@ impl JournalAdapter for GNSAdapter {
                 [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::DecodeUnknownTxnOp.into())]
             };
         }
-        static DISPATCH: [fn(&mut BufferedScanner, &GlobalNS) -> RuntimeResult<()>; 9] = dispatch!(
+        static DISPATCH: [fn(&mut BufferedScanner, &GNSData) -> RuntimeResult<()>; 9] = dispatch!(
             gns::space::CreateSpaceTxn,
             gns::space::AlterSpaceTxn,
             gns::space::DropSpaceTxn,

@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{Field, Layer, Model},
+    super::{Field, Layer, ModelData},
     crate::{
         engine::{
             core::EntityIDRef,
@@ -76,7 +76,7 @@ macro_rules! can_ignore {
 }
 
 #[inline(always)]
-fn no_field(mr: &Model, new: &str) -> bool {
+fn no_field(mr: &ModelData, new: &str) -> bool {
     !mr.fields().st_contains(new)
 }
 
@@ -90,7 +90,7 @@ fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> QueryResul
 
 impl<'a> AlterPlan<'a> {
     pub fn fdeltas(
-        mdl: &Model,
+        mdl: &ModelData,
         AlterModel { model, kind }: AlterModel<'a>,
     ) -> QueryResult<AlterPlan<'a>> {
         let mut no_lock = true;
@@ -245,7 +245,7 @@ impl<'a> AlterPlan<'a> {
     }
 }
 
-impl Model {
+impl ModelData {
     pub fn transactional_exec_alter<G: GlobalInstanceLike>(
         global: &G,
         alter: AlterModel,
@@ -253,6 +253,7 @@ impl Model {
         let (space_name, model_name) = (alter.model.space(), alter.model.entity());
         global
             .state()
+            .namespace()
             .with_model_space_mut_for_ddl(alter.model, |space, model| {
                 // prepare plan
                 let plan = AlterPlan::fdeltas(model, alter)?;
@@ -274,8 +275,8 @@ impl Model {
                         );
                         // commit txn
                         global
+                            .state()
                             .gns_driver()
-                            .lock()
                             .driver_context(|drv| drv.commit_event(txn), || {})?;
                         let mut mutator = model.model_mutator();
                         new_fields
@@ -293,8 +294,8 @@ impl Model {
                         );
                         // commit txn
                         global
+                            .state()
                             .gns_driver()
-                            .lock()
                             .driver_context(|drv| drv.commit_event(txn), || {})?;
                         let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
@@ -309,8 +310,8 @@ impl Model {
                         );
                         // commit txn
                         global
+                            .state()
                             .gns_driver()
-                            .lock()
                             .driver_context(|drv| drv.commit_event(txn), || {})?;
                         let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {

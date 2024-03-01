@@ -31,7 +31,7 @@ use {
     },
     crate::{
         engine::{
-            core::GlobalNS,
+            core::GNSData,
             storage::{
                 common_encoding::r1::impls::gns::GNSEvent,
                 v2::raw::journal::{self, EventLogDriver, JournalAdapterEvent},
@@ -56,14 +56,15 @@ use {
 */
 
 pub type GNSDriver = EventLogDriver<GNSEventLog>;
+#[derive(Debug)]
 pub struct GNSEventLog;
 
 impl GNSDriver {
     const FILE_PATH: &'static str = "gns.db-tlog";
-    pub fn open_gns_with_name(name: &str, gs: &GlobalNS) -> RuntimeResult<Self> {
+    pub fn open_gns_with_name(name: &str, gs: &GNSData) -> RuntimeResult<Self> {
         journal::open_journal(name, gs)
     }
-    pub fn open_gns(gs: &GlobalNS) -> RuntimeResult<Self> {
+    pub fn open_gns(gs: &GNSData) -> RuntimeResult<Self> {
         Self::open_gns_with_name(Self::FILE_PATH, gs)
     }
     pub fn create_gns_with_name(name: &str) -> RuntimeResult<Self> {
@@ -83,10 +84,10 @@ macro_rules! make_dispatch {
 
 impl EventLogSpec for GNSEventLog {
     type Spec = SystemDatabaseV1;
-    type GlobalState = GlobalNS;
+    type GlobalState = GNSData;
     type EventMeta = GNSTransactionCode;
     type DecodeDispatch =
-        [fn(&GlobalNS, Vec<u8>) -> RuntimeResult<()>; GNSTransactionCode::VARIANT_COUNT];
+        [fn(&GNSData, Vec<u8>) -> RuntimeResult<()>; GNSTransactionCode::VARIANT_COUNT];
     const DECODE_DISPATCH: Self::DecodeDispatch = make_dispatch![
         CreateSpaceTxn,
         AlterSpaceTxn,

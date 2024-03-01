@@ -35,7 +35,7 @@ use {
     self::raw::sysdb::RestoredSystemDatabase,
     super::common::interface::fs::FileSystem,
     crate::{
-        engine::{core::GlobalNS, RuntimeResult},
+        engine::{core::GNSData, RuntimeResult},
         util,
     },
 };
@@ -44,7 +44,7 @@ pub const GNS_PATH: &str = "gns.db-tlog";
 pub const SYSDB_PATH: &str = "sys.db";
 pub const DATA_DIR: &str = "data";
 
-pub fn load_gns_prepare_migration() -> RuntimeResult<GlobalNS> {
+pub fn load_gns_prepare_migration() -> RuntimeResult<GNSData> {
     // load gns
     let gns = loader::load_gns()?;
     // load sysdb

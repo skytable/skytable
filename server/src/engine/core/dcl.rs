@@ -62,6 +62,7 @@ fn alter_user(
     let (username, password) = get_user_data(user)?;
     global
         .state()
+        .namespace()
         .sys_db()
         .alter_user(global, &username, &password)
 }
@@ -70,6 +71,7 @@ fn create_user(global: &impl GlobalInstanceLike, user: UserDecl) -> QueryResult<
     let (username, password) = get_user_data(user)?;
     global
         .state()
+        .namespace()
         .sys_db()
         .create_user(global, username.into_boxed_str(), &password)
 }
@@ -99,6 +101,7 @@ fn drop_user(
     }
     global
         .state()
+        .namespace()
         .sys_db()
         .drop_user(global, user_del.username())
 }

@@ -30,7 +30,7 @@ mod select;
 mod update;
 
 use crate::engine::{
-    core::{dml, index::Row, model::Model, space::Space, EntityIDRef},
+    core::{dml, index::Row, model::ModelData, space::Space, EntityIDRef},
     data::{cell::Datacell, lit::Lit},
     error::QueryResult,
     fractal::GlobalInstanceLike,
@@ -45,12 +45,13 @@ use crate::engine::{
 fn _exec_only_create_space_model(global: &impl GlobalInstanceLike, model: &str) -> QueryResult<()> {
     let _ = global
         .state()
+        .namespace()
         .idx()
         .write()
         .insert("myspace".into(), Space::new_auto_all().into());
     let lex_create_model = lex_insecure(model.as_bytes()).unwrap();
     let stmt_create_model = parse_ast_node_full(&lex_create_model[2..]).unwrap();
-    Model::transactional_exec_create(global, stmt_create_model).map(|_| ())
+    ModelData::transactional_exec_create(global, stmt_create_model).map(|_| ())
 }
 
 fn _exec_only_insert<T>(
@@ -73,7 +74,7 @@ fn _exec_only_read_key_and_then<T>(
     and_then: impl Fn(Row) -> T,
 ) -> QueryResult<T> {
     let guard = sync::atm::cpin();
-    global.state().with_model(entity, |mdl| {
+    global.state().namespace().with_model(entity, |mdl| {
         let row = mdl
             .primary_index()
             .select(Lit::from(key_name), &guard)
@@ -90,7 +91,7 @@ fn _exec_delete_only(global: &impl GlobalInstanceLike, delete: &str, key: &str) 
     let entity = delete.entity();
     dml::delete(global, delete)?;
     assert_eq!(
-        global.state().with_model(entity, |model| {
+        global.state().namespace().with_model(entity, |model| {
             let g = sync::atm::cpin();
             Ok(model.primary_index().select(key.into(), &g).is_none())
         }),

@@ -70,6 +70,7 @@ impl sdss::sdss_r1::HeaderV1Enumeration for FileSpecifier {
     }
 }
 
+#[derive(Debug)]
 pub struct HeaderImplV2;
 impl sdss::sdss_r1::HeaderV1Spec for HeaderImplV2 {
     type FileClass = FileClass;

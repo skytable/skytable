@@ -30,7 +30,7 @@ use {
         space, SpaceIDRef, SpaceIDRes,
     },
     crate::engine::{
-        core::{model::Model, space::Space},
+        core::{model::ModelData, space::Space},
         storage::common_encoding::r1::{dec, enc},
         txn::ModelIDRef,
     },
@@ -95,7 +95,7 @@ mod model_tests {
                 AlterModelAddTxnRestorePL, AlterModelRemoveTxnRestorePL,
                 AlterModelUpdateTxnRestorePL, CreateModelTxnRestorePL,
             },
-            Model, Space,
+            ModelData, Space,
         },
         crate::engine::{
             core::model::{Field, Layer},
@@ -106,9 +106,9 @@ mod model_tests {
             },
         },
     };
-    fn default_space_model() -> (Space, Model) {
+    fn default_space_model() -> (Space, ModelData) {
         let space = Space::new_auto_all();
-        let model = Model::new_restore(
+        let model = ModelData::new_restore(
             Uuid::new(),
             "username".into(),
             TagSelector::String.into_full(),

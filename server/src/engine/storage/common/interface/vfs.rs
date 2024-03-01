@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(dead_code)]
-
 use {
     crate::{engine::sync::cell::Lazy, IoResult},
     parking_lot::RwLock,
@@ -83,6 +81,7 @@ pub enum FileOpen<CF, EF = CF> {
     Existing(EF),
 }
 
+#[derive(Debug)]
 pub struct VFileDescriptor(pub(super) Box<str>);
 
 impl VFileDescriptor {

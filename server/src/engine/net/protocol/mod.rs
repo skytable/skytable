@@ -293,6 +293,7 @@ async fn do_handshake<S: Socket>(
         Ok(uname) => {
             match global
                 .state()
+                .namespace()
                 .sys_db()
                 .verify_user(uname, handshake.hs_auth().password())
             {

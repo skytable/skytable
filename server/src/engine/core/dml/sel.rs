@@ -29,7 +29,7 @@ use crate::engine::{
         index::{
             DcFieldIndex, IndexLatchHandleExclusive, PrimaryIndexKey, Row, RowData, RowDataLck,
         },
-        model::Model,
+        model::ModelData,
     },
     data::{
         cell::{Datacell, VirtualDatacell},
@@ -91,10 +91,10 @@ pub fn select_all<Fm, F, T>(
     mut f: F,
 ) -> QueryResult<usize>
 where
-    Fm: FnMut(&mut T, &Model, usize),
+    Fm: FnMut(&mut T, &ModelData, usize),
     F: FnMut(&mut T, &Datacell, usize),
 {
-    global.state().with_model(select.entity, |mdl| {
+    global.state().namespace().with_model(select.entity, |mdl| {
         let g = sync::atm::cpin();
         let mut i = 0;
         if select.wildcard {
@@ -181,47 +181,50 @@ pub fn select_custom<F>(
 where
     F: FnMut(&Datacell),
 {
-    global.state().with_model(select.entity(), |mdl| {
-        let target_key = mdl.resolve_where(select.clauses_mut())?;
-        let pkdc = VirtualDatacell::new(target_key.clone(), mdl.p_tag().tag_unique());
-        let g = sync::atm::cpin();
-        let mut read_field = |key, fields: &DcFieldIndex| {
-            match fields.st_get(key) {
-                Some(dc) => cellfn(dc),
-                None if key == mdl.p_key() => cellfn(&pkdc),
-                None => return Err(QueryError::QExecUnknownField),
-            }
-            Ok(())
-        };
-        match mdl.primary_index().select(target_key.clone(), &g) {
-            Some(row) => {
-                let r = row.resolve_schema_deltas_and_freeze(mdl.delta_state());
-                if select.is_wildcard() {
-                    for key in mdl.fields().stseq_ord_key() {
-                        read_field(key.as_ref(), r.fields())?;
-                    }
-                } else {
-                    for key in select.into_fields() {
-                        read_field(key.as_str(), r.fields())?;
+    global
+        .state()
+        .namespace()
+        .with_model(select.entity(), |mdl| {
+            let target_key = mdl.resolve_where(select.clauses_mut())?;
+            let pkdc = VirtualDatacell::new(target_key.clone(), mdl.p_tag().tag_unique());
+            let g = sync::atm::cpin();
+            let mut read_field = |key, fields: &DcFieldIndex| {
+                match fields.st_get(key) {
+                    Some(dc) => cellfn(dc),
+                    None if key == mdl.p_key() => cellfn(&pkdc),
+                    None => return Err(QueryError::QExecUnknownField),
+                }
+                Ok(())
+            };
+            match mdl.primary_index().select(target_key.clone(), &g) {
+                Some(row) => {
+                    let r = row.resolve_schema_deltas_and_freeze(mdl.delta_state());
+                    if select.is_wildcard() {
+                        for key in mdl.fields().stseq_ord_key() {
+                            read_field(key.as_ref(), r.fields())?;
+                        }
+                    } else {
+                        for key in select.into_fields() {
+                            read_field(key.as_str(), r.fields())?;
+                        }
                     }
                 }
+                None => return Err(QueryError::QExecDmlRowNotFound),
             }
-            None => return Err(QueryError::QExecDmlRowNotFound),
-        }
-        Ok(())
-    })
+            Ok(())
+        })
 }
 
 struct RowIteratorAll<'g> {
     _g: &'g sync::atm::Guard,
-    mdl: &'g Model,
+    mdl: &'g ModelData,
     iter: <IndexMTRaw<Row> as MTIndexExt<Row, PrimaryIndexKey, RowDataLck>>::IterEntry<'g, 'g, 'g>,
     _latch: IndexLatchHandleExclusive<'g>,
     limit: usize,
 }
 
 impl<'g> RowIteratorAll<'g> {
-    fn new(g: &'g sync::atm::Guard, mdl: &'g Model, limit: usize) -> Self {
+    fn new(g: &'g sync::atm::Guard, mdl: &'g ModelData, limit: usize) -> Self {
         let idx = mdl.primary_index();
         let latch = idx.acquire_exclusive();
         Self {

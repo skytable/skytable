@@ -26,7 +26,7 @@
 
 use {
     super::{
-        core::{dml::QueryExecMeta, model::Model, GlobalNS},
+        core::{dml::QueryExecMeta, model::ModelData, GlobalNS},
         data::uuid::Uuid,
         storage::{
             safe_interfaces::{paths_v1, FileSystem},
@@ -34,7 +34,6 @@ use {
         },
     },
     crate::engine::error::RuntimeResult,
-    parking_lot::Mutex,
     std::{fmt, mem::MaybeUninit},
     tokio::sync::mpsc::unbounded_channel,
 };
@@ -47,7 +46,7 @@ mod mgr;
 pub mod test_utils;
 mod util;
 pub use {
-    drivers::ModelDrivers,
+    drivers::{FractalGNSDriver, FractalModelDriver},
     mgr::{CriticalTask, GenericTask, Task, GENERAL_EXECUTOR_WINDOW},
     util::FractalToken,
 };
@@ -68,19 +67,12 @@ pub struct GlobalStateStart {
 /// ## Safety
 ///
 /// Must be called iff this is the only thread calling it
-pub unsafe fn load_and_enable_all(
-    gns: GlobalNS,
-    gns_driver: GNSDriver,
-    model_drivers: ModelDrivers,
-) -> GlobalStateStart {
-    let model_cnt_on_boot = model_drivers.count();
-    let gns_driver = drivers::FractalGNSDriver::new(gns_driver);
+pub unsafe fn load_and_enable_all(gns: GlobalNS) -> GlobalStateStart {
+    let model_cnt_on_boot = gns.namespace().idx_models().read().len();
     let (hp_sender, hp_recv) = unbounded_channel();
     let (lp_sender, lp_recv) = unbounded_channel();
     let global_state = GlobalState::new(
         gns,
-        gns_driver,
-        model_drivers,
         mgr::FractalMgr::new(hp_sender, lp_sender, model_cnt_on_boot),
     );
     *Global::__gref_raw() = MaybeUninit::new(global_state);
@@ -101,7 +93,11 @@ pub trait GlobalInstanceLike {
     fn get_max_delta_size(&self) -> usize;
     // global namespace
     fn state(&self) -> &GlobalNS;
-    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver>;
+    fn initialize_space(&self, space_name: &str, space_uuid: Uuid) -> RuntimeResult<()> {
+        e!(FileSystem::create_dir_all(&paths_v1::space_dir(
+            space_name, space_uuid
+        )))
+    }
     // model drivers
     fn initialize_model_driver(
         &self,
@@ -109,14 +105,13 @@ pub trait GlobalInstanceLike {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> RuntimeResult<()>;
+    ) -> RuntimeResult<FractalModelDriver>;
     fn purge_model_driver(
         &self,
         space_name: &str,
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-        skip_delete: bool,
     );
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
@@ -126,7 +121,7 @@ pub trait GlobalInstanceLike {
         &self,
         space_name: &str,
         model_name: &str,
-        model: &Model,
+        model: &ModelData,
         hint: QueryExecMeta,
     ) {
         // check if we need to sync
@@ -150,9 +145,6 @@ impl GlobalInstanceLike for Global {
     fn state(&self) -> &GlobalNS {
         self._namespace()
     }
-    fn gns_driver(&self) -> &Mutex<drivers::FractalGNSDriver> {
-        &self.get_state().gns_driver
-    }
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
         self._post_high_priority_task(task)
@@ -171,15 +163,10 @@ impl GlobalInstanceLike for Global {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-        skip_delete: bool,
     ) {
-        let id = ModelUniqueID::new(space_name, model_name, model_uuid);
-        self.get_state().mdl_driver.remove_driver(id);
-        if !skip_delete {
-            self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
-                space_name, space_uuid, model_name, model_uuid,
-            )));
-        }
+        self.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+            space_name, space_uuid, model_name, model_uuid,
+        )));
     }
     fn initialize_model_driver(
         &self,
@@ -187,7 +174,7 @@ impl GlobalInstanceLike for Global {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> RuntimeResult<()> {
+    ) -> RuntimeResult<FractalModelDriver> {
         // create dir
         FileSystem::create_dir(&paths_v1::model_dir(
             space_name, space_uuid, model_name, model_uuid,
@@ -196,11 +183,7 @@ impl GlobalInstanceLike for Global {
         let driver = ModelDriver::create_model_driver(&paths_v1::model_path(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
-        self.get_state().mdl_driver.add_driver(
-            ModelUniqueID::new(space_name, model_name, model_uuid),
-            driver,
-        );
-        Ok(())
+        Ok(FractalModelDriver::init(driver))
     }
 }
 
@@ -247,16 +230,17 @@ impl Global {
     }
     pub unsafe fn unload_all(self) {
         // TODO(@ohsayan): handle errors
-        let GlobalState {
-            gns_driver,
-            mdl_driver,
-            ..
-        } = Self::__gref_raw().assume_init_read();
-        let mut gns_driver = gns_driver.into_inner().txn_driver;
-        let mdl_drivers = mdl_driver.into_inner();
+        let GlobalState { gns, .. } = Self::__gref_raw().assume_init_read();
+        let mut gns_driver = gns.gns_driver().txn_driver.lock();
         GNSDriver::close_driver(&mut gns_driver).unwrap();
-        for (_, driver) in mdl_drivers {
-            driver.close().unwrap();
+        for mdl in gns
+            .namespace()
+            .idx_models()
+            .write()
+            .drain()
+            .map(|(_, mdl)| mdl)
+        {
+            mdl.into_driver().close().unwrap();
         }
     }
 }
@@ -268,27 +252,12 @@ impl Global {
 /// The global state
 struct GlobalState {
     gns: GlobalNS,
-    gns_driver: Mutex<drivers::FractalGNSDriver>,
-    mdl_driver: ModelDrivers,
     task_mgr: mgr::FractalMgr,
 }
 
 impl GlobalState {
-    fn new(
-        gns: GlobalNS,
-        gns_driver: drivers::FractalGNSDriver,
-        mdl_driver: ModelDrivers,
-        task_mgr: mgr::FractalMgr,
-    ) -> Self {
-        Self {
-            gns,
-            gns_driver: Mutex::new(gns_driver),
-            mdl_driver,
-            task_mgr,
-        }
-    }
-    pub(self) fn get_mdl_drivers(&self) -> &ModelDrivers {
-        &self.mdl_driver
+    fn new(gns: GlobalNS, task_mgr: mgr::FractalMgr) -> Self {
+        Self { gns, task_mgr }
     }
     pub(self) fn fractal_mgr(&self) -> &mgr::FractalMgr {
         &self.task_mgr

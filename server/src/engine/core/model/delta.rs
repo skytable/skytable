@@ -25,7 +25,7 @@
 */
 
 use {
-    super::Model,
+    super::ModelData,
     crate::engine::{
         core::{dml::QueryExecMeta, index::Row},
         fractal::{FractalToken, GlobalInstanceLike},
@@ -74,7 +74,7 @@ impl DeltaState {
         global: &impl GlobalInstanceLike,
         space_name: &str,
         model_name: &str,
-        model: &Model,
+        model: &ModelData,
         hint: QueryExecMeta,
     ) {
         global.request_batch_resolve_if_cache_full(space_name, model_name, model, hint)

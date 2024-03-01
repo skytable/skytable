@@ -42,11 +42,11 @@ pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};
 
 use {
     super::{rw::SDSSFileIO, spec},
-    crate::engine::{core::model::Model, error::RuntimeResult},
+    crate::engine::{core::model::ModelData, error::RuntimeResult},
 };
 
 /// Re-initialize an existing batch journal and read all its data into model
-pub fn reinit(name: &str, model: &Model) -> RuntimeResult<DataBatchPersistDriver> {
+pub fn reinit(name: &str, model: &ModelData) -> RuntimeResult<DataBatchPersistDriver> {
     let (f, _header) = SDSSFileIO::open::<spec::DataBatchJournalV1>(name)?;
     // restore
     let mut restore_driver = DataBatchRestoreDriver::new(f)?;

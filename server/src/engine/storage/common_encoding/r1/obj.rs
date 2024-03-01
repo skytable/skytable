@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             core::{
-                model::{Field, Layer, Model},
+                model::{Field, Layer, ModelData},
                 space::Space,
             },
             data::{
@@ -405,16 +405,16 @@ impl ModelLayoutMD {
 }
 
 #[derive(Clone, Copy)]
-pub struct ModelLayoutRef<'a>(pub(super) &'a Model);
-impl<'a> From<&'a Model> for ModelLayoutRef<'a> {
-    fn from(mdl: &'a Model) -> Self {
+pub struct ModelLayoutRef<'a>(pub(super) &'a ModelData);
+impl<'a> From<&'a ModelData> for ModelLayoutRef<'a> {
+    fn from(mdl: &'a ModelData) -> Self {
         Self(mdl)
     }
 }
 impl<'a> PersistObject for ModelLayoutRef<'a> {
     const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64, 3);
     type InputType = ModelLayoutRef<'a>;
-    type OutputType = Model;
+    type OutputType = ModelData;
     type Metadata = ModelLayoutMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.p_key_len as usize)
@@ -455,7 +455,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         } else {
             TagSelector::from_raw(md.p_key_tag as u8)
         };
-        Ok(Model::new_restore(
+        Ok(ModelData::new_restore(
             md.model_uuid,
             key.into_boxed_str(),
             ptag.into_full(),

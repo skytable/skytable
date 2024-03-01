@@ -31,9 +31,9 @@ use {
         config::Configuration,
         core::{
             system_db::{SystemDatabase, VerifyUser},
-            GlobalNS,
+            GNSData, GlobalNS,
         },
-        fractal::{context, ModelDrivers, ModelUniqueID},
+        fractal::{context, FractalGNSDriver},
         storage::common::paths_v1,
         txn::{
             gns::{
@@ -54,8 +54,7 @@ pub(super) mod raw;
 pub const GNS_PATH: &str = v1::GNS_PATH;
 pub const DATA_DIR: &str = v1::DATA_DIR;
 
-pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
-    let model_drivers = ModelDrivers::empty();
+pub fn recreate(gns: GNSData) -> RuntimeResult<SELoaded> {
     context::set_dmsg("creating gns");
     let mut gns_driver = impls::gns_log::GNSDriver::create_gns()?;
     // create all spaces
@@ -67,41 +66,37 @@ pub fn recreate(gns: GlobalNS) -> RuntimeResult<SELoaded> {
     // create all models
     context::set_dmsg("creating all models");
     for (model_id, model) in gns.idx_models().read().iter() {
+        let model_data = model.data();
         let space_uuid = gns.idx().read().get(model_id.space()).unwrap().get_uuid();
         FileSystem::create_dir_all(&paths_v1::model_dir(
             model_id.space(),
             space_uuid,
             model_id.entity(),
-            model.get_uuid(),
+            model_data.get_uuid(),
         ))?;
         let mut model_driver = ModelDriver::create_model_driver(&paths_v1::model_path(
             model_id.space(),
             space_uuid,
             model_id.entity(),
-            model.get_uuid(),
+            model_data.get_uuid(),
         ))?;
         gns_driver.commit_event(CreateModelTxn::new(
             SpaceIDRef::with_uuid(model_id.space(), space_uuid),
             model_id.entity(),
-            model,
+            model_data,
         ))?;
-        model_driver.commit_with_ctx(FullModel::new(model), BatchStats::new())?;
-        model_drivers.add_driver(
-            ModelUniqueID::new(model_id.space(), model_id.entity(), model.get_uuid()),
-            model_driver,
-        );
+        model_driver.commit_with_ctx(FullModel::new(model_data), BatchStats::new())?;
+        model.driver().initialize_model_driver(model_driver);
     }
     Ok(SELoaded {
-        gns,
-        gns_driver,
-        model_drivers,
+        gns: GlobalNS::new(gns, FractalGNSDriver::new(gns_driver)),
     })
 }
 
 pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
     FileSystem::create_dir_all(DATA_DIR)?;
     let mut gns_driver = impls::gns_log::GNSDriver::create_gns()?;
-    let gns = GlobalNS::empty();
+    let gns = GNSData::empty();
     let password_hash = rcrypt::hash(&config.auth.root_key, rcrypt::DEFAULT_COST).unwrap();
     // now go ahead and initialize our root user
     gns_driver.commit_event(CreateUserTxn::new(
@@ -113,31 +108,26 @@ pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
         password_hash.into_boxed_slice(),
     ));
     Ok(SELoaded {
-        gns,
-        gns_driver,
-        model_drivers: ModelDrivers::empty(),
+        gns: GlobalNS::new(gns, FractalGNSDriver::new(gns_driver)),
     })
 }
 
 pub fn restore(cfg: &Configuration) -> RuntimeResult<SELoaded> {
-    let gns = GlobalNS::empty();
+    let gns = GNSData::empty();
     context::set_dmsg("loading gns");
     let mut gns_driver = impls::gns_log::GNSDriver::open_gns(&gns)?;
-    let model_drivers = ModelDrivers::empty();
     for (id, model) in gns.idx_models().write().iter_mut() {
+        let model_data = model.data();
         let space_uuid = gns.idx().read().get(id.space()).unwrap().get_uuid();
         let model_data_file_path =
-            paths_v1::model_path(id.space(), space_uuid, id.entity(), model.get_uuid());
+            paths_v1::model_path(id.space(), space_uuid, id.entity(), model_data.get_uuid());
         context::set_dmsg(format!("loading model driver in {model_data_file_path}"));
         let model_driver =
-            impls::mdl_journal::ModelDriver::open_model_driver(model, &model_data_file_path)?;
-        model_drivers.add_driver(
-            ModelUniqueID::new(id.space(), id.entity(), model.get_uuid()),
-            model_driver,
-        );
+            impls::mdl_journal::ModelDriver::open_model_driver(model_data, &model_data_file_path)?;
+        model.driver().initialize_model_driver(model_driver);
         unsafe {
             // UNSAFE(@ohsayan): all pieces of data are upgraded by now, so vacuum
-            model.model_mutator().vacuum_stashed();
+            model.data_mut().model_mutator().vacuum_stashed();
         }
     }
     // check if password has changed
@@ -155,8 +145,6 @@ pub fn restore(cfg: &Configuration) -> RuntimeResult<SELoaded> {
             .__raw_alter_user(SystemDatabase::ROOT_ACCOUNT, phash.into_boxed_slice());
     }
     Ok(SELoaded {
-        gns,
-        gns_driver,
-        model_drivers,
+        gns: GlobalNS::new(gns, FractalGNSDriver::new(gns_driver)),
     })
 }

@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::{ddl_misc, dml, model::Model, space::Space},
+    core::{ddl_misc, dml, model::ModelData, space::Space},
     error::{QueryError, QueryResult},
     fractal::{Global, GlobalInstanceLike},
     net::protocol::{ClientLocalState, Response, ResponseType, SQuery},
@@ -152,14 +152,25 @@ async fn run_blocking_stmt(
             _callgs_map(
                 &g,
                 t,
-                Model::transactional_exec_create,
+                ModelData::transactional_exec_create,
                 translate_ddl_result,
             )
         },
         |g, _, t| _callgs_map(&g, t, Space::transactional_exec_alter, |_| Response::Empty),
-        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_alter, |_| Response::Empty),
+        |g, _, t| {
+            _callgs_map(&g, t, ModelData::transactional_exec_alter, |_| {
+                Response::Empty
+            })
+        },
         |g, _, t| _callgs_map(&g, t, Space::transactional_exec_drop, translate_ddl_result),
-        |g, _, t| _callgs_map(&g, t, Model::transactional_exec_drop, translate_ddl_result),
+        |g, _, t| {
+            _callgs_map(
+                &g,
+                t,
+                ModelData::transactional_exec_drop,
+                translate_ddl_result,
+            )
+        },
     ];
     let r = unsafe {
         // UNSAFE(@ohsayan): the only await is within this block
@@ -201,7 +212,11 @@ fn cstate_use(
                 NB: just like SQL, we don't really care about what this is set to as it's basically a shorthand.
                 so we do a simple vanity check
             */
-            if !global.state().contains_space(new_space.as_str()) {
+            if !global
+                .state()
+                .namespace()
+                .contains_space(new_space.as_str())
+            {
                 return Err(QueryError::QExecObjectNotFound);
             }
             cstate.set_cs(new_space.boxed_str());
@@ -209,7 +224,7 @@ fn cstate_use(
         Use::RefreshCurrent => match cstate.get_cs() {
             None => return Ok(Response::Null),
             Some(space) => {
-                if !global.state().contains_space(space) {
+                if !global.state().namespace().contains_space(space) {
                     cstate.unset_cs();
                     return Err(QueryError::QExecObjectNotFound);
                 }

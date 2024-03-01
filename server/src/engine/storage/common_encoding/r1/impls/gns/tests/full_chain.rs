@@ -26,7 +26,7 @@
 
 use crate::engine::{
     core::{
-        model::{Field, Layer, Model},
+        model::{Field, Layer, ModelData},
         space::Space,
     },
     data::{cell::Datacell, tag::TagSelector, uuid::Uuid, DictEntryGeneric},
@@ -58,6 +58,7 @@ fn init_space(global: &impl GlobalInstanceLike, space_name: &str, env: &str) -> 
     Space::transactional_exec_create(global, stmt).unwrap();
     global
         .state()
+        .namespace()
         .idx()
         .read()
         .get(name.as_str())
@@ -76,7 +77,7 @@ fn create_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
-            let spaces = global.state().idx().read();
+            let spaces = global.state().namespace().idx().read();
             let space = spaces.get("myspace").unwrap();
             assert_eq!(
                 &*space,
@@ -106,7 +107,7 @@ fn alter_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
-            let spaces = global.state().idx().read();
+            let spaces = global.state().namespace().idx().read();
             let space = spaces.get("myspace").unwrap();
             assert_eq!(
                 &*space,
@@ -133,7 +134,13 @@ fn drop_space() {
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
-            assert!(global.state().idx().read().get("myspace").is_none());
+            assert!(global
+                .state()
+                .namespace()
+                .idx()
+                .read()
+                .get("myspace")
+                .is_none());
         })
     })
 }
@@ -148,9 +155,10 @@ fn init_model(
     let stmt = lex_insecure(query.as_bytes()).unwrap();
     let stmt = parse_ast_node_full::<CreateModel>(&stmt[2..]).unwrap();
     let model_name = stmt.model_name;
-    Model::transactional_exec_create(global, stmt).unwrap();
+    ModelData::transactional_exec_create(global, stmt).unwrap();
     global
         .state()
+        .namespace()
         .with_model(model_name, |model| Ok(model.get_uuid()))
         .unwrap()
 }
@@ -178,10 +186,11 @@ fn create_model() {
             let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
+                .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model,
-                        &Model::new_restore(
+                        &ModelData::new_restore(
                             uuid_model,
                             "username".into(),
                             TagSelector::String.into_full(),
@@ -210,12 +219,13 @@ fn alter_model_add() {
             )
             .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&global, stmt).unwrap();
+            ModelData::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
+                .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model.fields().st_get("profile_pic").unwrap(),
@@ -245,12 +255,13 @@ fn alter_model_remove() {
             )
             .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&global, stmt).unwrap();
+            ModelData::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
+                .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert!(model.fields().st_get("has_secure_key").is_none());
                     assert!(model.fields().st_get("is_dumb").is_none());
@@ -277,12 +288,13 @@ fn alter_model_update() {
                 lex_insecure(b"alter model myspace.mymodel update profile_pic { nullable: true }")
                     .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&global, stmt).unwrap();
+            ModelData::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
             global
                 .state()
+                .namespace()
                 .with_model(("myspace", "mymodel").into(), |model| {
                     assert_eq!(
                         model.fields().st_get("profile_pic").unwrap(),
@@ -304,13 +316,14 @@ fn drop_model() {
             init_default_model(&global);
             let stmt = lex_insecure(b"drop model myspace.mymodel").unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_drop(&global, stmt).unwrap();
+            ModelData::transactional_exec_drop(&global, stmt).unwrap();
         }
         multirun(|| {
             let global = TestGlobal::new_with_driver_id(log_name);
             assert_eq!(
                 global
                     .state()
+                    .namespace()
                     .with_model(("myspace", "mymodel").into(), |_| { Ok(()) })
                     .unwrap_err(),
                 QueryError::QExecObjectNotFound

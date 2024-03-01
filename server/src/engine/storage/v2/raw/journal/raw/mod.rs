@@ -33,7 +33,6 @@ use {
         mem::unsafe_apis::memcpy,
         storage::common::{
             checksum::SCrc64,
-            interface::fs::File,
             sdss::sdss_r1::{
                 rw::{SdssFile, TrackedReader, TrackedWriter},
                 FileSpecV1,
@@ -41,6 +40,7 @@ use {
         },
         RuntimeResult,
     },
+    core::fmt,
     std::ops::Range,
 };
 
@@ -212,7 +212,7 @@ pub trait RawJournalAdapterEvent<CA: RawJournalAdapter>: Sized {
     fn md(&self) -> u64;
     fn write_direct(
         self,
-        _: &mut TrackedWriter<File, <CA as RawJournalAdapter>::Spec>,
+        _: &mut TrackedWriter<<CA as RawJournalAdapter>::Spec>,
         _: <CA as RawJournalAdapter>::CommitContext,
     ) -> RuntimeResult<()> {
         unimplemented!()
@@ -251,7 +251,7 @@ pub trait RawJournalAdapter: Sized {
     /// commit event (direct preference)
     fn commit_direct<E>(
         &mut self,
-        _: &mut TrackedWriter<File, Self::Spec>,
+        _: &mut TrackedWriter<Self::Spec>,
         _: E,
         _: Self::CommitContext,
     ) -> RuntimeResult<()>
@@ -468,10 +468,25 @@ pub(super) enum DriverEventKind {
 /// A low-level journal writer
 pub struct RawJournalWriter<J: RawJournalAdapter> {
     j: J,
-    log_file: TrackedWriter<File, <J as RawJournalAdapter>::Spec>,
+    log_file: TrackedWriter<<J as RawJournalAdapter>::Spec>,
     txn_id: u64,
     known_txn_id: u64,
     known_txn_offset: u64, // if offset is 0, txn id is unset
+}
+
+impl<J: RawJournalAdapter + fmt::Debug> fmt::Debug for RawJournalWriter<J>
+where
+    <J::Spec as FileSpecV1>::Metadata: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawJournalWriter")
+            .field("j", &self.j)
+            .field("log_file", &self.log_file)
+            .field("txn_id", &self.txn_id)
+            .field("known_txn_id", &self.known_txn_id)
+            .field("known_txn_offset", &self.known_txn_offset)
+            .finish()
+    }
 }
 
 const SERVER_EV_MASK: u64 = 1 << (u64::BITS - 1);

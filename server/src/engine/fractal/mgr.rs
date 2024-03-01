@@ -29,11 +29,12 @@ use {
     crate::{
         engine::{
             core::{
-                model::{delta::DataDelta, Model},
+                model::{delta::DataDelta, ModelData},
                 EntityIDRef,
             },
             data::uuid::Uuid,
             error::ErrorKind,
+            fractal::GlobalInstanceLike,
             storage::{
                 safe_interfaces::{paths_v1, StdModelBatch},
                 BatchStats,
@@ -289,20 +290,13 @@ impl FractalMgr {
         match task {
             CriticalTask::WriteBatch(model_id, observed_size) => {
                 info!("fhp: {model_id} has reached cache capacity. writing to disk");
-                let mdl_drivers = global.get_state().get_mdl_drivers().drivers().read();
-                let Some(mdl_driver) = mdl_drivers.get(&model_id) else {
-                    // because we maximize throughput, the model driver may have been already removed but this task
-                    // was way behind in the queue
-                    return;
-                };
-                let mdl_read = global._namespace().idx_models().read();
+                let mdl_read = global.state().namespace().idx_models().read();
                 let mdl = match mdl_read.get(&EntityIDRef::new(
                     model_id.space().into(),
                     model_id.model().into(),
                 )) {
-                    Some(mdl) if mdl.get_uuid() != model_id.uuid() => {
-                        // so the model driver was not removed, neither was the model *yet* but we happened to find the task
-                        // just return
+                    Some(mdl) if mdl.data().get_uuid() != model_id.uuid() => {
+                        // this is a different model with the same entity path
                         return;
                     }
                     Some(mdl) => mdl,
@@ -310,7 +304,7 @@ impl FractalMgr {
                         panic!("found deleted model")
                     }
                 };
-                match Self::try_write_model_data_batch(mdl, observed_size, mdl_driver) {
+                match Self::try_write_model_data_batch(mdl.data(), observed_size, mdl.driver()) {
                     Ok(()) => {
                         if observed_size != 0 {
                             info!("fhp: completed maintenance task for {model_id}, synced={observed_size}")
@@ -391,40 +385,34 @@ impl FractalMgr {
         }
     }
     fn general_executor(&'static self, global: super::Global) {
-        let mdl_drivers = global.get_state().get_mdl_drivers().drivers().read();
-        for (model_id, driver) in mdl_drivers.iter() {
-            let mdl_read = global._namespace().idx_models().read();
-            let mdl = match mdl_read.get(&EntityIDRef::new(
-                model_id.space().into(),
-                model_id.model().into(),
-            )) {
-                Some(mdl) if mdl.get_uuid() != model_id.uuid() => {
-                    // so the model driver was not removed, neither was the model *yet* but we happened to find the task
-                    // just return
-                    return;
-                }
-                Some(mdl) => mdl,
-                None => {
-                    panic!("found deleted model")
-                }
-            };
-            let observed_len = mdl
+        for (model_id, model) in global.state().namespace().idx_models().read().iter() {
+            let observed_len = model
+                .data()
                 .delta_state()
                 .__fractal_take_full_from_data_delta(super::FractalToken::new());
-            match Self::try_write_model_data_batch(mdl, observed_len, driver) {
+            match Self::try_write_model_data_batch(model.data(), observed_len, model.driver()) {
                 Ok(()) => {
                     if observed_len != 0 {
                         info!(
-                            "flp: completed maintenance task for {model_id}, synced={observed_len}"
+                            "flp: completed maintenance task for {}.{}, synced={observed_len}",
+                            model_id.space(),
+                            model_id.entity()
                         )
                     }
                 }
                 Err((e, stats)) => {
-                    info!("flp: failed to sync data for {model_id} with {e}. promoting to higher priority");
+                    info!(
+                        "flp: failed to sync data for {}.{} with erro `{e}`. promoting to higher priority",
+                        model_id.space(), model_id.entity(),
+                    );
                     // this failure is *not* good, so we want to promote this to a critical task
                     self.hp_dispatcher
                         .send(Task::new(CriticalTask::WriteBatch(
-                            model_id.clone(),
+                            ModelUniqueID::new(
+                                model_id.space(),
+                                model_id.entity(),
+                                model.data().get_uuid(),
+                            ),
                             observed_len - stats.get_actual(),
                         )))
                         .unwrap()
@@ -440,11 +428,11 @@ impl FractalMgr {
     ///
     /// The zero check is essential
     fn try_write_model_data_batch(
-        model: &Model,
+        model: &ModelData,
         observed_size: usize,
-        mdl_driver: &super::drivers::FractalModelDriver,
+        mdl_driver_: &super::drivers::FractalModelDriver,
     ) -> Result<(), (super::error::Error, BatchStats)> {
-        if mdl_driver.status().is_iffy() {
+        if mdl_driver_.status().is_iffy() {
             // don't mess this up any further
             return Err((
                 super::error::Error::from(ErrorKind::Other(
@@ -459,14 +447,15 @@ impl FractalMgr {
         }
         // try flushing the batch
         let batch_stats = BatchStats::new();
-        let mut batch_driver = mdl_driver.batch_driver().lock();
+        let mut mdl_driver = mdl_driver_.batch_driver().lock();
+        let batch_driver = mdl_driver.as_mut().unwrap();
         batch_driver
             .commit_with_ctx(
                 StdModelBatch::new(model, observed_size),
                 batch_stats.clone(),
             )
             .map_err(|e| {
-                mdl_driver.status().set_iffy();
+                mdl_driver_.status().set_iffy();
                 (e, BatchStats::into_inner(batch_stats))
             })
     }

@@ -27,10 +27,7 @@
 //! Implementations of the Skytable Disk Storage Subsystem (SDSS)
 
 use {
-    super::{
-        config::Configuration, core::GlobalNS, fractal::context, fractal::ModelDrivers,
-        RuntimeResult,
-    },
+    super::{config::Configuration, core::GlobalNS, fractal::context, RuntimeResult},
     std::path::Path,
 };
 
@@ -58,8 +55,6 @@ pub use v2::impls::{
 
 pub struct SELoaded {
     pub gns: GlobalNS,
-    pub gns_driver: v2::impls::gns_log::GNSDriver,
-    pub model_drivers: ModelDrivers,
 }
 
 pub fn load(cfg: &Configuration) -> RuntimeResult<SELoaded> {

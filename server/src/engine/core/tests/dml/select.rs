@@ -46,7 +46,9 @@ fn simple_select_wildcard() {
 
 #[test]
 fn simple_select_specified_same_order() {
-    let global = TestGlobal::new_with_driver_id_instant_update("dml_select_simple_select_specified_same_order");
+    let global = TestGlobal::new_with_driver_id_instant_update(
+        "dml_select_simple_select_specified_same_order",
+    );
     assert_eq!(
         super::exec_select(
             &global,
@@ -61,8 +63,9 @@ fn simple_select_specified_same_order() {
 
 #[test]
 fn simple_select_specified_reversed_order() {
-    let global =
-        TestGlobal::new_with_driver_id_instant_update("dml_select_simple_select_specified_reversed_order");
+    let global = TestGlobal::new_with_driver_id_instant_update(
+        "dml_select_simple_select_specified_reversed_order",
+    );
     assert_eq!(
         super::exec_select(
             &global,

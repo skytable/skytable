@@ -131,7 +131,7 @@ impl SystemDatabase {
             return Err(QueryError::SysAuthError);
         }
         let password_hash = rcrypt::hash(password, rcrypt::DEFAULT_COST).unwrap();
-        global.gns_driver().lock().driver_context(
+        global.state().gns_driver().driver_context(
             |drv| drv.commit_event(CreateUserTxn::new(&username, &password_hash)),
             || {},
         )?;
@@ -147,7 +147,7 @@ impl SystemDatabase {
         match self.users.write().get_mut(username) {
             Some(user) => {
                 let password_hash = rcrypt::hash(password, rcrypt::DEFAULT_COST).unwrap();
-                global.gns_driver().lock().driver_context(
+                global.state().gns_driver().driver_context(
                     |drv| drv.commit_event(AlterUserTxn::new(username, &password_hash)),
                     || {},
                 )?;
@@ -163,8 +163,8 @@ impl SystemDatabase {
             return Err(QueryError::SysAuthError);
         }
         global
+            .state()
             .gns_driver()
-            .lock()
             .driver_context(|drv| drv.commit_event(DropUserTxn::new(username)), || {})?;
         let _ = users.remove(username);
         Ok(())

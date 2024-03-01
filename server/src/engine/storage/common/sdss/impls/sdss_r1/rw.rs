@@ -40,6 +40,7 @@ use {
         util::os::SysIOError,
         IoResult,
     },
+    core::fmt,
     std::mem,
 };
 
@@ -287,13 +288,12 @@ impl<S: FileSpecV1> TrackedReader<S> {
 /// interface. It tracks the cursor, automatically buffers writes and in case of buffer flush failure,
 /// provides methods to robustly handle errors, down to byte-level cursor tracking in case of failure.
 pub struct TrackedWriter<
-    F,
     S: FileSpecV1,
     const SIZE: usize = 8192,
     const PANIC_IF_UNFLUSHED: bool = true,
     const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool = true,
 > {
-    f_d: F,
+    f_d: File,
     f_md: S::Metadata,
     t_cursor: u64,
     t_checksum: SCrc64,
@@ -302,12 +302,32 @@ pub struct TrackedWriter<
 }
 
 impl<
-        F,
         S: FileSpecV1,
         const SIZE: usize,
         const PANIC_IF_UNFLUSHED: bool,
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
-    > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+    > fmt::Debug for TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+where
+    S::Metadata: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TrackedWriter")
+            .field("f_d", &self.f_d)
+            .field("f_md", &self.f_md)
+            .field("t_cursor", &self.t_cursor)
+            .field("t_checksum", &self.t_checksum)
+            .field("t_partial_checksum", &self.t_partial_checksum)
+            .field("buf", &self.buf)
+            .finish()
+    }
+}
+
+impl<
+        S: FileSpecV1,
+        const SIZE: usize,
+        const PANIC_IF_UNFLUSHED: bool,
+        const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
+    > TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
     fn available_capacity(&self) -> usize {
         self.buf.remaining_capacity()
@@ -315,14 +335,13 @@ impl<
 }
 
 impl<
-        F,
         S: FileSpecV1,
         const SIZE: usize,
         const PANIC_IF_UNFLUSHED: bool,
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
-    > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+    > TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
-    fn _new(f_d: F, f_md: S::Metadata, t_cursor: u64, t_checksum: SCrc64) -> Self {
+    fn _new(f_d: File, f_md: S::Metadata, t_cursor: u64, t_checksum: SCrc64) -> Self {
         Self {
             f_d,
             f_md,
@@ -349,29 +368,27 @@ impl<
 }
 
 impl<
-        F: FileExt,
         S: FileSpecV1,
         const SIZE: usize,
         const PANIC_IF_UNFLUSHED: bool,
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
-    > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+    > TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
     /// Create a new tracked writer
     ///
     /// NB: The cursor is fetched. If the cursor is already available, use [`Self::with_cursor`]
     pub fn new(
-        mut f: SdssFile<S, F>,
-    ) -> IoResult<TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>>
-    {
+        mut f: SdssFile<S>,
+    ) -> IoResult<TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>> {
         f.file_cursor().map(|v| TrackedWriter::with_cursor(f, v))
     }
     /// Create a new tracked writer with the provided cursor
-    pub fn with_cursor(f: SdssFile<S, F>, c: u64) -> Self {
+    pub fn with_cursor(f: SdssFile<S>, c: u64) -> Self {
         Self::with_cursor_and_checksum(f, c, SCrc64::new())
     }
     /// Create a new tracked writer with the provided checksum and cursor
     pub fn with_cursor_and_checksum(
-        SdssFile { file, meta }: SdssFile<S, F>,
+        SdssFile { file, meta }: SdssFile<S>,
         c: u64,
         ck: SCrc64,
     ) -> Self {
@@ -383,12 +400,11 @@ impl<
 }
 
 impl<
-        F: FileWrite,
         S: FileSpecV1,
         const SIZE: usize,
         const PANIC_IF_UNFLUSHED: bool,
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
-    > TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+    > TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
     /// Same as [`Self::tracked_write_through_buffer`], but the partial state is updated
     pub fn dtrack_write_through_buffer(&mut self, buf: &[u8]) -> IoResult<()> {
@@ -471,10 +487,7 @@ impl<
         Ok(())
     }
     /// Flush the buffer and then sync data and metadata
-    pub fn flush_sync(&mut self) -> IoResult<()>
-    where
-        F: FileWriteExt,
-    {
+    pub fn flush_sync(&mut self) -> IoResult<()> {
         self.flush_buf().and_then(|_| self.fsync())
     }
     /// Flush the buffer
@@ -502,21 +515,17 @@ impl<
             }
         }
     }
-    pub fn fsync(&mut self) -> IoResult<()>
-    where
-        F: FileWriteExt,
-    {
+    pub fn fsync(&mut self) -> IoResult<()> {
         self.f_d.fsync_all()
     }
 }
 
 impl<
-        F,
         S: FileSpecV1,
         const SIZE: usize,
         const PANIC_IF_UNFLUSHED: bool,
         const CHECKSUM_WRITTEN_IF_BLOCK_ERROR: bool,
-    > Drop for TrackedWriter<F, S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
+    > Drop for TrackedWriter<S, SIZE, PANIC_IF_UNFLUSHED, CHECKSUM_WRITTEN_IF_BLOCK_ERROR>
 {
     fn drop(&mut self) {
         if PANIC_IF_UNFLUSHED && !self.buf.is_empty() {
@@ -544,7 +553,7 @@ fn check_vfs_buffering() {
     };
     closure! {
         // init writer
-        let mut twriter: TrackedWriter<File, SystemDatabaseV1> =
+        let mut twriter: TrackedWriter<SystemDatabaseV1> =
             TrackedWriter::new(SdssFile::create("myfile")?)?;
         assert_eq!(twriter.cursor_usize(), Header::SIZE);
         {

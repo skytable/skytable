@@ -36,7 +36,7 @@ use {
             uuid::Uuid,
         },
         error::{QueryError, QueryResult},
-        fractal::{GenericTask, GlobalInstanceLike, Task},
+        fractal::{FractalModelDriver, GenericTask, GlobalInstanceLike, Task},
         idx::{self, IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::{RawStr, VInline},
         ql::ddl::{
@@ -56,6 +56,30 @@ type Fields = IndexSTSeqCns<RawStr, Field>;
 
 #[derive(Debug)]
 pub struct Model {
+    data: ModelData,
+    driver: FractalModelDriver,
+}
+
+impl Model {
+    pub fn new(data: ModelData, driver: FractalModelDriver) -> Self {
+        Self { data, driver }
+    }
+    pub fn data(&self) -> &ModelData {
+        &self.data
+    }
+    pub fn data_mut(&mut self) -> &mut ModelData {
+        &mut self.data
+    }
+    pub fn driver(&self) -> &FractalModelDriver {
+        &self.driver
+    }
+    pub fn into_driver(self) -> FractalModelDriver {
+        self.driver
+    }
+}
+
+#[derive(Debug)]
+pub struct ModelData {
     uuid: Uuid,
     p_key: RawStr,
     p_tag: FullTag,
@@ -67,7 +91,7 @@ pub struct Model {
 }
 
 #[cfg(test)]
-impl PartialEq for Model {
+impl PartialEq for ModelData {
     fn eq(&self, m: &Self) -> bool {
         self.uuid == m.uuid
             && self.p_key == m.p_key
@@ -76,7 +100,7 @@ impl PartialEq for Model {
     }
 }
 
-impl Model {
+impl ModelData {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
@@ -153,7 +177,7 @@ impl Model {
     }
 }
 
-impl Model {
+impl ModelData {
     fn new_with_private(
         uuid: Uuid,
         p_key: RawStr,
@@ -260,7 +284,7 @@ impl Model {
     }
 }
 
-impl Model {
+impl ModelData {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         stmt: CreateModel,
@@ -268,110 +292,119 @@ impl Model {
         let (space_name, model_name) = (stmt.model_name.space(), stmt.model_name.entity());
         let if_nx = stmt.if_not_exists;
         let model = Self::process_create(stmt)?;
-        global.state().ddl_with_space_mut(&space_name, |space| {
-            // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
-            if space.models().contains(model_name) {
-                if if_nx {
-                    return Ok(Some(false));
-                } else {
-                    return Err(QueryError::QExecDdlObjectAlreadyExists);
+        global
+            .state()
+            .namespace()
+            .ddl_with_space_mut(&space_name, |space| {
+                // TODO(@ohsayan): be extra cautious with post-transactional tasks (memck)
+                if space.models().contains(model_name) {
+                    if if_nx {
+                        return Ok(Some(false));
+                    } else {
+                        return Err(QueryError::QExecDdlObjectAlreadyExists);
+                    }
                 }
-            }
-            // since we've locked this down, no one else can parallely create another model in the same space (or remove)
-            let mut txn_driver = global.gns_driver().lock();
-            // prepare txn
-            let txn = gns::model::CreateModelTxn::new(
-                SpaceIDRef::new(&space_name, &space),
-                &model_name,
-                &model,
-            );
-            // attempt to initialize driver
-            global.initialize_model_driver(
-                &space_name,
-                space.get_uuid(),
-                &model_name,
-                model.get_uuid(),
-            )?;
-            // commit txn
-            txn_driver.driver_context(
-                |drv| drv.commit_event(txn),
-                || {
-                    global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
-                        &space_name,
-                        space.get_uuid(),
-                        &model_name,
-                        model.get_uuid(),
-                    )))
-                },
-            )?;
-            // update global state
-            let _ = space.models_mut().insert(model_name.into());
-            let _ = global
-                .state()
-                .idx_models()
-                .write()
-                .insert(EntityID::new(&space_name, &model_name), model);
-            if if_nx {
-                Ok(Some(true))
-            } else {
-                Ok(None)
-            }
-        })
+                // since we've locked this down, no one else can parallely create another model in the same space (or remove)
+                // prepare txn
+                let txn = gns::model::CreateModelTxn::new(
+                    SpaceIDRef::new(&space_name, &space),
+                    &model_name,
+                    &model,
+                );
+                // attempt to initialize driver
+                let mdl_driver = global.initialize_model_driver(
+                    &space_name,
+                    space.get_uuid(),
+                    &model_name,
+                    model.get_uuid(),
+                )?;
+                // commit txn
+                global.state().gns_driver().driver_context(
+                    |drv| drv.commit_event(txn),
+                    || {
+                        global.taskmgr_post_standard_priority(Task::new(
+                            GenericTask::delete_model_dir(
+                                &space_name,
+                                space.get_uuid(),
+                                &model_name,
+                                model.get_uuid(),
+                            ),
+                        ))
+                    },
+                )?;
+                // update global state
+                let _ = space.models_mut().insert(model_name.into());
+                let _ = global.state().namespace().idx_models().write().insert(
+                    EntityID::new(&space_name, &model_name),
+                    Model::new(model, mdl_driver),
+                );
+                if if_nx {
+                    Ok(Some(true))
+                } else {
+                    Ok(None)
+                }
+            })
     }
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         stmt: DropModel,
     ) -> QueryResult<Option<bool>> {
         let (space_name, model_name) = (stmt.entity.space(), stmt.entity.entity());
-        global.state().ddl_with_space_mut(&space_name, |space| {
-            if !space.models().contains(model_name) {
-                if stmt.if_exists {
-                    return Ok(Some(false));
-                } else {
-                    // the model isn't even present
-                    return Err(QueryError::QExecObjectNotFound);
+        global
+            .state()
+            .namespace()
+            .ddl_with_space_mut(&space_name, |space| {
+                if !space.models().contains(model_name) {
+                    if stmt.if_exists {
+                        return Ok(Some(false));
+                    } else {
+                        // the model isn't even present
+                        return Err(QueryError::QExecObjectNotFound);
+                    }
                 }
-            }
-            // get exclusive lock on models
-            let mut models_idx = global.state().idx_models().write();
-            let model = models_idx
-                .get(&EntityIDRef::new(&space_name, &model_name))
-                .unwrap();
-            // the model must be empty for us to clean it up! (NB: consistent view + EX)
-            if (model.primary_index().count() != 0) & !(stmt.force) {
-                // nope, we can't drop this
-                return Err(QueryError::QExecDdlNotEmpty);
-            }
-            // okay this is looking good for us
-            // prepare txn
-            let txn = gns::model::DropModelTxn::new(ModelIDRef::new(
-                SpaceIDRef::new(&space_name, &space),
-                &model_name,
-                model.get_uuid(),
-                model.delta_state().schema_current_version().value_u64(),
-            ));
-            // commit txn
-            global
-                .gns_driver()
-                .lock()
-                .driver_context(|drv| drv.commit_event(txn), || {})?;
-            // request cleanup
-            global.purge_model_driver(
-                space_name,
-                space.get_uuid(),
-                model_name,
-                model.get_uuid(),
-                false,
-            );
-            // update global state
-            let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
-            let _ = space.models_mut().remove(model_name);
-            if stmt.if_exists {
-                Ok(Some(true))
-            } else {
-                Ok(None)
-            }
-        })
+                // get exclusive lock on models
+                let mut models_idx = global.state().namespace().idx_models().write();
+                let model = models_idx
+                    .get(&EntityIDRef::new(&space_name, &model_name))
+                    .unwrap();
+                // the model must be empty for us to clean it up! (NB: consistent view + EX)
+                if (model.data.primary_index().count() != 0) & !(stmt.force) {
+                    // nope, we can't drop this
+                    return Err(QueryError::QExecDdlNotEmpty);
+                }
+                // okay this is looking good for us
+                // prepare txn
+                let txn = gns::model::DropModelTxn::new(ModelIDRef::new(
+                    SpaceIDRef::new(&space_name, &space),
+                    &model_name,
+                    model.data.get_uuid(),
+                    model
+                        .data
+                        .delta_state()
+                        .schema_current_version()
+                        .value_u64(),
+                ));
+                // commit txn
+                global
+                    .state()
+                    .gns_driver()
+                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                // request cleanup
+                global.purge_model_driver(
+                    space_name,
+                    space.get_uuid(),
+                    model_name,
+                    model.data().get_uuid(),
+                );
+                // update global state
+                let _ = models_idx.remove(&EntityIDRef::new(&space_name, &model_name));
+                let _ = space.models_mut().remove(model_name);
+                if stmt.if_exists {
+                    Ok(Some(true))
+                } else {
+                    Ok(None)
+                }
+            })
     }
 }
 
@@ -429,7 +462,7 @@ impl ModelPrivate {
 }
 
 pub struct ModelMutator<'a> {
-    model: &'a mut Model,
+    model: &'a mut ModelData,
 }
 
 impl<'a> ModelMutator<'a> {

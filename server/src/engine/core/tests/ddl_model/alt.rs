@@ -26,7 +26,7 @@
 
 use crate::engine::{
     core::{
-        model::{alt::AlterPlan, Model},
+        model::{alt::AlterPlan, ModelData},
         tests::ddl_model::{create, exec_create},
         EntityIDRef,
     },
@@ -50,25 +50,26 @@ fn exec_plan(
     new_space: bool,
     model: &str,
     plan: &str,
-    f: impl Fn(&Model),
+    f: impl Fn(&ModelData),
 ) -> QueryResult<()> {
     let mdl_name = exec_create(global, model, new_space)?;
     let prev_uuid = {
         global
             .state()
+            .namespace()
             .idx_models()
             .read()
             .get(&EntityIDRef::new("myspace", &mdl_name))
-            .map(|mdl| mdl.get_uuid())
+            .map(|mdl| mdl.data().get_uuid())
             .unwrap()
     };
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
-    Model::transactional_exec_alter(global, alter)?;
-    let models = global.state().idx_models().read();
+    ModelData::transactional_exec_alter(global, alter)?;
+    let models = global.state().namespace().idx_models().read();
     let model = models.get(&EntityIDRef::new("myspace", &mdl_name)).unwrap();
-    assert_eq!(prev_uuid, model.get_uuid());
-    f(model);
+    assert_eq!(prev_uuid, model.data().get_uuid());
+    f(model.data());
     Ok(())
 }
 

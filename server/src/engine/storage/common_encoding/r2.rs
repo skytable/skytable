@@ -32,7 +32,7 @@ use {
     super::r1::{dec, impls::gns::GNSEvent, PersistObject},
     crate::{
         engine::{
-            core::GlobalNS,
+            core::GNSData,
             error::{StorageError, TransactionError},
             mem::BufferedScanner,
             txn::gns::sysctl::{AlterUserTxn, CreateUserTxn, DropUserTxn},
@@ -51,7 +51,7 @@ impl<'a> GNSEvent for CreateUserTxn<'a> {
     type RestoreType = FullUserDefinition;
     fn update_global_state(
         FullUserDefinition { username, password }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         if gns.sys_db().__raw_create_user(username, password) {
             Ok(())
@@ -138,7 +138,7 @@ impl<'a> GNSEvent for AlterUserTxn<'a> {
     type RestoreType = FullUserDefinition;
     fn update_global_state(
         FullUserDefinition { username, password }: Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         if gns.sys_db().__raw_alter_user(&username, password) {
             Ok(())
@@ -200,7 +200,7 @@ impl<'a> GNSEvent for DropUserTxn<'a> {
     type RestoreType = DropUserPayload;
     fn update_global_state(
         DropUserPayload(username): Self::RestoreType,
-        gns: &GlobalNS,
+        gns: &GNSData,
     ) -> RuntimeResult<()> {
         if gns.sys_db().__raw_delete_user(&username) {
             Ok(())

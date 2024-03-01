@@ -30,15 +30,13 @@
     file system
 */
 
-use std::io::BufWriter;
-
 #[cfg(test)]
 use super::vfs::{VFileDescriptor, VirtualFS};
 use {
     crate::IoResult,
     std::{
         fs as std_fs,
-        io::{BufReader, Error, ErrorKind, Read, Seek, SeekFrom, Write},
+        io::{BufReader, BufWriter, Error, ErrorKind, Read, Seek, SeekFrom, Write},
     },
 };
 
@@ -380,11 +378,13 @@ impl<Lf: FileExt> FileExt for AnyFile<Lf> {
 */
 
 #[cfg(test)]
+#[derive(Debug)]
 enum AnyFile<Lf = std_fs::File> {
     Local(Lf),
     Virtual(VFileDescriptor),
 }
 
+#[derive(Debug)]
 pub struct File {
     #[cfg(test)]
     f: AnyFile,
