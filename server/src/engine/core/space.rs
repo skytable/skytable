@@ -169,6 +169,7 @@ impl Space {
             global.initialize_space(&space_name, space.get_uuid())?;
             // commit txn
             global.state().gns_driver().driver_context(
+                global,
                 |drv| drv.commit_event(txn),
                 || {
                     global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
@@ -216,10 +217,11 @@ impl Space {
                 );
                 // commit
                 // commit txn
-                global
-                    .state()
-                    .gns_driver()
-                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                global.state().gns_driver().driver_context(
+                    global,
+                    |drv| drv.commit_event(txn),
+                    || {},
+                )?;
                 // merge
                 dict::rmerge_data_with_patch(space.props_mut(), patch);
                 // the `env` key may have been popped, so put it back (setting `env: null` removes the env key and we don't want to waste time enforcing this in the
@@ -255,10 +257,11 @@ impl Space {
                     let txn =
                         txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                     // commit txn
-                    global
-                        .state()
-                        .gns_driver()
-                        .driver_context(|drv| drv.commit_event(txn), || {})?;
+                    global.state().gns_driver().driver_context(
+                        global,
+                        |drv| drv.commit_event(txn),
+                        || {},
+                    )?;
                     // request cleanup
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
@@ -301,10 +304,11 @@ impl Space {
                 // prepare txn
                 let txn = txn::gns::space::DropSpaceTxn::new(SpaceIDRef::new(&space_name, &space));
                 // commit txn
-                global
-                    .state()
-                    .gns_driver()
-                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                global.state().gns_driver().driver_context(
+                    global,
+                    |drv| drv.commit_event(txn),
+                    || {},
+                )?;
                 // request cleanup
                 global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
                     &space_name,

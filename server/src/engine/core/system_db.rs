@@ -132,6 +132,7 @@ impl SystemDatabase {
         }
         let password_hash = rcrypt::hash(password, rcrypt::DEFAULT_COST).unwrap();
         global.state().gns_driver().driver_context(
+            global,
             |drv| drv.commit_event(CreateUserTxn::new(&username, &password_hash)),
             || {},
         )?;
@@ -148,6 +149,7 @@ impl SystemDatabase {
             Some(user) => {
                 let password_hash = rcrypt::hash(password, rcrypt::DEFAULT_COST).unwrap();
                 global.state().gns_driver().driver_context(
+                    global,
                     |drv| drv.commit_event(AlterUserTxn::new(username, &password_hash)),
                     || {},
                 )?;
@@ -162,10 +164,11 @@ impl SystemDatabase {
         if !users.contains_key(username) {
             return Err(QueryError::SysAuthError);
         }
-        global
-            .state()
-            .gns_driver()
-            .driver_context(|drv| drv.commit_event(DropUserTxn::new(username)), || {})?;
+        global.state().gns_driver().driver_context(
+            global,
+            |drv| drv.commit_event(DropUserTxn::new(username)),
+            || {},
+        )?;
         let _ = users.remove(username);
         Ok(())
     }

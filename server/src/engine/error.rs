@@ -220,5 +220,6 @@ enumerate_err! {
         RawJournalEventCorrupted = "journal-invalid-event",
         RawJournalCorrupted = "journal-corrupted",
         RawJournalInvalidEvent = "journal-invalid-event-order",
+        RawJournalRuntimeCriticalLwtHBFail = "journal-lwt-heartbeat-failed",
     }
 }

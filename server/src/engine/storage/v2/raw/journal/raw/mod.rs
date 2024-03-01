@@ -563,6 +563,19 @@ impl<J: RawJournalAdapter> RawJournalWriter<J> {
     {
         self.commit_with_ctx(event, Default::default())
     }
+    /// WARNING: ONLY CALL AFTER A FAILURE EVENT. THIS WILL EMPTY THE UNFLUSHED BUFFER
+    pub fn __lwt_heartbeat(&mut self) -> RuntimeResult<()> {
+        // verify that the on disk cursor is the same as what we know
+        self.log_file.verify_cursor()?;
+        if self.log_file.cursor() == self.known_txn_offset {
+            // great, so if there was something in the buffer, simply ignore it
+            self.log_file.__zero_buffer();
+            Ok(())
+        } else {
+            // so, the on-disk file probably has some partial state. this is bad. throw an error
+            Err(StorageError::RawJournalRuntimeCriticalLwtHBFail.into())
+        }
+    }
 }
 
 impl<J: RawJournalAdapter> RawJournalWriter<J> {

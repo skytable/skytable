@@ -25,10 +25,11 @@
 */
 
 use {
-    super::util,
+    super::{util, GlobalInstanceLike},
     crate::{
         engine::{
             error::{QueryError, QueryResult, RuntimeResult},
+            fractal::{CriticalTask, Task},
             storage::{GNSDriver, ModelDriver},
         },
         util::compiler,
@@ -50,8 +51,12 @@ impl FractalGNSDriver {
             txn_driver: Mutex::new(txn_driver),
         }
     }
+    pub(super) fn status(&self) -> &util::Status {
+        &self.status
+    }
     pub fn driver_context<T>(
         &self,
+        g: &impl GlobalInstanceLike,
         f: impl Fn(&mut GNSDriver) -> RuntimeResult<T>,
         on_failure: impl Fn(),
     ) -> QueryResult<T> {
@@ -65,6 +70,7 @@ impl FractalGNSDriver {
                 error!("GNS driver failed with: {e}");
                 self.status.set_iffy();
                 on_failure();
+                g.taskmgr_post_high_priority(Task::new(CriticalTask::CheckGNSDriver));
                 Err(QueryError::SysServerError)
             }),
         }

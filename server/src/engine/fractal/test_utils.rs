@@ -127,6 +127,8 @@ impl GlobalInstanceLike for TestGlobal {
                     .commit_with_ctx(StdModelBatch::new(mdl.data(), count), BatchStats::new())
                     .unwrap()
             }
+            CriticalTask::TryModelAutorecoverLWT(_) => {}
+            CriticalTask::CheckGNSDriver => {}
         }
     }
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>) {

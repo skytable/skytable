@@ -277,9 +277,33 @@ pub struct ModelUniqueID {
     uuid: Uuid,
 }
 
+pub struct ModelUniqueIDRef<'a> {
+    space: &'a str,
+    model: &'a str,
+    uuid: Uuid,
+}
+
+impl<'a> ModelUniqueIDRef<'a> {
+    pub fn new(space: &'a str, model: &'a str, uuid: Uuid) -> Self {
+        Self { space, model, uuid }
+    }
+}
+
 impl fmt::Display for ModelUniqueID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "model-{}@{}", self.model(), self.space())
+    }
+}
+
+impl<'a> From<ModelUniqueIDRef<'a>> for ModelUniqueID {
+    fn from(uid: ModelUniqueIDRef<'a>) -> Self {
+        Self::new(uid.space, uid.model, uid.uuid)
+    }
+}
+
+impl<'a> From<&'a ModelUniqueID> for ModelUniqueIDRef<'a> {
+    fn from(uid: &'a ModelUniqueID) -> Self {
+        Self::new(uid.space(), uid.model(), uid.uuid())
     }
 }
 

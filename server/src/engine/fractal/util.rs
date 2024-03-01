@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(unused)]
-
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug)]
@@ -36,9 +34,6 @@ pub struct Status {
 impl Status {
     pub const fn new_okay() -> Self {
         Self::new(true)
-    }
-    pub const fn new_iffy() -> Self {
-        Self::new(false)
     }
     const fn new(v: bool) -> Self {
         Self {

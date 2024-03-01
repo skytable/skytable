@@ -332,6 +332,20 @@ impl<
     fn available_capacity(&self) -> usize {
         self.buf.remaining_capacity()
     }
+    pub fn verify_cursor(&mut self) -> IoResult<()> {
+        let cursor = self.f_d.f_cursor()?;
+        if self.cursor() == cursor {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "file cursor is out of sync. unreliable file system",
+            ))
+        }
+    }
+    pub fn __zero_buffer(&mut self) {
+        self.buf.clear()
+    }
 }
 
 impl<

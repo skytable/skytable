@@ -274,10 +274,11 @@ impl ModelData {
                             &new_fields,
                         );
                         // commit txn
-                        global
-                            .state()
-                            .gns_driver()
-                            .driver_context(|drv| drv.commit_event(txn), || {})?;
+                        global.state().gns_driver().driver_context(
+                            global,
+                            |drv| drv.commit_event(txn),
+                            || {},
+                        )?;
                         let mut mutator = model.model_mutator();
                         new_fields
                             .stseq_ord_kv()
@@ -293,10 +294,11 @@ impl ModelData {
                             &removed,
                         );
                         // commit txn
-                        global
-                            .state()
-                            .gns_driver()
-                            .driver_context(|drv| drv.commit_event(txn), || {})?;
+                        global.state().gns_driver().driver_context(
+                            global,
+                            |drv| drv.commit_event(txn),
+                            || {},
+                        )?;
                         let mut mutator = model.model_mutator();
                         removed.iter().for_each(|field_id| {
                             mutator.remove_field(field_id.as_str());
@@ -309,10 +311,11 @@ impl ModelData {
                             &updated,
                         );
                         // commit txn
-                        global
-                            .state()
-                            .gns_driver()
-                            .driver_context(|drv| drv.commit_event(txn), || {})?;
+                        global.state().gns_driver().driver_context(
+                            global,
+                            |drv| drv.commit_event(txn),
+                            || {},
+                        )?;
                         let mut mutator = model.model_mutator();
                         updated.into_iter().for_each(|(field_id, field)| {
                             mutator.update_field(field_id.as_ref(), field);

@@ -25,7 +25,7 @@
 */
 
 use {
-    super::ModelUniqueID,
+    super::{ModelUniqueID, ModelUniqueIDRef},
     crate::{
         engine::{
             core::{
@@ -108,6 +108,9 @@ impl GenericTask {
 pub enum CriticalTask {
     /// Write a new data batch
     WriteBatch(ModelUniqueID, usize),
+    /// try recovering model ID
+    TryModelAutorecoverLWT(ModelUniqueID),
+    CheckGNSDriver,
 }
 
 /// The task manager
@@ -288,6 +291,55 @@ impl FractalMgr {
     ) {
         // TODO(@ohsayan): check threshold and update hooks
         match task {
+            CriticalTask::CheckGNSDriver => {
+                info!("trying to autorecover GNS driver");
+                match global
+                    .state()
+                    .gns_driver()
+                    .txn_driver
+                    .lock()
+                    .__lwt_heartbeat()
+                {
+                    Ok(()) => {
+                        info!("GNS driver has been successfully auto-recovered");
+                        global.state().gns_driver().status().set_okay();
+                    }
+                    Err(e) => {
+                        error!("failed to autorecover GNS driver with error `{e}`. will try again");
+                        self.hp_dispatcher
+                            .send(Task::new(CriticalTask::CheckGNSDriver))
+                            .unwrap();
+                    }
+                }
+            }
+            CriticalTask::TryModelAutorecoverLWT(mdl_id) => {
+                info!("trying to autorecover model {mdl_id}");
+                match global
+                    .state()
+                    .namespace()
+                    .idx_models()
+                    .read()
+                    .get(&EntityIDRef::new(mdl_id.space(), mdl_id.model()))
+                {
+                    Some(mdl) if mdl.data().get_uuid() == mdl_id.uuid() => {
+                        let mut drv = mdl.driver().batch_driver().lock();
+                        let drv = drv.as_mut().unwrap();
+                        match drv.__lwt_heartbeat() {
+                            Ok(()) => {
+                                mdl.driver().status().set_okay();
+                                info!("model driver for {mdl_id} has been successfully auto-recovered");
+                            }
+                            Err(e) => {
+                                error!("failed to autorecover {mdl_id} with {e}. will try again");
+                                self.hp_dispatcher
+                                    .send(Task::new(CriticalTask::TryModelAutorecoverLWT(mdl_id)))
+                                    .unwrap()
+                            }
+                        }
+                    }
+                    Some(_) | None => {}
+                }
+            }
             CriticalTask::WriteBatch(model_id, observed_size) => {
                 info!("fhp: {model_id} has reached cache capacity. writing to disk");
                 let mdl_read = global.state().namespace().idx_models().read();
@@ -295,16 +347,18 @@ impl FractalMgr {
                     model_id.space().into(),
                     model_id.model().into(),
                 )) {
-                    Some(mdl) if mdl.data().get_uuid() != model_id.uuid() => {
-                        // this is a different model with the same entity path
+                    Some(mdl) if mdl.data().get_uuid() == model_id.uuid() => mdl,
+                    Some(_) | None => {
+                        // this is a different model with the same entity path or it was deleted but the task was queued
                         return;
                     }
-                    Some(mdl) => mdl,
-                    None => {
-                        panic!("found deleted model")
-                    }
                 };
-                match Self::try_write_model_data_batch(mdl.data(), observed_size, mdl.driver()) {
+                match self.try_write_model_data_batch(
+                    ModelUniqueIDRef::from(&model_id),
+                    mdl.data(),
+                    observed_size,
+                    mdl.driver(),
+                ) {
                     Ok(()) => {
                         if observed_size != 0 {
                             info!("fhp: completed maintenance task for {model_id}, synced={observed_size}")
@@ -390,7 +444,12 @@ impl FractalMgr {
                 .data()
                 .delta_state()
                 .__fractal_take_full_from_data_delta(super::FractalToken::new());
-            match Self::try_write_model_data_batch(model.data(), observed_len, model.driver()) {
+            match self.try_write_model_data_batch(
+                ModelUniqueIDRef::new(model_id.space(), model_id.entity(), model.data().get_uuid()),
+                model.data(),
+                observed_len,
+                model.driver(),
+            ) {
                 Ok(()) => {
                     if observed_len != 0 {
                         info!(
@@ -428,6 +487,8 @@ impl FractalMgr {
     ///
     /// The zero check is essential
     fn try_write_model_data_batch(
+        &'static self,
+        mdl_id: ModelUniqueIDRef,
         model: &ModelData,
         observed_size: usize,
         mdl_driver_: &super::drivers::FractalModelDriver,
@@ -456,6 +517,11 @@ impl FractalMgr {
             )
             .map_err(|e| {
                 mdl_driver_.status().set_iffy();
+                self.hp_dispatcher
+                    .send(Task::new(CriticalTask::TryModelAutorecoverLWT(
+                        mdl_id.into(),
+                    )))
+                    .unwrap();
                 (e, BatchStats::into_inner(batch_stats))
             })
     }

@@ -320,6 +320,7 @@ impl ModelData {
                 )?;
                 // commit txn
                 global.state().gns_driver().driver_context(
+                    global,
                     |drv| drv.commit_event(txn),
                     || {
                         global.taskmgr_post_standard_priority(Task::new(
@@ -385,10 +386,11 @@ impl ModelData {
                         .value_u64(),
                 ));
                 // commit txn
-                global
-                    .state()
-                    .gns_driver()
-                    .driver_context(|drv| drv.commit_event(txn), || {})?;
+                global.state().gns_driver().driver_context(
+                    global,
+                    |drv| drv.commit_event(txn),
+                    || {},
+                )?;
                 // request cleanup
                 global.purge_model_driver(
                     space_name,

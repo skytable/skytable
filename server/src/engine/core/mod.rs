@@ -38,6 +38,7 @@ mod util;
 // test
 #[cfg(test)]
 pub(super) mod tests;
+
 // re-exports
 pub use self::util::{EntityID, EntityIDRef};
 
@@ -47,11 +48,14 @@ use {
         dml::QueryExecMeta,
         model::{Model, ModelData},
     },
-    crate::engine::{
-        core::space::Space,
-        error::{QueryError, QueryResult},
-        fractal::{FractalGNSDriver, GlobalInstanceLike},
-        idx::IndexST,
+    crate::{
+        engine::{
+            core::space::Space,
+            error::{QueryError, QueryResult},
+            fractal::{FractalGNSDriver, GlobalInstanceLike},
+            idx::IndexST,
+        },
+        util::compiler,
     },
     parking_lot::RwLock,
     std::collections::HashMap,
@@ -179,13 +183,17 @@ where
     let Some(model) = mdl_idx.get(&entity) else {
         return Err(QueryError::QExecObjectNotFound);
     };
-    let r = f(model.data())?;
-    model::DeltaState::guard_delta_overflow(
-        global,
-        entity.space(),
-        entity.entity(),
-        model.data(),
-        r,
-    );
-    Ok(())
+    if compiler::likely(model.driver().status().is_healthy()) {
+        let r = f(model.data())?;
+        model::DeltaState::guard_delta_overflow(
+            global,
+            entity.space(),
+            entity.entity(),
+            model.data(),
+            r,
+        );
+        Ok(())
+    } else {
+        compiler::cold_call(|| Err(QueryError::SysServerError))
+    }
 }
