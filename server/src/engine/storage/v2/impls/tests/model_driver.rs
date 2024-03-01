@@ -141,7 +141,6 @@ fn run_sample_inserts<K, V>(
             // reopen and verify 100 times
             test_utils::multi_run(100, || {
                 let global = TestGlobal::new_with_driver_id(log_name);
-                global.load_model_drivers().unwrap();
                 global
                     .state()
                     .namespace()
@@ -203,7 +202,6 @@ fn run_sample_updates<K, V>(
                 for _ in 0..reopen_count {
                     let mut global = TestGlobal::new_with_driver_id(log_name);
                     global.set_max_data_pressure(changes_per_cycle);
-                    global.load_model_drivers().unwrap();
                     let mut j = 0;
                     for _ in 0..changes_per_cycle {
                         let (username, pass) = &key_values[actual_position];
@@ -218,7 +216,6 @@ fn run_sample_updates<K, V>(
             }
             {
                 let global = TestGlobal::new_with_driver_id(log_name);
-                global.load_model_drivers().unwrap();
                 for (txn_id, (username, password)) in key_values
                     .iter()
                     .enumerate()

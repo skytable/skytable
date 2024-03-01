@@ -59,7 +59,7 @@ pub struct VirtualFS {
 #[derive(Debug)]
 enum VNode {
     Dir(HashMap<Box<str>, Self>),
-    File(VFile),
+    File(RwLock<VFile>),
 }
 
 #[derive(Debug)]
@@ -83,15 +83,6 @@ pub enum FileOpen<CF, EF = CF> {
 
 #[derive(Debug)]
 pub struct VFileDescriptor(pub(super) Box<str>);
-
-impl VFileDescriptor {
-    pub(super) fn get_ref<'a>(&self, vfs: &'a VirtualFS) -> &'a VFile {
-        vfs.with_file(&self.0, |f| Ok(f)).unwrap()
-    }
-    pub(super) fn get_mut<'a>(&self, vfs: &'a mut VirtualFS) -> &'a mut VFile {
-        vfs.with_file_mut(&self.0, |f| Ok(f)).unwrap()
-    }
-}
 
 impl Drop for VFileDescriptor {
     fn drop(&mut self) {
@@ -176,9 +167,6 @@ impl VFile {
     fn current(&self) -> &[u8] {
         &self.data[self.pos..]
     }
-    fn fw_write_all(&mut self, bytes: &[u8]) -> IoResult<()> {
-        self.fwrite(bytes).map(|_| ())
-    }
 }
 
 impl VNode {
@@ -224,7 +212,7 @@ impl VirtualFS {
             }
             Entry::Vacant(v) => {
                 // no file exists, we can create this
-                v.insert(VNode::File(VFile::new(true, true, vec![], 0)));
+                v.insert(VNode::File(RwLock::new(VFile::new(true, true, vec![], 0))));
                 Ok(VFileDescriptor(fpath.into()))
             }
         }
@@ -242,14 +230,14 @@ impl VirtualFS {
         // create new file
         let file = self.fs_fopen_or_create_rw(to)?;
         match file {
-            FileOpen::Created(c) => {
-                c.get_mut(self).fw_write_all(&data)?;
-            }
-            FileOpen::Existing(c) => {
-                let file = c.get_mut(self);
-                file.truncate(0)?;
-                file.fw_write_all(&data)?;
-            }
+            FileOpen::Created(c) => self.with_file_mut(&c.0, |f| Ok(f.data = data))?,
+            FileOpen::Existing(c) => self.with_file_mut(&c.0, |f| {
+                f.data = data;
+                f.pos = 0;
+                f.read = false;
+                f.write = false;
+                Ok(())
+            })?,
         }
         // delete old file
         self.fs_remove_file(from)
@@ -330,8 +318,9 @@ impl VirtualFS {
         let (target_file, components) = util::split_target_and_components(fpath);
         let target_dir = util::find_target_dir_mut(components, &mut self.root)?;
         match target_dir.entry(target_file.into()) {
-            Entry::Occupied(mut oe) => match oe.get_mut() {
+            Entry::Occupied(oe) => match oe.get() {
                 VNode::File(f) => {
+                    let mut f = f.write();
                     f.read = true;
                     f.write = true;
                     Ok(FileOpen::Existing(VFileDescriptor(fpath.into())))
@@ -339,33 +328,39 @@ impl VirtualFS {
                 VNode::Dir(_) => return err::item_is_not_file(),
             },
             Entry::Vacant(v) => {
-                v.insert(VNode::File(VFile::new(true, true, vec![], 0)));
+                v.insert(VNode::File(RwLock::new(VFile::new(true, true, vec![], 0))));
                 Ok(FileOpen::Created(VFileDescriptor(fpath.into())))
             }
         }
     }
-    fn with_file_mut<'a, T>(
-        &'a mut self,
+    pub(super) fn with_file_mut<T>(
+        &self,
         fpath: &str,
-        mut f: impl FnMut(&'a mut VFile) -> IoResult<T>,
-    ) -> IoResult<T> {
-        let (target_file, components) = util::split_target_and_components(fpath);
-        let target_dir = util::find_target_dir_mut(components, &mut self.root)?;
-        match target_dir.get_mut(target_file) {
-            Some(VNode::File(file)) => f(file),
-            Some(VNode::Dir(_)) => return err::item_is_not_file(),
-            None => return Err(Error::from(ErrorKind::NotFound).into()),
-        }
-    }
-    fn with_file<'a, T>(
-        &'a self,
-        fpath: &str,
-        mut f: impl FnMut(&'a VFile) -> IoResult<T>,
+        f: impl FnOnce(&mut VFile) -> IoResult<T>,
     ) -> IoResult<T> {
         let (target_file, components) = util::split_target_and_components(fpath);
         let target_dir = util::find_target_dir(components, &self.root)?;
         match target_dir.get(target_file) {
-            Some(VNode::File(file)) => f(file),
+            Some(VNode::File(file)) => {
+                let mut file = file.write();
+                f(&mut file)
+            }
+            Some(VNode::Dir(_)) => return err::item_is_not_file(),
+            None => return Err(Error::from(ErrorKind::NotFound).into()),
+        }
+    }
+    pub(super) fn with_file<T>(
+        &self,
+        fpath: &str,
+        f: impl FnOnce(&VFile) -> IoResult<T>,
+    ) -> IoResult<T> {
+        let (target_file, components) = util::split_target_and_components(fpath);
+        let target_dir = util::find_target_dir(components, &self.root)?;
+        match target_dir.get(target_file) {
+            Some(VNode::File(file)) => {
+                let f_ = file.read();
+                f(&f_)
+            }
             Some(VNode::Dir(_)) => return err::item_is_not_file(),
             None => return Err(Error::from(ErrorKind::NotFound).into()),
         }

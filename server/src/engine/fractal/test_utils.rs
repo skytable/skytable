@@ -46,26 +46,23 @@ use {
 pub struct TestGlobal {
     gns: GlobalNS,
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
-    #[allow(unused)]
     max_delta_size: usize,
-    max_data_pressure: usize,
 }
 
 impl TestGlobal {
-    fn new(gns: GlobalNS, max_delta_size: usize) -> Self {
+    fn new(gns: GlobalNS) -> Self {
         Self {
             gns,
             lp_queue: RwLock::default(),
-            max_delta_size,
-            max_data_pressure: usize::MAX,
+            max_delta_size: usize::MAX,
         }
     }
     pub fn set_max_data_pressure(&mut self, max_data_pressure: usize) {
-        self.max_data_pressure = max_data_pressure;
+        self.max_delta_size = max_data_pressure;
     }
     /// Normally, model drivers are not loaded on startup because of shared global state. Calling this will attempt to load
     /// all model drivers
-    pub fn load_model_drivers(&self) -> RuntimeResult<()> {
+    fn load_model_drivers(&self) -> RuntimeResult<()> {
         let space_idx = self.gns.namespace().idx().read();
         for (model_name, model) in self.gns.namespace().idx_models().read().iter() {
             let model_data = model.data();
@@ -106,7 +103,9 @@ impl TestGlobal {
             },
         }
         .unwrap();
-        Self::new(GlobalNS::new(data, FractalGNSDriver::new(driver)), 0)
+        let me = Self::new(GlobalNS::new(data, FractalGNSDriver::new(driver)));
+        me.load_model_drivers().unwrap();
+        me
     }
 }
 
@@ -134,7 +133,7 @@ impl GlobalInstanceLike for TestGlobal {
         self.lp_queue.write().push(task)
     }
     fn get_max_delta_size(&self) -> usize {
-        self.max_data_pressure
+        self.max_delta_size
     }
     fn purge_model_driver(
         &self,
@@ -169,8 +168,22 @@ impl Drop for TestGlobal {
     fn drop(&mut self) {
         let mut txn_driver = self.gns.gns_driver().txn_driver.lock();
         GNSDriver::close_driver(&mut txn_driver).unwrap();
-        for (_, model_driver) in self.gns.namespace().idx_models().write().drain() {
-            model_driver.into_driver().close().unwrap();
+        for (_, model) in self.gns.namespace().idx_models().write().drain() {
+            let delta_count = model
+                .data()
+                .delta_state()
+                .__fractal_take_full_from_data_delta(super::FractalToken::new());
+            if delta_count != 0 {
+                let mut drv = model.driver().batch_driver().lock();
+                drv.as_mut()
+                    .unwrap()
+                    .commit_with_ctx(
+                        StdModelBatch::new(model.data(), delta_count),
+                        BatchStats::new(),
+                    )
+                    .unwrap();
+            }
+            model.into_driver().close().unwrap();
         }
     }
 }

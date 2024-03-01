@@ -525,24 +525,23 @@ fn arg_decode_auth<CS: ConfigurationSource>(
     src_args: &mut ParsedRawArgs,
     config: &mut ModifyGuard<DecodedConfiguration>,
 ) -> RuntimeResult<()> {
-    let (Some(auth_driver), Some(mut root_key)) = (
-        src_args.remove(CS::KEY_AUTH_DRIVER),
-        src_args.remove(CS::KEY_AUTH_ROOT_PASSWORD),
-    ) else {
+    let auth_driver = src_args.remove(CS::KEY_AUTH_DRIVER);
+    let Some(mut root_key) = src_args.remove(CS::KEY_AUTH_ROOT_PASSWORD) else {
         return Err(ConfigError::with_src(
             CS::SOURCE,
             ConfigErrorKind::ErrorString(format!(
-                "to enable auth, you must provide values for both {} and {}",
+                "to enable auth, you must provide values for {}",
                 CS::KEY_AUTH_DRIVER,
-                CS::KEY_AUTH_ROOT_PASSWORD
             )),
         )
         .into());
     };
-    argck_duplicate_values::<CS>(&auth_driver, CS::KEY_AUTH_DRIVER)?;
+    if let Some(ref adrv) = auth_driver {
+        argck_duplicate_values::<CS>(&adrv, CS::KEY_AUTH_DRIVER)?;
+    }
     argck_duplicate_values::<CS>(&root_key, CS::KEY_AUTH_DRIVER)?;
-    let auth_plugin = match auth_driver[0].as_str() {
-        "pwd" => AuthDriver::Pwd,
+    let auth_plugin = match auth_driver.as_ref().map(|v| v[0].as_str()) {
+        Some("pwd") | None => AuthDriver::Pwd,
         _ => return Err(CS::err_invalid_value_for(CS::KEY_AUTH_DRIVER).into()),
     };
     config.auth = Some(DecodedAuth {

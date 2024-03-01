@@ -9,11 +9,9 @@ A modern NoSQL database, powered by BlueQL.<br/>
 Skytable is a **modern NoSQL database** that focuses on **performance, flexibility and scalability**. Skytable
 is a primarily in-memory, wide-column based database with support for additional data models<sup>*</sup> that 
 uses its own storage engine (structured like n-ary records with optimized delayed-durability transactions) and 
-enables querying with its own query language *BlueQL* that is based on SQL which builds on SQL to improve 
-security and flexibility.
+enables querying with its own query language *BlueQL* that builds on top of SQL to improve security and flexibility.
 
-Skytable is best-suited for applications that need to store large-scale data, need high-performance and low 
-latencies.
+Skytable is best-suited for applications that need to store large-scale data, need high-performance and low latencies.
 
 > **You can read more about Skytable's architecture, including information on the clustering and HA implementation that we're currently working on, and limitations [on this page](https://docs.skytable.io/architecture).**
 

@@ -42,12 +42,6 @@ use {
 
 pub struct FileSystem {}
 
-impl Default for FileSystem {
-    fn default() -> Self {
-        Self::instance()
-    }
-}
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum FSContext {
     Local,
@@ -55,9 +49,6 @@ pub enum FSContext {
 }
 
 impl FileSystem {
-    pub fn instance() -> Self {
-        Self {}
-    }
     fn context() -> FSContext {
         local! { static CTX: FSContext = FSContext::Virtual; }
         local_ref!(CTX, |ctx| *ctx)
@@ -308,7 +299,9 @@ impl<Lf: FileWrite> FileWrite for AnyFile<Lf> {
     fn fwrite(&mut self, buf: &[u8]) -> IoResult<u64> {
         match self {
             Self::Local(lf) => lf.fwrite(buf),
-            Self::Virtual(vf) => vf.get_mut(&mut VirtualFS::instance().write()).fwrite(buf),
+            Self::Virtual(vf) => VirtualFS::instance()
+                .read()
+                .with_file_mut(&vf.0, |f| f.fwrite(buf)),
         }
     }
 }
@@ -318,9 +311,9 @@ impl<Lf: FileRead> FileRead for AnyFile<Lf> {
     fn fread_exact(&mut self, buf: &mut [u8]) -> IoResult<()> {
         match self {
             Self::Local(lf) => lf.fread_exact(buf),
-            Self::Virtual(vf) => vf
-                .get_mut(&mut VirtualFS::instance().write())
-                .fread_exact(buf),
+            Self::Virtual(vf) => VirtualFS::instance()
+                .read()
+                .with_file_mut(&vf.0, |f| f.fread_exact(buf)),
         }
     }
 }
@@ -342,9 +335,9 @@ impl<Lf: FileWriteExt> FileWriteExt for AnyFile<Lf> {
     fn f_truncate(&mut self, new_size: u64) -> IoResult<()> {
         match self {
             Self::Local(lf) => lf.f_truncate(new_size),
-            Self::Virtual(vf) => vf
-                .get_mut(&mut VirtualFS::instance().write())
-                .truncate(new_size),
+            Self::Virtual(vf) => VirtualFS::instance()
+                .read()
+                .with_file_mut(&vf.0, |f| f.truncate(new_size)),
         }
     }
 }
@@ -354,21 +347,25 @@ impl<Lf: FileExt> FileExt for AnyFile<Lf> {
     fn f_len(&self) -> IoResult<u64> {
         match self {
             Self::Local(lf) => lf.f_len(),
-            Self::Virtual(vf) => vf.get_ref(&VirtualFS::instance().read()).length(),
+            Self::Virtual(vf) => VirtualFS::instance()
+                .read()
+                .with_file(&vf.0, |f| f.length()),
         }
     }
     fn f_cursor(&mut self) -> IoResult<u64> {
         match self {
             Self::Local(lf) => lf.f_cursor(),
-            Self::Virtual(vf) => vf.get_ref(&VirtualFS::instance().read()).cursor(),
+            Self::Virtual(vf) => VirtualFS::instance()
+                .read()
+                .with_file(&vf.0, |f| f.cursor()),
         }
     }
     fn f_seek_start(&mut self, offset: u64) -> IoResult<()> {
         match self {
             Self::Local(lf) => lf.f_seek_start(offset),
-            Self::Virtual(vf) => vf
-                .get_mut(&mut VirtualFS::instance().write())
-                .seek_from_start(offset),
+            Self::Virtual(vf) => VirtualFS::instance()
+                .read()
+                .with_file_mut(&vf.0, |f| f.seek_from_start(offset)),
         }
     }
 }
