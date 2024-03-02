@@ -42,7 +42,7 @@ use {
         },
         util::os,
     },
-    std::path::PathBuf,
+    std::{path::PathBuf, time::Duration},
     tokio::{
         fs,
         sync::{
@@ -54,6 +54,8 @@ use {
 };
 
 pub const GENERAL_EXECUTOR_WINDOW: u64 = 5 * 60;
+const TASK_THRESHOLD: usize = 10;
+const TASK_FAILURE_SLEEP_DURATION: u64 = 30;
 
 /// A task for the [`FractalMgr`] to perform
 #[derive(Debug)]
@@ -63,10 +65,9 @@ pub struct Task<T> {
 }
 
 impl<T> Task<T> {
-    const THRESHOLD: usize = 10;
     /// Create a new task with the default threshold
     pub fn new(task: T) -> Self {
-        Self::with_threshold(task, Self::THRESHOLD)
+        Self::with_threshold(task, TASK_THRESHOLD)
     }
     /// Create a task with the given threshold
     fn with_threshold(task: T, threshold: usize) -> Self {
@@ -75,6 +76,11 @@ impl<T> Task<T> {
     #[cfg(test)]
     pub fn into_task(self) -> T {
         self.task
+    }
+    async fn sleep(&self) {
+        if self.threshold != TASK_THRESHOLD {
+            tokio::time::sleep(Duration::from_secs(TASK_FAILURE_SLEEP_DURATION)).await
+        }
     }
 }
 
@@ -248,6 +254,11 @@ impl FractalMgr {
 
 // services
 impl FractalMgr {
+    #[inline(always)]
+    fn adjust_threshold(th: usize) -> usize {
+        // FIXME(@ohsayan): adjust a correct threshold. right now we don't do anything here (and for good reason)
+        th.saturating_sub(1)
+    }
     /// The high priority executor service runs in the background to take care of high priority tasks and take any
     /// appropriate action. It will exclusively own the high priority queue since it is the only broker that is
     /// allowed to perform HP tasks
@@ -261,7 +272,10 @@ impl FractalMgr {
             let task = tokio::select! {
                 task = receiver.recv() => {
                     match task {
-                        Some(t) => t,
+                        Some(t) => {
+                            t.sleep().await;
+                            t
+                        },
                         None => {
                             info!("fhp: exiting executor service because all tasks closed");
                             break;
@@ -283,6 +297,22 @@ impl FractalMgr {
                 .await
                 .unwrap()
         }
+    }
+    #[cold]
+    #[inline(never)]
+    fn re_enqueue_model_sync(
+        &self,
+        model_id: ModelUniqueID,
+        observed_size: usize,
+        stats: BatchStats,
+        threshold: usize,
+    ) {
+        self.hp_dispatcher
+            .send(Task::with_threshold(
+                CriticalTask::WriteBatch(model_id, observed_size - stats.get_actual()),
+                threshold,
+            ))
+            .unwrap()
     }
     fn hp_executor(
         &'static self,
@@ -370,15 +400,12 @@ impl FractalMgr {
                             model_id.uuid()
                         );
                         // enqueue again for retrying
-                        self.hp_dispatcher
-                            .send(Task::with_threshold(
-                                CriticalTask::WriteBatch(
-                                    model_id,
-                                    observed_size - stats.get_actual(),
-                                ),
-                                threshold - 1,
-                            ))
-                            .unwrap();
+                        self.re_enqueue_model_sync(
+                            model_id,
+                            observed_size,
+                            stats,
+                            Self::adjust_threshold(threshold),
+                        )
                     }
                 }
             }
@@ -411,7 +438,10 @@ impl FractalMgr {
                 }
                 task = lpq.recv() => {
                     let Task { threshold, task } = match task {
-                        Some(t) => t,
+                        Some(t) => {
+                            t.sleep().await;
+                            t
+                        },
                         None => {
                             info!("flp: exiting executor service because all tasks closed");
                             break;
@@ -422,14 +452,14 @@ impl FractalMgr {
                         GenericTask::DeleteFile(f) => {
                             if let Err(_) = fs::remove_file(&f).await {
                                 self.general_dispatcher.send(
-                                    Task::with_threshold(GenericTask::DeleteFile(f), threshold - 1)
+                                    Task::with_threshold(GenericTask::DeleteFile(f), Self::adjust_threshold(threshold))
                                 ).unwrap();
                             }
                         }
                         GenericTask::DeleteDirAll(dir) => {
                             if let Err(_) = fs::remove_dir_all(&dir).await {
                                 self.general_dispatcher.send(
-                                    Task::with_threshold(GenericTask::DeleteDirAll(dir), threshold - 1)
+                                    Task::with_threshold(GenericTask::DeleteDirAll(dir), Self::adjust_threshold(threshold))
                                 ).unwrap();
                             }
                         }
@@ -465,16 +495,16 @@ impl FractalMgr {
                         model_id.space(), model_id.entity(),
                     );
                     // this failure is *not* good, so we want to promote this to a critical task
-                    self.hp_dispatcher
-                        .send(Task::new(CriticalTask::WriteBatch(
-                            ModelUniqueID::new(
-                                model_id.space(),
-                                model_id.entity(),
-                                model.data().get_uuid(),
-                            ),
-                            observed_len - stats.get_actual(),
-                        )))
-                        .unwrap()
+                    self.re_enqueue_model_sync(
+                        ModelUniqueID::new(
+                            model_id.space(),
+                            model_id.entity(),
+                            model.data().get_uuid(),
+                        ),
+                        observed_len,
+                        stats,
+                        TASK_THRESHOLD,
+                    )
                 }
             }
         }

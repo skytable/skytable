@@ -266,19 +266,14 @@ impl Space {
                     global.taskmgr_post_standard_priority(Task::new(
                         GenericTask::delete_space_dir(&space_name, space.get_uuid()),
                     ));
-                    let space_uuid = space.get_uuid();
                     for model in space.models.into_iter() {
                         let e: EntityIDRef<'static> = unsafe {
                             // UNSAFE(@ohsayan): I want to try what the borrow checker has been trying
                             core::mem::transmute(EntityIDRef::new(space_name.as_str(), &model))
                         };
-                        let mdl = models.st_delete_return(&e).unwrap();
-                        global.purge_model_driver(
-                            &space_name,
-                            space_uuid,
-                            &model,
-                            mdl.data().get_uuid(),
-                        );
+                        models.st_delete(&e);
+                        // no need to purge model drive since the dir itself is deleted. our work here is to just
+                        // remove this from the linked models from the model ns
                     }
                     let _ = spaces.st_delete(space_name.as_str());
                     if if_exists {

@@ -33,7 +33,7 @@ use {
             GNSDriver, ModelDriver,
         },
     },
-    crate::engine::error::RuntimeResult,
+    crate::{engine::error::RuntimeResult, util::compiler},
     std::{fmt, mem::MaybeUninit},
     tokio::sync::mpsc::unbounded_channel,
 };
@@ -117,6 +117,7 @@ pub trait GlobalInstanceLike {
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>);
     // default impls
+    #[inline(always)]
     fn request_batch_resolve_if_cache_full(
         &self,
         space_name: &str,
@@ -128,14 +129,18 @@ pub trait GlobalInstanceLike {
         let r_tolerated_change = hint.delta_hint() >= self.get_max_delta_size();
         let r_percent_change = (hint.delta_hint() >= ((model.primary_index().count() / 100) * 5))
             & (r_tolerated_change);
-        if r_tolerated_change | r_percent_change {
-            let obtained_delta_size = model
-                .delta_state()
-                .__fractal_take_full_from_data_delta(FractalToken::new());
-            self.taskmgr_post_high_priority(Task::new(CriticalTask::WriteBatch(
-                ModelUniqueID::new(space_name, model_name, model.get_uuid()),
-                obtained_delta_size,
-            )));
+        if compiler::unlikely(r_tolerated_change | r_percent_change) {
+            // do not inline this path as we expect sufficient memory to be present and/or the background service
+            // to pick this up
+            compiler::cold_call(|| {
+                let obtained_delta_size = model
+                    .delta_state()
+                    .__fractal_take_full_from_data_delta(FractalToken::new());
+                self.taskmgr_post_high_priority(Task::new(CriticalTask::WriteBatch(
+                    ModelUniqueID::new(space_name, model_name, model.get_uuid()),
+                    obtained_delta_size,
+                )));
+            })
         }
     }
 }
