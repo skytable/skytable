@@ -50,6 +50,9 @@ impl User {
             phash: password_hash,
         }
     }
+    pub fn hash(&self) -> &[u8] {
+        &self.phash
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]

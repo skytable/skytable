@@ -88,6 +88,11 @@ pub fn recreate(gns: GNSData) -> RuntimeResult<SELoaded> {
         model_driver.commit_with_ctx(FullModel::new(model_data), BatchStats::new())?;
         model.driver().initialize_model_driver(model_driver);
     }
+    // create all users
+    context::set_dmsg("creating all users");
+    for (user_name, user) in gns.sys_db().users().read().iter() {
+        gns_driver.commit_event(CreateUserTxn::new(&user_name, user.hash()))?;
+    }
     Ok(SELoaded {
         gns: GlobalNS::new(gns, FractalGNSDriver::new(gns_driver)),
     })
