@@ -2,6 +2,13 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.8.1
+
+### Fixes
+
+- Fixed migration from v1 SE (released with v0.8.0-beta) to v2 SE (released in v0.8.0)
+- Fixed health reporting
+
 ## Version 0.8.0
 
 > This is the first release of Skytable Octave, and it changes the query API entirely making all previous versions incompatible 

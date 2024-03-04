@@ -271,9 +271,13 @@ impl Space {
                             // UNSAFE(@ohsayan): I want to try what the borrow checker has been trying
                             core::mem::transmute(EntityIDRef::new(space_name.as_str(), &model))
                         };
-                        models.st_delete(&e);
+                        let mdl = models.st_delete_return(&e).unwrap();
                         // no need to purge model drive since the dir itself is deleted. our work here is to just
-                        // remove this from the linked models from the model ns
+                        // remove this from the linked models from the model ns. but we should update the global state
+                        if mdl.driver().status().is_iffy() {
+                            // yes this driver had a fault but it's being purged anyway so update global status
+                            global.health().report_removal_of_faulty_source();
+                        }
                     }
                     let _ = spaces.st_delete(space_name.as_str());
                     if if_exists {

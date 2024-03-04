@@ -26,7 +26,7 @@
 
 use {
     super::{
-        drivers::FractalGNSDriver, CriticalTask, FractalModelDriver, GenericTask,
+        drivers::FractalGNSDriver, CriticalTask, FractalModelDriver, GenericTask, GlobalHealth,
         GlobalInstanceLike, Task,
     },
     crate::engine::{
@@ -47,6 +47,7 @@ pub struct TestGlobal {
     gns: GlobalNS,
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
     max_delta_size: usize,
+    health: GlobalHealth,
 }
 
 impl TestGlobal {
@@ -55,6 +56,7 @@ impl TestGlobal {
             gns,
             lp_queue: RwLock::default(),
             max_delta_size: usize::MAX,
+            health: GlobalHealth::new(),
         }
     }
     pub fn set_max_data_pressure(&mut self, max_data_pressure: usize) {
@@ -110,6 +112,9 @@ impl TestGlobal {
 }
 
 impl GlobalInstanceLike for TestGlobal {
+    fn health(&self) -> &GlobalHealth {
+        &self.health
+    }
     fn state(&self) -> &GlobalNS {
         &self.gns
     }

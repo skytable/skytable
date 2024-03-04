@@ -67,10 +67,11 @@ impl FractalGNSDriver {
         match f(&mut txn_driver) {
             Ok(v) => Ok(v),
             Err(e) => compiler::cold_call(|| {
-                error!("GNS driver failed with: {e}");
                 self.status.set_iffy();
+                g.health().report_fault();
                 on_failure();
                 g.taskmgr_post_high_priority(Task::new(CriticalTask::CheckGNSDriver));
+                error!("GNS driver failed with: {e}");
                 Err(QueryError::SysServerError)
             }),
         }

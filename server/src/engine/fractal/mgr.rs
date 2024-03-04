@@ -333,6 +333,7 @@ impl FractalMgr {
                     Ok(()) => {
                         info!("GNS driver has been successfully auto-recovered");
                         global.state().gns_driver().status().set_okay();
+                        global.health().report_recovery();
                     }
                     Err(e) => {
                         error!("failed to autorecover GNS driver with error `{e}`. will try again");
@@ -357,6 +358,7 @@ impl FractalMgr {
                         match drv.__lwt_heartbeat() {
                             Ok(()) => {
                                 mdl.driver().status().set_okay();
+                                global.health().report_recovery();
                                 info!("model driver for {mdl_id} has been successfully auto-recovered");
                             }
                             Err(e) => {

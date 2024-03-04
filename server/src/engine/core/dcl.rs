@@ -46,7 +46,13 @@ pub fn exec<G: GlobalInstanceLike>(
         SysctlCommand::CreateUser(new) => create_user(&g, new),
         SysctlCommand::DropUser(drop) => drop_user(&g, current_user, drop),
         SysctlCommand::AlterUser(usermod) => alter_user(&g, current_user, usermod),
-        SysctlCommand::ReportStatus => Ok(()),
+        SysctlCommand::ReportStatus => {
+            if g.health().status_okay() {
+                Ok(())
+            } else {
+                Err(QueryError::SysServerError)
+            }
+        }
     }
 }
 

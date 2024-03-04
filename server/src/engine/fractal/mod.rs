@@ -34,7 +34,11 @@ use {
         },
     },
     crate::{engine::error::RuntimeResult, util::compiler},
-    std::{fmt, mem::MaybeUninit},
+    std::{
+        fmt,
+        mem::MaybeUninit,
+        sync::atomic::{AtomicUsize, Ordering},
+    },
     tokio::sync::mpsc::unbounded_channel,
 };
 
@@ -87,9 +91,34 @@ pub unsafe fn load_and_enable_all(gns: GlobalNS) -> GlobalStateStart {
     global access
 */
 
+pub struct GlobalHealth {
+    faults: AtomicUsize,
+}
+
+impl GlobalHealth {
+    pub fn status_okay(&self) -> bool {
+        self.faults.load(Ordering::Acquire) == 0
+    }
+    const fn new() -> Self {
+        Self {
+            faults: AtomicUsize::new(0),
+        }
+    }
+    fn report_fault(&self) {
+        self.faults.fetch_add(1, Ordering::Release);
+    }
+    fn report_recovery(&self) {
+        self.faults.fetch_sub(1, Ordering::Release);
+    }
+    pub fn report_removal_of_faulty_source(&self) {
+        self.report_recovery()
+    }
+}
+
 /// Something that represents the global state
 pub trait GlobalInstanceLike {
     // stat
+    fn health(&self) -> &GlobalHealth;
     fn get_max_delta_size(&self) -> usize;
     // global namespace
     fn state(&self) -> &GlobalNS;
@@ -149,6 +178,13 @@ impl GlobalInstanceLike for Global {
     // ns
     fn state(&self) -> &GlobalNS {
         self._namespace()
+    }
+    fn health(&self) -> &GlobalHealth {
+        &unsafe {
+            // UNSAFE(@ohsayan): we expect the system to be initialized
+            self.__gref()
+        }
+        .health
     }
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
@@ -258,11 +294,16 @@ impl Global {
 struct GlobalState {
     gns: GlobalNS,
     task_mgr: mgr::FractalMgr,
+    health: GlobalHealth,
 }
 
 impl GlobalState {
     fn new(gns: GlobalNS, task_mgr: mgr::FractalMgr) -> Self {
-        Self { gns, task_mgr }
+        Self {
+            gns,
+            task_mgr,
+            health: GlobalHealth::new(),
+        }
     }
     pub(self) fn fractal_mgr(&self) -> &mgr::FractalMgr {
         &self.task_mgr
