@@ -95,7 +95,7 @@ pub mod cell {
     impl StorageCellTypeID {
         #[inline(always)]
         pub const fn is_valid(d: u8) -> bool {
-            d <= Self::MAX
+            d <= Self::MAX_DSCR
         }
         unsafe fn into_selector(self) -> TagSelector {
             debug_assert!(self.value_u8() != Self::Null.value_u8());
@@ -451,7 +451,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         > as PersistObject>::obj_dec(
             scanner, super::map::MapIndexSizeMD(md.field_c as usize)
         )?;
-        let ptag = if md.p_key_tag > TagSelector::MAX as u64 {
+        let ptag = if md.p_key_tag > TagSelector::MAX_DSCR as u64 {
             return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
         } else {
             TagSelector::from_raw(md.p_key_tag as u8)

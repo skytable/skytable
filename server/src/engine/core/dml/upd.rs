@@ -43,7 +43,7 @@ use {
             ql::dml::upd::{AssignmentExpression, UpdateStatement},
             sync,
         },
-        util::compiler,
+        util::compiler::{self, TaggedEnum},
     },
     std::mem,
 };
@@ -185,7 +185,7 @@ unsafe fn dc_op_str_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
 }
 
 static OPERATOR: [unsafe fn(&Datacell, Lit) -> (bool, Datacell); {
-    TagClass::MAX as usize * AssignmentOperator::VARIANTS
+    TagClass::MAX_DSCR as usize * AssignmentOperator::VARIANT_COUNT
 }] = [
     // bool
     dc_op_bool_ass,
@@ -230,7 +230,7 @@ static OPERATOR: [unsafe fn(&Datacell, Lit) -> (bool, Datacell); {
 
 #[inline(always)]
 const fn opc(opr: TagClass, ope: AssignmentOperator) -> usize {
-    (AssignmentOperator::VARIANTS * opr.value_word()) + ope.value_word()
+    (AssignmentOperator::VARIANT_COUNT * opr.value_word()) + ope.value_word()
 }
 
 #[cfg(test)]

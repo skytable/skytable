@@ -24,7 +24,17 @@
  *
 */
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 #[repr(u8)]
 pub enum AssignmentOperator {
     Assign = 0,

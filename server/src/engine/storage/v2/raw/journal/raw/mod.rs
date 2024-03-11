@@ -431,7 +431,7 @@ impl DriverEvent {
             checksum_
                 .update(&block[Self::OFFSET_3_PAYLOAD_LEN.start..Self::OFFSET_6_LAST_TXN_ID.end]);
             let target_checksum = checksum_.finish();
-            let invalid_ev_dscr = driver_event_ > DriverEventKind::MAX as u64;
+            let invalid_ev_dscr = driver_event_ > DriverEventKind::MAX_DSCR as u64;
             let invalid_ck = checksum != target_checksum;
             let invalid_pl_size = payload_len != 3;
             if invalid_ev_dscr | invalid_ck | invalid_pl_size {

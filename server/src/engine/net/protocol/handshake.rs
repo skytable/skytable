@@ -54,7 +54,7 @@ pub enum ProtocolError {
     handshake meta
 */
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods, sky_macros::TaggedEnum)]
 #[repr(u8)]
 /// the handshake version
 pub enum HandshakeVersion {
@@ -62,7 +62,7 @@ pub enum HandshakeVersion {
     Original = 0,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods, sky_macros::TaggedEnum)]
 #[repr(u8)]
 /// the skyhash protocol version
 pub enum ProtocolVersion {
@@ -70,7 +70,7 @@ pub enum ProtocolVersion {
     Original = 0,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods, sky_macros::TaggedEnum)]
 #[repr(u8)]
 /// the data exchange mode
 pub enum DataExchangeMode {
@@ -78,7 +78,7 @@ pub enum DataExchangeMode {
     QueryTime = 0,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods, sky_macros::TaggedEnum)]
 #[repr(u8)]
 /// the query mode
 pub enum QueryMode {
@@ -283,11 +283,11 @@ impl<'a> CHandshake<'a> {
         }
         let buf: [u8; CHandshake::INITIAL_READ] = unsafe { scanner.next_chunk() };
         let invalid_first_byte = buf[0] != Self::CLIENT_HELLO;
-        let invalid_hs_version = buf[1] > HandshakeVersion::MAX;
-        let invalid_proto_version = buf[2] > ProtocolVersion::MAX;
-        let invalid_exchange_mode = buf[3] > DataExchangeMode::MAX;
-        let invalid_query_mode = buf[4] > QueryMode::MAX;
-        let invalid_auth_mode = buf[5] > AuthMode::MAX;
+        let invalid_hs_version = buf[1] > HandshakeVersion::MAX_DSCR;
+        let invalid_proto_version = buf[2] > ProtocolVersion::MAX_DSCR;
+        let invalid_exchange_mode = buf[3] > DataExchangeMode::MAX_DSCR;
+        let invalid_query_mode = buf[4] > QueryMode::MAX_DSCR;
+        let invalid_auth_mode = buf[5] > AuthMode::MAX_DSCR;
         // check block
         if compiler::unlikely(
             invalid_first_byte

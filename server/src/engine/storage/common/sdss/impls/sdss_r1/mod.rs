@@ -304,10 +304,10 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
             okay_server_version,
             okay_driver_version,
             // 2.1.2
-            raw_host_os <= HostOS::MAX,
-            raw_host_arch <= HostArch::MAX,
-            raw_host_ptr_width <= HostPointerWidth::MAX,
-            raw_host_endian <= HostEndian::MAX,
+            raw_host_os <= HostOS::MAX_DSCR,
+            raw_host_arch <= HostArch::MAX_DSCR,
+            raw_host_ptr_width <= HostPointerWidth::MAX_DSCR,
+            raw_host_endian <= HostEndian::MAX_DSCR,
             // 2.1.3
             raw_file_class <= H::FileClass::MAX_DSCR,
             raw_file_specifier <= H::FileSpecifier::MAX_DSCR,

@@ -34,7 +34,18 @@ macro_rules! strid {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    Hash,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 pub enum TagClass {
     Bool = 0,
     UnsignedInt = 1,

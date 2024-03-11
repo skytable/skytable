@@ -141,31 +141,16 @@ pub fn derive_tagged_enum(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(EnumMethods)]
 pub fn derive_value_methods(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-    let (enum_name, repr_type, value_expressions, variant_len, repr_type_ident) =
-        process_enum_tags(&ast);
+    let (enum_name, repr_type, _, _, repr_type_ident) = process_enum_tags(&ast);
     let repr_type_ident_func = syn::Ident::new(
         &format!("value_{repr_type}"),
         proc_macro2::Span::call_site(),
     );
     let gen = quote! {
         impl #enum_name {
-            pub const MAX: #repr_type_ident = Self::max_value();
-            pub const VARIANTS: usize = #variant_len;
             pub const fn #repr_type_ident_func(&self) -> #repr_type_ident { unsafe { core::mem::transmute(*self) } }
             pub const fn value_word(&self) -> usize { self.#repr_type_ident_func() as usize }
             pub const fn value_qword(&self) -> u64 { self.#repr_type_ident_func() as u64 }
-            pub const fn max_value() -> #repr_type_ident {
-                let values = #value_expressions;
-                let mut i = 1;
-                let mut max = values[0];
-                while i < values.len() {
-                    if values[i] > max {
-                        max = values[i];
-                    }
-                    i = i + 1;
-                }
-                max
-            }
         }
     };
     gen.into()
