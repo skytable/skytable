@@ -40,7 +40,7 @@ use {
             idx::{IndexSTSeqCns, STIndexSeq},
             mem::{BufferedScanner, StatelessLen},
         },
-        util::{copy_slice_to_array as memcpy, EndianQW},
+        util::{compiler::TaggedEnum, copy_slice_to_array as memcpy, EndianQW},
     },
     std::{collections::HashMap, marker::PhantomData},
 };

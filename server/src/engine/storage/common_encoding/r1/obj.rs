@@ -41,7 +41,7 @@ use {
             idx::IndexSTSeqCns,
             mem::{BufferedScanner, VInline},
         },
-        util::EndianQW,
+        util::{compiler::TaggedEnum, EndianQW},
     },
 };
 
@@ -57,10 +57,21 @@ pub mod cell {
                 cell::Datacell,
                 tag::{DataTag, TagClass, TagSelector},
             },
-            util::EndianQW,
+            util::{compiler::TaggedEnum, EndianQW},
         },
     };
-    #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash, sky_macros::EnumMethods)]
+    #[derive(
+        Debug,
+        PartialEq,
+        Eq,
+        Clone,
+        Copy,
+        PartialOrd,
+        Ord,
+        Hash,
+        sky_macros::EnumMethods,
+        sky_macros::TaggedEnum,
+    )]
     #[repr(u8)]
     #[allow(dead_code)]
     pub enum StorageCellTypeID {
@@ -82,23 +93,13 @@ pub mod cell {
         Dict = 0x0F,
     }
     impl StorageCellTypeID {
-        pub const unsafe fn from_raw(v: u8) -> Self {
-            core::mem::transmute(v)
-        }
-        pub const fn try_from_raw(v: u8) -> Option<Self> {
-            if Self::is_valid(v) {
-                Some(unsafe { Self::from_raw(v) })
-            } else {
-                None
-            }
-        }
         #[inline(always)]
         pub const fn is_valid(d: u8) -> bool {
             d <= Self::MAX
         }
-        const unsafe fn into_selector(self) -> TagSelector {
+        unsafe fn into_selector(self) -> TagSelector {
             debug_assert!(self.value_u8() != Self::Null.value_u8());
-            core::mem::transmute(self.value_u8() - 1)
+            TagSelector::from_raw(self.value_u8() - 1)
         }
         #[inline(always)]
         pub fn expect_atleast(d: u8) -> usize {

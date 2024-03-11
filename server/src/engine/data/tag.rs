@@ -47,7 +47,18 @@ pub enum TagClass {
 
 strid! {
     #[repr(u8)]
-    #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
+    #[derive(
+        Debug,
+        PartialEq,
+        Eq,
+        Clone,
+        Copy,
+        Hash,
+        PartialOrd,
+        Ord,
+        sky_macros::EnumMethods,
+        sky_macros::TaggedEnum,
+    )]
     pub enum TagSelector {
         Bool = 0,
         UInt8 = 1,
@@ -70,49 +81,57 @@ impl TagSelector {
     pub const fn into_full(self) -> FullTag {
         FullTag::new(self.tag_class(), self, self.tag_unique())
     }
-    pub const unsafe fn from_raw(v: u8) -> Self {
-        core::mem::transmute(v)
-    }
     pub const fn tag_unique(&self) -> TagUnique {
         [
-            TagUnique::Illegal,
-            TagUnique::UnsignedInt,
-            TagUnique::UnsignedInt,
-            TagUnique::UnsignedInt,
-            TagUnique::UnsignedInt,
-            TagUnique::SignedInt,
-            TagUnique::SignedInt,
-            TagUnique::SignedInt,
-            TagUnique::SignedInt,
-            TagUnique::Illegal,
-            TagUnique::Illegal,
-            TagUnique::Bin,
-            TagUnique::Str,
-            TagUnique::Illegal,
+            TagUnique::Illegal,     // bool
+            TagUnique::UnsignedInt, // uint8
+            TagUnique::UnsignedInt, // uint16
+            TagUnique::UnsignedInt, // uint32
+            TagUnique::UnsignedInt, // uint64
+            TagUnique::SignedInt,   // sint8
+            TagUnique::SignedInt,   // sint16
+            TagUnique::SignedInt,   // sint32
+            TagUnique::SignedInt,   // sint64
+            TagUnique::Illegal,     // f32
+            TagUnique::Illegal,     // f64
+            TagUnique::Bin,         // bin
+            TagUnique::Str,         // str
+            TagUnique::Illegal,     // list
         ][self.value_word()]
     }
     pub const fn tag_class(&self) -> TagClass {
         [
-            TagClass::Bool,
-            TagClass::UnsignedInt,
-            TagClass::UnsignedInt,
-            TagClass::UnsignedInt,
-            TagClass::UnsignedInt,
-            TagClass::SignedInt,
-            TagClass::SignedInt,
-            TagClass::SignedInt,
-            TagClass::SignedInt,
-            TagClass::Float,
-            TagClass::Float,
-            TagClass::Bin,
-            TagClass::Str,
-            TagClass::List,
+            TagClass::Bool,        // bool
+            TagClass::UnsignedInt, // uint8
+            TagClass::UnsignedInt, // uint16
+            TagClass::UnsignedInt, // uint32
+            TagClass::UnsignedInt, // uint64
+            TagClass::SignedInt,   // sint8
+            TagClass::SignedInt,   // sint16
+            TagClass::SignedInt,   // sint32
+            TagClass::SignedInt,   // sint64
+            TagClass::Float,       // f32
+            TagClass::Float,       // f64
+            TagClass::Bin,         // bin
+            TagClass::Str,         // str
+            TagClass::List,        // recursive list
         ][self.value_word()]
     }
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    Hash,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 pub enum TagUnique {
     UnsignedInt = 0,
     SignedInt = 1,
@@ -124,12 +143,6 @@ pub enum TagUnique {
 impl TagUnique {
     pub const fn is_unique(&self) -> bool {
         self.value_u8() != Self::Illegal.value_u8()
-    }
-    pub const fn try_from_raw(raw: u8) -> Option<Self> {
-        if raw > 3 {
-            return None;
-        }
-        Some(unsafe { core::mem::transmute(raw) })
     }
 }
 

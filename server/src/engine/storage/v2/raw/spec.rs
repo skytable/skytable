@@ -24,12 +24,9 @@
  *
 */
 
-use {
-    crate::engine::storage::common::{
-        sdss::{self, sdss_r1::HeaderV1},
-        versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
-    },
-    std::mem::transmute,
+use crate::engine::storage::common::{
+    sdss::{self, sdss_r1::HeaderV1},
+    versions::{self, DriverVersion, FileSpecifierVersion, ServerVersion},
 };
 
 #[allow(unused)]
@@ -37,37 +34,37 @@ pub type Header = HeaderV1<HeaderImplV2>;
 
 /// The file scope
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 pub enum FileClass {
     EventLog = 0,
     Batch = 1,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 #[repr(u8)]
 pub enum FileSpecifier {
     GlobalNS = 0,
     ModelData = 1,
-}
-
-impl sdss::sdss_r1::HeaderV1Enumeration for FileClass {
-    const MAX: u8 = FileClass::MAX;
-    unsafe fn new(x: u8) -> Self {
-        transmute(x)
-    }
-    fn repr_u8(&self) -> u8 {
-        self.value_u8()
-    }
-}
-
-impl sdss::sdss_r1::HeaderV1Enumeration for FileSpecifier {
-    const MAX: u8 = FileSpecifier::MAX;
-    unsafe fn new(x: u8) -> Self {
-        transmute(x)
-    }
-    fn repr_u8(&self) -> u8 {
-        self.value_u8()
-    }
 }
 
 #[derive(Debug)]

@@ -39,35 +39,37 @@ impl sdss::sdss_r1::HeaderV1Spec for HeaderImplV1 {
     const CURRENT_SERVER_VERSION: ServerVersion = versions::v1::V1_SERVER_VERSION;
     const CURRENT_DRIVER_VERSION: DriverVersion = versions::v1::V1_DRIVER_VERSION;
 }
-impl sdss::sdss_r1::HeaderV1Enumeration for FileScope {
-    const MAX: u8 = FileScope::MAX;
-    unsafe fn new(x: u8) -> Self {
-        core::mem::transmute(x)
-    }
-    fn repr_u8(&self) -> u8 {
-        FileScope::value_u8(self)
-    }
-}
-impl sdss::sdss_r1::HeaderV1Enumeration for FileSpecifier {
-    const MAX: u8 = FileSpecifier::MAX;
-    unsafe fn new(x: u8) -> Self {
-        core::mem::transmute(x)
-    }
-    fn repr_u8(&self) -> u8 {
-        self.value_u8()
-    }
-}
 
 /// The file scope
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 pub enum FileScope {
     Journal = 0,
     DataBatch = 1,
     FlatmapData = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 #[repr(u8)]
 pub enum FileSpecifier {
     GNSTxnLog = 0,

@@ -616,19 +616,22 @@ impl BatchAdapterSpec for ModelDataAdapter {
 mod restore_impls {
     use {
         super::BatchMetadata,
-        crate::engine::{
-            core::index::PrimaryIndexKey,
-            data::{cell::Datacell, tag::TagUnique},
-            error::StorageError,
-            storage::{
-                common::sdss::sdss_r1::{rw::TrackedReaderContext, FileSpecV1},
-                common_encoding::r1::{
-                    obj::cell::{self, StorageCellTypeID},
-                    DataSource,
+        crate::{
+            engine::{
+                core::index::PrimaryIndexKey,
+                data::{cell::Datacell, tag::TagUnique},
+                error::StorageError,
+                storage::{
+                    common::sdss::sdss_r1::{rw::TrackedReaderContext, FileSpecV1},
+                    common_encoding::r1::{
+                        obj::cell::{self, StorageCellTypeID},
+                        DataSource,
+                    },
+                    v2::raw::spec::ModelDataBatchAofV1,
                 },
-                v2::raw::spec::ModelDataBatchAofV1,
+                RuntimeResult,
             },
-            RuntimeResult,
+            util::compiler::TaggedEnum,
         },
         std::mem::ManuallyDrop,
     };
@@ -662,7 +665,7 @@ mod restore_impls {
                     PrimaryIndexKey::new_from_dual(pk_type, len, md.as_mut_ptr() as usize)
                 }
             }
-            _ => unsafe {
+            TagUnique::Illegal => unsafe {
                 // UNSAFE(@ohsayan): TagUnique::try_from_raw rejects an construction with Invalid as the dscr
                 impossible!()
             },

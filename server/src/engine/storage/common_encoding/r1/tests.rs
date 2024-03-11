@@ -26,20 +26,23 @@
 
 use {
     super::obj,
-    crate::engine::{
-        core::{
-            model::{Field, Layer, ModelData},
-            space::Space,
+    crate::{
+        engine::{
+            core::{
+                model::{Field, Layer, ModelData},
+                space::Space,
+            },
+            data::{
+                cell::Datacell,
+                dict::{DictEntryGeneric, DictGeneric},
+                tag::{FloatSpec, SIntSpec, TagSelector, UIntSpec},
+                uuid::Uuid,
+            },
+            idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
+            mem::BufferedScanner,
+            storage::common_encoding::r1::obj::cell::StorageCellTypeID,
         },
-        data::{
-            cell::Datacell,
-            dict::{DictEntryGeneric, DictGeneric},
-            tag::{FloatSpec, SIntSpec, TagSelector, UIntSpec},
-            uuid::Uuid,
-        },
-        idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
-        mem::BufferedScanner,
-        storage::common_encoding::r1::obj::cell::StorageCellTypeID,
+        util::compiler::TaggedEnum,
     },
 };
 

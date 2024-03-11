@@ -44,13 +44,10 @@ use {
             storage::common::interface::fs::{FileRead, FileWrite},
             RuntimeResult,
         },
-        util::os,
+        util::{compiler::TaggedEnum, os},
         IoResult,
     },
-    std::{
-        mem::{transmute, ManuallyDrop},
-        ops::Range,
-    },
+    std::{mem::ManuallyDrop, ops::Range},
 };
 
 pub const TEST_TIME: u128 = (u64::MAX / sizeof!(u64) as u64) as _;
@@ -59,22 +56,13 @@ pub const TEST_TIME: u128 = (u64::MAX / sizeof!(u64) as u64) as _;
     header utils
 */
 
-pub trait HeaderV1Enumeration {
-    /// the maximum value of this enumeration
-    const MAX: u8;
-    /// Create a new enumeration, given that the maximum is validated
-    unsafe fn new(x: u8) -> Self;
-    /// Return the 1B repr of the enumeration
-    fn repr_u8(&self) -> u8;
-}
-
 /// A trait that enables customizing the SDSS header for a specific version tuple
 pub trait HeaderV1Spec {
     // types
     /// The file class type
-    type FileClass: HeaderV1Enumeration + Copy + PartialEq;
+    type FileClass: TaggedEnum<Dscr = u8> + Copy + PartialEq;
     /// The file specifier type
-    type FileSpecifier: HeaderV1Enumeration + Copy + PartialEq;
+    type FileSpecifier: TaggedEnum<Dscr = u8> + Copy + PartialEq;
     // constants
     /// The server version to use during encode
     ///
@@ -232,8 +220,8 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
         ret[Self::SEG2_REC1_HOST_PTR_WIDTH] = HostPointerWidth::new().value_u8();
         ret[Self::SEG2_REC1_HOST_ENDIAN] = HostEndian::new().value_u8();
         // 2.1.3
-        ret[Self::SEG2_REC1_FILE_CLASS] = file_class.repr_u8();
-        ret[Self::SEG2_REC1_FILE_SPECIFIER] = file_specifier.repr_u8();
+        ret[Self::SEG2_REC1_FILE_CLASS] = file_class.dscr();
+        ret[Self::SEG2_REC1_FILE_SPECIFIER] = file_specifier.dscr();
         ret[Self::SEG2_REC1_FILE_SPECIFIER_VERSION]
             .copy_from_slice(&file_specifier_version.little_endian());
         // 2.2
@@ -321,8 +309,8 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
             raw_host_ptr_width <= HostPointerWidth::MAX,
             raw_host_endian <= HostEndian::MAX,
             // 2.1.3
-            raw_file_class <= H::FileClass::MAX,
-            raw_file_specifier <= H::FileSpecifier::MAX,
+            raw_file_class <= H::FileClass::MAX_DSCR,
+            raw_file_specifier <= H::FileSpecifier::MAX_DSCR,
         );
         if okay {
             Ok(unsafe {
@@ -334,13 +322,13 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
                     raw_server_version,
                     raw_driver_version,
                     // 2.1.2
-                    transmute(raw_host_os),
-                    transmute(raw_host_arch),
-                    transmute(raw_host_ptr_width),
-                    transmute(raw_host_endian),
+                    HostOS::from_raw(raw_host_os),
+                    HostArch::from_raw(raw_host_arch),
+                    HostPointerWidth::from_raw(raw_host_ptr_width),
+                    HostEndian::from_raw(raw_host_endian),
                     // 2.1.3
-                    H::FileClass::new(raw_file_class),
-                    H::FileSpecifier::new(raw_file_specifier),
+                    H::FileClass::from_raw(raw_file_class),
+                    H::FileSpecifier::from_raw(raw_file_specifier),
                     raw_file_specifier_version,
                     // 2.2
                     raw_runtime_epoch_time,

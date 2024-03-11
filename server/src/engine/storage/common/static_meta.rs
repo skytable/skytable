@@ -33,7 +33,17 @@
 pub const SDSS_MAGIC_8B: u64 = 0x4F48534159414E21;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 /// Host architecture enumeration for common platforms
 pub enum HostArch {
     X86 = 0,
@@ -65,7 +75,17 @@ impl HostArch {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 /// Host OS enumeration for common operating systems
 pub enum HostOS {
     // T1
@@ -124,7 +144,17 @@ impl HostOS {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 /// Host endian enumeration
 pub enum HostEndian {
     Big = 0,
@@ -141,7 +171,17 @@ impl HostEndian {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    sky_macros::EnumMethods,
+    sky_macros::TaggedEnum,
+)]
 #[repr(u8)]
 /// Host pointer width enumeration
 pub enum HostPointerWidth {

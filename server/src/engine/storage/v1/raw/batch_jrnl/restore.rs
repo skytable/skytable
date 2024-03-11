@@ -29,22 +29,25 @@ use {
         MARKER_ACTUAL_BATCH_EVENT, MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN, MARKER_END_OF_BATCH,
         MARKER_RECOVERY_EVENT,
     },
-    crate::engine::{
-        core::{
-            index::{DcFieldIndex, PrimaryIndexKey, Row},
-            model::{delta::DeltaVersion, ModelData},
-        },
-        data::{cell::Datacell, tag::TagUnique},
-        error::{RuntimeResult, StorageError},
-        idx::{MTIndex, STIndex, STIndexSeq},
-        storage::{
-            common::interface::fs::File,
-            common_encoding::r1::{
-                obj::cell::{self, StorageCellTypeID},
-                DataSource,
+    crate::{
+        engine::{
+            core::{
+                index::{DcFieldIndex, PrimaryIndexKey, Row},
+                model::{delta::DeltaVersion, ModelData},
             },
-            v1::raw::rw::{SDSSFileIO, TrackedReader},
+            data::{cell::Datacell, tag::TagUnique},
+            error::{RuntimeResult, StorageError},
+            idx::{MTIndex, STIndex, STIndexSeq},
+            storage::{
+                common::interface::fs::File,
+                common_encoding::r1::{
+                    obj::cell::{self, StorageCellTypeID},
+                    DataSource,
+                },
+                v1::raw::rw::{SDSSFileIO, TrackedReader},
+            },
         },
+        util::compiler::TaggedEnum,
     },
     std::{
         collections::{hash_map::Entry as HMEntry, HashMap},

@@ -26,7 +26,7 @@
 
 use crate::{
     engine::mem::scanner::{BufferedScanner, ScannerDecodeResult},
-    util::compiler,
+    util::compiler::{self, TaggedEnum},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
@@ -86,7 +86,7 @@ pub enum QueryMode {
     Bql1 = 0,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods, sky_macros::TaggedEnum)]
 #[repr(u8)]
 /// the authentication mode
 pub enum AuthMode {
@@ -94,9 +94,6 @@ pub enum AuthMode {
 }
 
 impl AuthMode {
-    unsafe fn from_raw(v: u8) -> Self {
-        core::mem::transmute(v)
-    }
     /// returns the minimum number of metadata bytes need to parse the payload for this auth mode
     const fn min_payload_bytes(&self) -> usize {
         match self {

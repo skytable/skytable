@@ -28,17 +28,20 @@
 mod tests;
 
 use {
-    crate::engine::{
-        error::StorageError,
-        mem::unsafe_apis::memcpy,
-        storage::common::{
-            checksum::SCrc64,
-            sdss::sdss_r1::{
-                rw::{SdssFile, TrackedReader, TrackedWriter},
-                FileSpecV1,
+    crate::{
+        engine::{
+            error::StorageError,
+            mem::unsafe_apis::memcpy,
+            storage::common::{
+                checksum::SCrc64,
+                sdss::sdss_r1::{
+                    rw::{SdssFile, TrackedReader, TrackedWriter},
+                    FileSpecV1,
+                },
             },
+            RuntimeResult,
         },
-        RuntimeResult,
+        util::compiler::TaggedEnum,
     },
     core::fmt,
     std::ops::Range,
@@ -434,7 +437,7 @@ impl DriverEvent {
             if invalid_ev_dscr | invalid_ck | invalid_pl_size {
                 return None;
             }
-            driver_event = core::mem::transmute(driver_event_ as u8);
+            driver_event = DriverEventKind::from_raw(driver_event_ as u8);
             Some(Self::with_checksum(
                 txn_id,
                 driver_event,
@@ -447,7 +450,7 @@ impl DriverEvent {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, sky_macros::EnumMethods)]
+#[derive(Debug, PartialEq, Clone, Copy, sky_macros::EnumMethods, sky_macros::TaggedEnum)]
 #[repr(u8)]
 pub(super) enum DriverEventKind {
     Reopened = 0,
