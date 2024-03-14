@@ -61,9 +61,10 @@ pub fn format_response(resp: Response, print_special: bool, pretty_format: bool)
             } else {
                 for (i, row) in rows.into_iter().enumerate().map(|(i, r)| (i + 1, r)) {
                     if pretty_format {
-                        println!("{}", "({i})".grey().bold())
+                        let fmt = format!("({i})").grey().italic();
+                        print!("{fmt}")
                     } else {
-                        println!("({i})")
+                        print!("({i})")
                     }
                     print_row(row, pretty_format);
                     println!();
