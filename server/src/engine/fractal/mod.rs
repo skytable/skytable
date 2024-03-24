@@ -37,6 +37,7 @@ use {
     std::{
         fmt,
         mem::MaybeUninit,
+        ptr::addr_of_mut,
         sync::atomic::{AtomicUsize, Ordering},
     },
     tokio::sync::mpsc::unbounded_channel,
@@ -262,16 +263,16 @@ impl Global {
             .get_rt_stat()
             .per_mdl_delta_max_size()
     }
-    unsafe fn __gref_raw() -> &'static mut MaybeUninit<GlobalState> {
+    unsafe fn __gref_raw() -> *mut MaybeUninit<GlobalState> {
         static mut G: MaybeUninit<GlobalState> = MaybeUninit::uninit();
-        &mut G
+        addr_of_mut!(G)
     }
     unsafe fn __gref(&self) -> &'static GlobalState {
-        Self::__gref_raw().assume_init_ref()
+        (&*Self::__gref_raw()).assume_init_ref()
     }
     pub unsafe fn unload_all(self) {
         // TODO(@ohsayan): handle errors
-        let GlobalState { gns, .. } = Self::__gref_raw().assume_init_read();
+        let GlobalState { gns, .. } = Self::__gref_raw().read().assume_init();
         let mut gns_driver = gns.gns_driver().txn_driver.lock();
         GNSDriver::close_driver(&mut gns_driver).unwrap();
         for mdl in gns

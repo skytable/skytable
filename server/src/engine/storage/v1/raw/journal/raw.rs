@@ -215,7 +215,7 @@ impl<TA: JournalAdapter> JournalReader<TA> {
         }
         match entry_metadata
             .event_source_marker()
-            .ok_or(StorageError::JournalLogEntryCorrupted)?
+            .ok_or(StorageError::V1JournalDecodeLogEntryCorrupted)?
         {
             EventSourceMarker::ServerStandard => {}
             EventSourceMarker::DriverClosed => {
@@ -230,7 +230,7 @@ impl<TA: JournalAdapter> JournalReader<TA> {
             EventSourceMarker::DriverReopened | EventSourceMarker::RecoveryReverseLastJournal => {
                 // these two are only taken in close and error paths (respectively) so we shouldn't see them here; this is bad
                 // two special directives in the middle of nowhere? incredible
-                return Err(StorageError::JournalCorrupted.into());
+                return Err(StorageError::V1JournalDecodeCorrupted.into());
             }
         }
         // read payload
@@ -263,10 +263,10 @@ impl<TA: JournalAdapter> JournalReader<TA> {
                 Ok(())
             } else {
                 // FIXME(@ohsayan): tolerate loss in this directive too
-                Err(StorageError::JournalCorrupted.into())
+                Err(StorageError::V1JournalDecodeCorrupted.into())
             }
         } else {
-            Err(StorageError::JournalCorrupted.into())
+            Err(StorageError::V1JournalDecodeCorrupted.into())
         }
     }
     #[cold] // FIXME(@ohsayan): how bad can prod systems be? (clue: pretty bad, so look for possible changes)
@@ -279,7 +279,7 @@ impl<TA: JournalAdapter> JournalReader<TA> {
         self.__record_read_bytes(JournalEntryMetadata::SIZE); // FIXME(@ohsayan): don't assume read length?
         let mut entry_buf = [0u8; JournalEntryMetadata::SIZE];
         if self.log_file.read_buffer(&mut entry_buf).is_err() {
-            return Err(StorageError::JournalCorrupted.into());
+            return Err(StorageError::V1JournalDecodeCorrupted.into());
         }
         let entry = JournalEntryMetadata::decode(entry_buf);
         let okay = (entry.event_id == self.evid as u128)
@@ -290,7 +290,7 @@ impl<TA: JournalAdapter> JournalReader<TA> {
         if okay {
             return Ok(());
         } else {
-            Err(StorageError::JournalCorrupted.into())
+            Err(StorageError::V1JournalDecodeCorrupted.into())
         }
     }
     /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
@@ -305,7 +305,7 @@ impl<TA: JournalAdapter> JournalReader<TA> {
         if slf.closed {
             Ok((slf.log_file.downgrade_reader(), slf.evid))
         } else {
-            Err(StorageError::JournalCorrupted.into())
+            Err(StorageError::V1JournalDecodeCorrupted.into())
         }
     }
 }

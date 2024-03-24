@@ -35,7 +35,7 @@ use {
         storage::{
             common::sdss::sdss_r1::rw::TrackedReader,
             v2::raw::{
-                journal::raw::{JournalReaderTraceEvent, JournalWriterTraceEvent},
+                journal::raw::{JournalReaderTraceEvent, JournalSettings, JournalWriterTraceEvent},
                 spec::SystemDatabaseV1,
             },
         },
@@ -177,7 +177,7 @@ impl RawJournalAdapter for SimpleDBJournal {
                 file.tracked_read(&mut keybuf)?;
                 match String::from_utf8(keybuf) {
                     Ok(k) => gs.data.borrow_mut().push(k),
-                    Err(_) => return Err(StorageError::RawJournalEventCorrupted.into()),
+                    Err(_) => return Err(StorageError::RawJournalDecodeEventCorruptedPayload.into()),
                 }
             }
             EventMeta::Clear => gs.data.borrow_mut().clear(),
@@ -219,7 +219,12 @@ fn journal_open_close() {
     }
     {
         // second boot
-        let mut j = open_journal::<SimpleDBJournal>(JOURNAL_NAME, &SimpleDB::new()).unwrap();
+        let mut j = open_journal::<SimpleDBJournal>(
+            JOURNAL_NAME,
+            &SimpleDB::new(),
+            JournalSettings::default(),
+        )
+        .unwrap();
         assert_eq!(
             super::obtain_trace(),
             intovec![
@@ -258,7 +263,12 @@ fn journal_open_close() {
     }
     {
         // third boot
-        let mut j = open_journal::<SimpleDBJournal>(JOURNAL_NAME, &SimpleDB::new()).unwrap();
+        let mut j = open_journal::<SimpleDBJournal>(
+            JOURNAL_NAME,
+            &SimpleDB::new(),
+            JournalSettings::default(),
+        )
+        .unwrap();
         assert_eq!(
             super::obtain_trace(),
             intovec![
@@ -336,7 +346,7 @@ fn journal_with_server_single_event() {
     {
         let db = SimpleDB::new();
         // second boot
-        let mut j = open_journal::<SimpleDBJournal>(JOURNAL_NAME, &db)
+        let mut j = open_journal::<SimpleDBJournal>(JOURNAL_NAME, &db, JournalSettings::default())
             .set_dmsg_fn(|| format!("{:?}", super::obtain_trace()))
             .unwrap();
         assert_eq!(db.data().len(), 1);
@@ -385,7 +395,8 @@ fn journal_with_server_single_event() {
     {
         // third boot
         let db = SimpleDB::new();
-        let mut j = open_journal::<SimpleDBJournal>(JOURNAL_NAME, &db).unwrap();
+        let mut j =
+            open_journal::<SimpleDBJournal>(JOURNAL_NAME, &db, JournalSettings::default()).unwrap();
         assert_eq!(db.data().len(), 1);
         assert_eq!(db.data()[0], "hello world");
         assert_eq!(
@@ -453,7 +464,8 @@ fn multi_boot() {
     }
     {
         let mut db = SimpleDB::new();
-        let mut j = open_journal::<SimpleDBJournal>("multiboot", &db).unwrap();
+        let mut j =
+            open_journal::<SimpleDBJournal>("multiboot", &db, JournalSettings::default()).unwrap();
         assert_eq!(db.data().as_ref(), vec!["key_a".to_string()]);
         db.clear(&mut j).unwrap();
         db.push(&mut j, "myfinkey").unwrap();
@@ -461,7 +473,8 @@ fn multi_boot() {
     }
     {
         let db = SimpleDB::new();
-        let mut j = open_journal::<SimpleDBJournal>("multiboot", &db).unwrap();
+        let mut j =
+            open_journal::<SimpleDBJournal>("multiboot", &db, JournalSettings::default()).unwrap();
         assert_eq!(db.data().as_ref(), vec!["myfinkey".to_string()]);
         RawJournalWriter::close_driver(&mut j).unwrap();
     }

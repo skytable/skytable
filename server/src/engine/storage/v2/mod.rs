@@ -25,7 +25,10 @@
 */
 
 use {
-    self::impls::mdl_journal::{BatchStats, FullModel},
+    self::{
+        impls::mdl_journal::{BatchStats, FullModel},
+        raw::journal::JournalSettings,
+    },
     super::{common::interface::fs::FileSystem, v1, SELoaded},
     crate::engine::{
         config::Configuration,
@@ -120,15 +123,18 @@ pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
 pub fn restore(cfg: &Configuration) -> RuntimeResult<SELoaded> {
     let gns = GNSData::empty();
     context::set_dmsg("loading gns");
-    let mut gns_driver = impls::gns_log::GNSDriver::open_gns(&gns)?;
+    let mut gns_driver = impls::gns_log::GNSDriver::open_gns(&gns, JournalSettings::default())?;
     for (id, model) in gns.idx_models().write().iter_mut() {
         let model_data = model.data();
         let space_uuid = gns.idx().read().get(id.space()).unwrap().get_uuid();
         let model_data_file_path =
             paths_v1::model_path(id.space(), space_uuid, id.entity(), model_data.get_uuid());
         context::set_dmsg(format!("loading model driver in {model_data_file_path}"));
-        let model_driver =
-            impls::mdl_journal::ModelDriver::open_model_driver(model_data, &model_data_file_path)?;
+        let model_driver = impls::mdl_journal::ModelDriver::open_model_driver(
+            model_data,
+            &model_data_file_path,
+            JournalSettings::default(),
+        )?;
         model.driver().initialize_model_driver(model_driver);
         unsafe {
             // UNSAFE(@ohsayan): all pieces of data are upgraded by now, so vacuum

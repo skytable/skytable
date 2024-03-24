@@ -181,7 +181,7 @@ impl DataBatchRestoreDriver {
             }
         }
         // nope, this is a corrupted file
-        Err(StorageError::DataBatchRestoreCorruptedBatchFile.into())
+        Err(StorageError::V1DataBatchDecodeCorruptedBatchFile.into())
     }
     fn handle_reopen_is_actual_close(&mut self) -> RuntimeResult<bool> {
         if self.f.is_eof() {
@@ -194,7 +194,7 @@ impl DataBatchRestoreDriver {
                 Ok(false)
             } else {
                 // that's just a nice bug
-                Err(StorageError::DataBatchRestoreCorruptedBatchFile.into())
+                Err(StorageError::V1DataBatchDecodeCorruptedBatchFile.into())
             }
         }
     }
@@ -301,7 +301,7 @@ impl DataBatchRestoreDriver {
             // we must read the batch termination signature
             let b = self.f.read_byte()?;
             if b != MARKER_END_OF_BATCH {
-                return Err(StorageError::DataBatchRestoreCorruptedBatch.into());
+                return Err(StorageError::V1DataBatchDecodeCorruptedBatch.into());
             }
         }
         // read actual commit
@@ -314,7 +314,7 @@ impl DataBatchRestoreDriver {
         if actual_checksum == u64::from_le_bytes(hardcoded_checksum) {
             Ok(actual_commit)
         } else {
-            Err(StorageError::DataBatchRestoreCorruptedBatch.into())
+            Err(StorageError::V1DataBatchDecodeCorruptedBatch.into())
         }
     }
     fn read_batch(&mut self) -> RuntimeResult<Batch> {
@@ -334,7 +334,7 @@ impl DataBatchRestoreDriver {
             }
             _ => {
                 // this is the only singular byte that is expected to be intact. If this isn't intact either, I'm sorry
-                return Err(StorageError::DataBatchRestoreCorruptedBatch.into());
+                return Err(StorageError::V1DataBatchDecodeCorruptedBatch.into());
             }
         }
         // decode batch start block
@@ -378,7 +378,7 @@ impl DataBatchRestoreDriver {
                                 this_col_cnt -= 1;
                             }
                             if this_col_cnt != 0 {
-                                return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
+                                return Err(StorageError::V1DataBatchDecodeCorruptedEntry.into());
                             }
                             if change_type == 1 {
                                 this_batch.push(DecodedBatchEvent::new(
@@ -396,7 +396,7 @@ impl DataBatchRestoreDriver {
                             processed_in_this_batch += 1;
                         }
                         _ => {
-                            return Err(StorageError::DataBatchRestoreCorruptedBatch.into());
+                            return Err(StorageError::V1DataBatchDecodeCorruptedBatch.into());
                         }
                     }
                 }
@@ -413,7 +413,7 @@ impl DataBatchRestoreDriver {
         if let [MARKER_RECOVERY_EVENT] = buf {
             return Ok(());
         }
-        Err(StorageError::DataBatchRestoreCorruptedBatch.into())
+        Err(StorageError::V1DataBatchDecodeCorruptedBatch.into())
     }
     fn read_start_batch_block(&mut self) -> RuntimeResult<BatchStartBlock> {
         let pk_tag = self.f.read_byte()?;
@@ -463,7 +463,7 @@ impl BatchStartBlock {
 impl DataBatchRestoreDriver {
     fn decode_primary_key(&mut self, pk_type: u8) -> RuntimeResult<PrimaryIndexKey> {
         let Some(pk_type) = TagUnique::try_from_raw(pk_type) else {
-            return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
+            return Err(StorageError::V1DataBatchDecodeCorruptedEntry.into());
         };
         Ok(match pk_type {
             TagUnique::SignedInt | TagUnique::UnsignedInt => {
@@ -479,7 +479,7 @@ impl DataBatchRestoreDriver {
                 self.f.tracked_read(&mut data)?;
                 if pk_type == TagUnique::Str {
                     if core::str::from_utf8(&data).is_err() {
-                        return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
+                        return Err(StorageError::V1DataBatchDecodeCorruptedEntry.into());
                     }
                 }
                 unsafe {
@@ -496,7 +496,7 @@ impl DataBatchRestoreDriver {
     }
     fn decode_cell(&mut self) -> RuntimeResult<Datacell> {
         let Some(dscr) = StorageCellTypeID::try_from_raw(self.f.read_byte()?) else {
-            return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
+            return Err(StorageError::V1DataBatchDecodeCorruptedEntry.into());
         };
         unsafe { cell::decode_element::<Datacell, TrackedReader>(&mut self.f, dscr) }
             .map_err(|e| e.0)
@@ -516,7 +516,7 @@ impl From<std::io::Error> for ErrorHack {
 }
 impl From<()> for ErrorHack {
     fn from(_: ()) -> Self {
-        Self(StorageError::DataBatchRestoreCorruptedEntry.into())
+        Self(StorageError::V1DataBatchDecodeCorruptedEntry.into())
     }
 }
 

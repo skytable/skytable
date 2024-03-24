@@ -234,13 +234,13 @@ impl<S: FileSpecV1> TrackedReader<S> {
                 Err(e) => return Err(e),
             }
         } else {
-            Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into_inner())
+            Err(SysIOError::from(std::io::ErrorKind::UnexpectedEof).into_inner())
         }
     }
     /// Tracked read of a given block size. Shorthand for [`Self::tracked_read`]
     pub fn read_block<const N: usize>(&mut self) -> IoResult<[u8; N]> {
         if !self.has_left(N as _) {
-            return Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into_inner());
+            return Err(SysIOError::from(std::io::ErrorKind::UnexpectedEof).into_inner());
         }
         let mut buf = [0; N];
         self.tracked_read(&mut buf)?;

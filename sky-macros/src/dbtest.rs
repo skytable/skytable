@@ -24,11 +24,10 @@
  *
 */
 
-use quote::quote;
-
 use {
     crate::util::{self, AttributeKind},
     proc_macro::TokenStream,
+    quote::quote,
     std::collections::HashMap,
     syn::{parse_macro_input, AttributeArgs, ItemFn},
 };

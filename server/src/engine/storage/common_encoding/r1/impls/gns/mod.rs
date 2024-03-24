@@ -74,7 +74,7 @@ where
         if scanner.eof() {
             Ok(())
         } else {
-            Err(StorageError::JournalLogEntryCorrupted.into())
+            Err(StorageError::V1JournalDecodeLogEntryCorrupted.into())
         }
     }
     fn decode_and_update_global_state(

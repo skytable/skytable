@@ -71,9 +71,13 @@ impl PrimaryIndex {
 }
 
 #[derive(Debug)]
-pub struct IndexLatchHandleShared<'t>(parking_lot::RwLockReadGuard<'t, ()>);
+pub struct IndexLatchHandleShared<'t> {
+    _lck: parking_lot::RwLockReadGuard<'t, ()>,
+}
 #[derive(Debug)]
-pub struct IndexLatchHandleExclusive<'t>(parking_lot::RwLockWriteGuard<'t, ()>);
+pub struct IndexLatchHandleExclusive<'t> {
+    _lck: parking_lot::RwLockWriteGuard<'t, ()>,
+}
 
 #[derive(Debug)]
 struct IndexLatch {
@@ -87,9 +91,13 @@ impl IndexLatch {
         }
     }
     fn gl_handle_shared(&self) -> IndexLatchHandleShared {
-        IndexLatchHandleShared(self.glck.read())
+        IndexLatchHandleShared {
+            _lck: self.glck.read(),
+        }
     }
     fn gl_handle_exclusive(&self) -> IndexLatchHandleExclusive {
-        IndexLatchHandleExclusive(self.glck.write())
+        IndexLatchHandleExclusive {
+            _lck: self.glck.write(),
+        }
     }
 }

@@ -46,7 +46,7 @@ use {
                 v2::raw::{
                     journal::{
                         self, BatchAdapter, BatchAdapterSpec, BatchDriver, JournalAdapterEvent,
-                        RawJournalAdapter,
+                        JournalSettings, RawJournalAdapter,
                     },
                     spec::ModelDataBatchAofV1,
                 },
@@ -66,8 +66,12 @@ use {
 
 pub type ModelDriver = BatchDriver<ModelDataAdapter>;
 impl ModelDriver {
-    pub fn open_model_driver(mdl: &ModelData, model_data_file_path: &str) -> RuntimeResult<Self> {
-        journal::open_journal(model_data_file_path, mdl)
+    pub fn open_model_driver(
+        mdl: &ModelData,
+        model_data_file_path: &str,
+        settings: JournalSettings,
+    ) -> RuntimeResult<Self> {
+        journal::open_journal(model_data_file_path, mdl, settings)
     }
     /// Create a new event log
     pub fn create_model_driver(model_data_file_path: &str) -> RuntimeResult<Self> {
@@ -449,7 +453,7 @@ impl BatchAdapterSpec for ModelDataAdapter {
             BatchType::Standard => {}
         }
         let pk_tag = TagUnique::try_from_raw(f.read_block().map(|[b]| b)?)
-            .ok_or(StorageError::RawJournalCorrupted)?;
+            .ok_or(StorageError::InternalDecodeStructureIllegalData)?;
         let schema_version = u64::from_le_bytes(f.read_block()?);
         let column_count = u64::from_le_bytes(f.read_block()?);
         Ok(BatchMetadata {
@@ -656,7 +660,7 @@ mod restore_impls {
                 f.read(&mut data)?;
                 if pk_type == TagUnique::Str {
                     if core::str::from_utf8(&data).is_err() {
-                        return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
+                        return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
                     }
                 }
                 unsafe {
@@ -679,7 +683,7 @@ mod restore_impls {
         let mut this_col_cnt = batch_info.column_count;
         while this_col_cnt != 0 {
             let Some(dscr) = StorageCellTypeID::try_from_raw(f.read_block().map(|[b]| b)?) else {
-                return Err(StorageError::DataBatchRestoreCorruptedEntry.into());
+                return Err(StorageError::InternalDecodeStructureIllegalData.into());
             };
             let cell = unsafe { cell::decode_element::<Datacell, _>(f, dscr) }.map_err(|e| e.0)?;
             row.push(cell);
@@ -705,7 +709,7 @@ mod restore_impls {
     }
     impl From<()> for ErrorHack {
         fn from(_: ()) -> Self {
-            Self(StorageError::DataBatchRestoreCorruptedEntry.into())
+            Self(StorageError::InternalDecodeStructureCorrupted.into())
         }
     }
     impl<'a> DataSource for TrackedReaderContext<'a, ModelDataBatchAofV1> {

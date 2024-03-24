@@ -47,7 +47,8 @@ mod raw;
 #[cfg(test)]
 mod tests;
 pub use raw::{
-    create_journal, open_journal, RawJournalAdapter, RawJournalAdapterEvent as JournalAdapterEvent,
+    create_journal, open_journal, JournalSettings, RawJournalAdapter,
+    RawJournalAdapterEvent as JournalAdapterEvent,
 };
 
 /*
@@ -136,7 +137,7 @@ impl<EL: EventLogSpec> RawJournalAdapter for EventLogAdapter<EL> {
         this_checksum.update(&plen.to_le_bytes());
         this_checksum.update(&pl);
         if this_checksum.finish() != expected_checksum {
-            return Err(StorageError::RawJournalCorrupted.into());
+            return Err(StorageError::RawJournalDecodeCorruptionInBatchMetadata.into());
         }
         <EL as EventLogSpec>::DECODE_DISPATCH
             [<<EL as EventLogSpec>::EventMeta as TaggedEnum>::dscr_u64(&meta) as usize](
@@ -165,11 +166,15 @@ pub struct BatchAdapter<BA: BatchAdapterSpec>(PhantomData<BA>);
 #[cfg(test)]
 impl<BA: BatchAdapterSpec> BatchAdapter<BA> {
     /// Open a new batch journal
-    pub fn open(name: &str, gs: &BA::GlobalState) -> RuntimeResult<BatchDriver<BA>>
+    pub fn open(
+        name: &str,
+        gs: &BA::GlobalState,
+        settings: JournalSettings,
+    ) -> RuntimeResult<BatchDriver<BA>>
     where
         BA::Spec: FileSpecV1<DecodeArgs = ()>,
     {
-        raw::open_journal::<BatchAdapter<BA>>(name, gs)
+        raw::open_journal::<BatchAdapter<BA>>(name, gs, settings)
     }
     /// Create a new batch journal
     pub fn create(name: &str) -> RuntimeResult<BatchDriver<BA>>
@@ -278,7 +283,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
                 let event_type = <<BA as BatchAdapterSpec>::EventType as TaggedEnum>::try_from_raw(
                     f.read_block().map(|[b]| b)?,
                 )
-                .ok_or(StorageError::RawJournalCorrupted)?;
+                .ok_or(StorageError::InternalDecodeStructureIllegalData)?;
                 // is this an early exit marker? if so, exit
                 if <BA as BatchAdapterSpec>::is_early_exit(&event_type) {
                     break;
@@ -299,7 +304,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
                 // finish applying batch
                 BA::finish(batch_state, batch_md, gs)?;
             } else {
-                return Err(StorageError::RawJournalCorrupted.into());
+                return Err(StorageError::RawJournalDecodeBatchContentsMismatch.into());
             }
         }
         // and finally, verify checksum
@@ -308,7 +313,7 @@ impl<BA: BatchAdapterSpec> RawJournalAdapter for BatchAdapter<BA> {
         if real_checksum == stored_checksum {
             Ok(())
         } else {
-            Err(StorageError::RawJournalCorrupted.into())
+            Err(StorageError::RawJournalDecodeBatchIntegrityFailure.into())
         }
     }
 }

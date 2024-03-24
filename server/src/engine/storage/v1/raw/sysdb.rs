@@ -42,7 +42,7 @@ fn rkey<T>(
 ) -> RuntimeResult<T> {
     match d.remove(key).map(transform) {
         Some(Some(k)) => Ok(k),
-        _ => Err(StorageError::SysDBCorrupted.into()),
+        _ => Err(StorageError::V1SysDBDecodeCorrupted.into()),
     }
 }
 
@@ -95,14 +95,14 @@ impl RestoredSystemDatabase {
             let mut userdata = userdata
                 .into_data()
                 .and_then(Datacell::into_list)
-                .ok_or(StorageError::SysDBCorrupted)?;
+                .ok_or(StorageError::V1SysDBDecodeCorrupted)?;
             if userdata.len() != 1 {
-                return Err(StorageError::SysDBCorrupted.into());
+                return Err(StorageError::V1SysDBDecodeCorrupted.into());
             }
             let user_password = userdata
                 .remove(0)
                 .into_bin()
-                .ok_or(StorageError::SysDBCorrupted)?;
+                .ok_or(StorageError::V1SysDBDecodeCorrupted)?;
             loaded_users.insert(username, user_password.into_boxed_slice());
         }
         // load sys data
@@ -117,7 +117,7 @@ impl RestoredSystemDatabase {
             & sys_store.is_empty()
             & loaded_users.contains_key(SystemDatabase::ROOT_ACCOUNT))
         {
-            return Err(StorageError::SysDBCorrupted.into());
+            return Err(StorageError::V1SysDBDecodeCorrupted.into());
         }
         Ok(Self::new(loaded_users, sc, sv))
     }

@@ -43,6 +43,7 @@ use {
         },
         util::{compiler::TaggedEnum, EndianQW},
     },
+    std::marker::PhantomData,
 };
 
 /*
@@ -318,10 +319,10 @@ impl FieldMD {
     }
 }
 
-pub struct FieldRef<'a>(&'a Field);
+pub struct FieldRef<'a>(PhantomData<&'a Field>);
 impl<'a> From<&'a Field> for FieldRef<'a> {
-    fn from(f: &'a Field) -> Self {
-        Self(f)
+    fn from(_: &'a Field) -> Self {
+        Self(PhantomData)
     }
 }
 impl<'a> PersistObject for FieldRef<'a> {

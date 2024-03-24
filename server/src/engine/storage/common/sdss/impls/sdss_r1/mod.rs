@@ -47,7 +47,7 @@ use {
         util::{compiler::TaggedEnum, os},
         IoResult,
     },
-    std::{mem::ManuallyDrop, ops::Range},
+    std::ops::Range,
 };
 
 pub const TEST_TIME: u128 = (u64::MAX / sizeof!(u64) as u64) as _;
@@ -338,14 +338,10 @@ impl<H: HeaderV1Spec> HeaderV1<H> {
             })
         } else {
             let version_okay = okay_header_version & okay_server_version & okay_driver_version;
-            let md = ManuallyDrop::new([
-                StorageError::HeaderDecodeCorruptedHeader,
-                StorageError::HeaderDecodeVersionMismatch,
-            ]);
-            Err(unsafe {
-                // UNSAFE(@ohsayan): while not needed, md for drop safety + correct index
-                md.as_ptr().add(!version_okay as usize).read().into()
-            })
+            Err([
+                StorageError::FileDecodeHeaderCorrupted,
+                StorageError::FileDecodeHeaderVersionMismatch,
+            ][!version_okay as usize])
         }
     }
 }
@@ -444,7 +440,7 @@ pub trait SimpleFileSpecV1 {
         if v == Self::FILE_SPECFIER_VERSION {
             Ok(())
         } else {
-            Err(StorageError::HeaderDecodeVersionMismatch.into())
+            Err(StorageError::FileDecodeHeaderVersionMismatch.into())
         }
     }
 }
@@ -466,7 +462,7 @@ impl<Sfs: SimpleFileSpecV1> FileSpecV1 for Sfs {
         if okay {
             Ok(md)
         } else {
-            Err(StorageError::HeaderDecodeVersionMismatch.into())
+            Err(StorageError::FileDecodeHeaderVersionMismatch.into())
         }
     }
     fn write_metadata(f: &mut impl FileWrite, _: Self::EncodeArgs) -> IoResult<Self::Metadata> {

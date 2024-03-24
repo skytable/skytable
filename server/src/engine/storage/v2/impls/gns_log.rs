@@ -34,7 +34,7 @@ use {
             core::GNSData,
             storage::{
                 common_encoding::r1::impls::gns::GNSEvent,
-                v2::raw::journal::{self, EventLogDriver, JournalAdapterEvent},
+                v2::raw::journal::{self, EventLogDriver, JournalAdapterEvent, JournalSettings},
             },
             txn::gns::{
                 model::{
@@ -61,11 +61,15 @@ pub struct GNSEventLog;
 
 impl GNSDriver {
     const FILE_PATH: &'static str = "gns.db-tlog";
-    pub fn open_gns_with_name(name: &str, gs: &GNSData) -> RuntimeResult<Self> {
-        journal::open_journal(name, gs)
+    pub fn open_gns_with_name(
+        name: &str,
+        gs: &GNSData,
+        settings: JournalSettings,
+    ) -> RuntimeResult<Self> {
+        journal::open_journal(name, gs, settings)
     }
-    pub fn open_gns(gs: &GNSData) -> RuntimeResult<Self> {
-        Self::open_gns_with_name(Self::FILE_PATH, gs)
+    pub fn open_gns(gs: &GNSData, settings: JournalSettings) -> RuntimeResult<Self> {
+        Self::open_gns_with_name(Self::FILE_PATH, gs, settings)
     }
     pub fn create_gns_with_name(name: &str) -> RuntimeResult<Self> {
         journal::create_journal(name)

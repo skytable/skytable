@@ -30,7 +30,7 @@ mod tests;
 use {
     crate::{
         engine::{
-            error::StorageError,
+            error::{ErrorKind, StorageError},
             mem::unsafe_apis::memcpy,
             storage::common::{
                 checksum::SCrc64,
@@ -44,7 +44,7 @@ use {
         util::compiler::TaggedEnum,
     },
     core::fmt,
-    std::ops::Range,
+    std::{io::ErrorKind as IoErrorKind, ops::Range},
 };
 
 /*
@@ -67,12 +67,13 @@ where
 pub fn open_journal<J: RawJournalAdapter>(
     log_path: &str,
     gs: &J::GlobalState,
+    settings: JournalSettings,
 ) -> RuntimeResult<RawJournalWriter<J>>
 where
     J::Spec: FileSpecV1<DecodeArgs = ()>,
 {
     let log = SdssFile::<J::Spec>::open(log_path)?;
-    let (initializer, file) = RawJournalReader::<J>::scroll(log, gs)?;
+    let (initializer, file) = RawJournalReader::<J>::scroll(log, gs, settings)?;
     RawJournalWriter::new(initializer, file)
 }
 
@@ -640,6 +641,22 @@ pub struct RawJournalReader<J: RawJournalAdapter> {
     last_txn_offset: u64,
     last_txn_checksum: u64,
     stats: JournalStats,
+    _settings: JournalSettings,
+}
+
+#[derive(Debug)]
+pub struct JournalSettings {}
+
+impl Default for JournalSettings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JournalSettings {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 #[derive(Debug)]
@@ -658,28 +675,33 @@ impl JournalStats {
 }
 
 impl<J: RawJournalAdapter> RawJournalReader<J> {
-    pub fn scroll(
+    fn scroll(
         file: SdssFile<<J as RawJournalAdapter>::Spec>,
         gs: &J::GlobalState,
+        settings: JournalSettings,
     ) -> RuntimeResult<(JournalInitializer, SdssFile<J::Spec>)> {
         let reader = TrackedReader::with_cursor(
             file,
             <<J as RawJournalAdapter>::Spec as FileSpecV1>::SIZE as u64,
         )?;
         jtrace_reader!(Initialized);
-        let mut me = Self::new(reader, 0, 0, 0, 0);
+        let mut me = Self::new(reader, 0, 0, 0, 0, settings);
         loop {
-            if me._apply_next_event_and_stop(gs)? {
-                jtrace_reader!(Completed);
-                let initializer = JournalInitializer::new(
-                    me.tr.cursor(),
-                    me.tr.checksum(),
-                    me.txn_id,
-                    // NB: the last txn offset is important because it indicates that the log is new
-                    me.last_txn_offset,
-                );
-                let file = me.tr.into_inner();
-                return Ok((initializer, file));
+            match me._apply_next_event_and_stop(gs) {
+                Ok(true) => {
+                    jtrace_reader!(Completed);
+                    let initializer = JournalInitializer::new(
+                        me.tr.cursor(),
+                        me.tr.checksum(),
+                        me.txn_id,
+                        // NB: the last txn offset is important because it indicates that the log is new
+                        me.last_txn_offset,
+                    );
+                    let file = me.tr.into_inner();
+                    return Ok((initializer, file));
+                }
+                Ok(false) => {}
+                Err(e) => return Err(e),
             }
         }
     }
@@ -689,6 +711,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         last_txn_id: u64,
         last_txn_offset: u64,
         last_txn_checksum: u64,
+        settings: JournalSettings,
     ) -> Self {
         Self {
             tr: reader,
@@ -697,6 +720,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
             last_txn_offset,
             last_txn_checksum,
             stats: JournalStats::new(),
+            _settings: settings,
         }
     }
     fn __refresh_known_txn(me: &mut Self) {
@@ -704,6 +728,47 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         me.last_txn_checksum = me.tr.current_checksum();
         me.last_txn_offset = me.tr.cursor();
         me.txn_id += 1;
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum JournalRepairMode {
+    Simple,
+}
+
+impl<J: RawJournalAdapter> RawJournalReader<J> {
+    pub fn repair(
+        file: SdssFile<<J as RawJournalAdapter>::Spec>,
+        gs: &J::GlobalState,
+        settings: JournalSettings,
+        repair_mode: JournalRepairMode,
+    ) -> RuntimeResult<()> {
+        match repair_mode {
+            JournalRepairMode::Simple => {}
+        }
+        match Self::scroll(file, gs, settings) {
+            Ok(_) => {
+                // no error detected
+                return Ok(());
+            }
+            Err(e) => {
+                // now it's our task to determine exactly what happened
+                match e.kind() {
+                    ErrorKind::IoError(io) => match io.kind() {
+                        IoErrorKind::UnexpectedEof => {
+                            // this is the only kind of error that we can actually repair since it indicates that a part of the
+                            // file is "missing"
+                        }
+                        _ => return Err(e),
+                    },
+                    ErrorKind::Storage(_) => todo!(),
+                    ErrorKind::Txn(_) => todo!(),
+                    ErrorKind::Other(_) => todo!(),
+                    ErrorKind::Config(_) => unreachable!(),
+                }
+            }
+        }
+        todo!()
     }
 }
 
@@ -716,7 +781,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                 expected: self.txn_id,
                 current: txn_id as u64
             });
-            return Err(StorageError::RawJournalEventCorruptedMetadata.into());
+            return Err(StorageError::RawJournalDecodeEventCorruptedMetadata.into());
         }
         jtrace_reader!(AttemptingEvent(txn_id as u64));
         // check for a server event
@@ -740,7 +805,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                         Err(e) => return Err(e),
                     }
                 }
-                None => return Err(StorageError::RawJournalEventCorruptedMetadata.into()),
+                None => return Err(StorageError::RawJournalDecodeEventCorruptedMetadata.into()),
             }
         }
         return self.handle_close(txn_id, meta);
@@ -772,9 +837,9 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                 ..
             }) => {
                 jtrace_reader!(ErrExpectedCloseGotReopen);
-                return Err(StorageError::RawJournalInvalidEvent.into());
+                return Err(StorageError::RawJournalDecodeInvalidEvent.into());
             }
-            None => return Err(StorageError::RawJournalEventCorrupted.into()),
+            None => return Err(StorageError::RawJournalDecodeEventCorruptedPayload.into()),
         };
         jtrace_reader!(DriverEventExpectedCloseGotClose);
         // a driver closed event; we've checked integrity, but we must check the field values
@@ -787,7 +852,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
             jtrace_reader!(DriverEventInvalidMetadata);
             // either the block is corrupted or the data we read is corrupted; either way,
             // we're going to refuse to read this
-            return Err(StorageError::RawJournalCorrupted.into());
+            return Err(StorageError::RawJournalDecodeEventCorruptedMetadata.into());
         }
         self.stats.driver_events += 1;
         // update
@@ -807,7 +872,8 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         let event_block = self.tr.read_block::<{ DriverEvent::FULL_EVENT_SIZE }>()?;
         let reopen_event = match DriverEvent::decode(event_block) {
             Some(ev) if ev.event == DriverEventKind::Reopened => ev,
-            None | Some(_) => return Err(StorageError::RawJournalEventCorrupted.into()),
+            Some(_) => return Err(StorageError::RawJournalDecodeInvalidEvent.into()),
+            None => return Err(StorageError::RawJournalDecodeEventCorruptedPayload.into()),
         };
         jtrace_reader!(DriverEventExpectingReopenGotReopen);
         let valid_meta = okay! {
@@ -824,7 +890,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
             Ok(false)
         } else {
             jtrace_reader!(ErrInvalidReopenMetadata);
-            Err(StorageError::RawJournalCorrupted.into())
+            Err(StorageError::RawJournalDecodeEventCorruptedMetadata.into())
         }
     }
 }

@@ -30,8 +30,9 @@
 
 use {
     super::{
-        raw::RawJournalAdapterEvent, BatchAdapter, BatchAdapterSpec, BatchDriver, DispatchFn,
-        EventLogAdapter, EventLogDriver, EventLogSpec,
+        raw::{JournalSettings, RawJournalAdapterEvent},
+        BatchAdapter, BatchAdapterSpec, BatchDriver, DispatchFn, EventLogAdapter, EventLogDriver,
+        EventLogSpec,
     },
     crate::{
         engine::{
@@ -112,13 +113,13 @@ impl EventLogSpec for TestDBAdapter {
     const DECODE_DISPATCH: Self::DecodeDispatch = [
         |db, payload| {
             if payload.len() < sizeof!(u64) {
-                Err(StorageError::RawJournalCorrupted.into())
+                Err(StorageError::RawJournalDecodeEventCorruptedMetadata.into())
             } else {
                 let length =
                     u64::from_le_bytes(unsafe { unsafe_apis::memcpy(&payload[..sizeof!(u64)]) });
                 let payload = &payload[sizeof!(u64)..];
                 if payload.len() as u64 != length {
-                    Err(StorageError::RawJournalCorrupted.into())
+                    Err(StorageError::RawJournalDecodeEventCorruptedPayload.into())
                 } else {
                     let string = String::from_utf8(payload.to_owned()).unwrap();
                     db._mut().push(string);
@@ -172,7 +173,7 @@ fn open_log() -> (
     super::raw::RawJournalWriter<EventLogAdapter<TestDBAdapter>>,
 ) {
     let db = TestDB::default();
-    let log = open_journal("jrnl", &db).unwrap();
+    let log = open_journal("jrnl", &db, JournalSettings::default()).unwrap();
     (db, log)
 }
 
@@ -381,7 +382,7 @@ fn batch_simple() {
     }
     {
         let db = BatchDB::new();
-        let mut batch_drv = BatchAdapter::open("mybatch", &db).unwrap();
+        let mut batch_drv = BatchAdapter::open("mybatch", &db, JournalSettings::default()).unwrap();
         db.push(&mut batch_drv, "key3").unwrap();
         db.push(&mut batch_drv, "key4").unwrap();
         assert_eq!(db._ref().data, ["key1", "key2", "key3", "key4"]);
@@ -389,7 +390,7 @@ fn batch_simple() {
     }
     {
         let db = BatchDB::new();
-        let mut batch_drv = BatchAdapter::open("mybatch", &db).unwrap();
+        let mut batch_drv = BatchAdapter::open("mybatch", &db, JournalSettings::default()).unwrap();
         db.push(&mut batch_drv, "key5").unwrap();
         db.push(&mut batch_drv, "key6").unwrap();
         assert_eq!(
@@ -400,7 +401,9 @@ fn batch_simple() {
     }
     {
         let db = BatchDB::new();
-        let mut batch_drv = BatchAdapter::<BatchDBAdapter>::open("mybatch", &db).unwrap();
+        let mut batch_drv =
+            BatchAdapter::<BatchDBAdapter>::open("mybatch", &db, JournalSettings::default())
+                .unwrap();
         assert_eq!(
             db._ref().data,
             ["key1", "key2", "key3", "key4", "key5", "key6"]

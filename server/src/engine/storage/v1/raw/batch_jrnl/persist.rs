@@ -53,7 +53,7 @@ impl DataBatchPersistDriver {
         if slf.fsynced_write(&[MARKER_BATCH_CLOSED]).is_ok() {
             return Ok(());
         } else {
-            return Err(StorageError::DataBatchCloseError.into());
+            return Err(StorageError::V1DataBatchRuntimeCloseError.into());
         }
     }
 }

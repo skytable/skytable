@@ -24,8 +24,10 @@
  *
 */
 
-use proc_macro2::Ident;
-use syn::{Lit, Meta, MetaNameValue, NestedMeta, Path};
+use {
+    proc_macro2::Ident,
+    syn::{Lit, Meta, MetaNameValue, NestedMeta, Path},
+};
 
 pub enum AttributeKind {
     Lit(Lit),

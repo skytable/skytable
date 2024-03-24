@@ -77,6 +77,7 @@ impl TestGlobal {
                     model_name.entity(),
                     model_data.get_uuid(),
                 ),
+                Default::default(),
             )?;
             model.driver().initialize_model_driver(driver);
         }
@@ -97,7 +98,7 @@ impl TestGlobal {
             Err(e) => match e.kind() {
                 ErrorKind::IoError(e_) => match e_.kind() {
                     std::io::ErrorKind::AlreadyExists => {
-                        GNSDriver::open_gns_with_name(log_name, &data)
+                        GNSDriver::open_gns_with_name(log_name, &data, Default::default())
                     }
                     _ => Err(e),
                 },
