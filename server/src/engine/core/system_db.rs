@@ -84,14 +84,19 @@ impl SystemDatabase {
             .read()
             .get(username)
             .map(|user| {
-                if rcrypt::verify(password, &user.phash).unwrap() {
-                    if username == Self::ROOT_ACCOUNT {
-                        VerifyUser::OkayRoot
-                    } else {
-                        VerifyUser::Okay
+                if password.is_empty() {
+                    return VerifyUser::IncorrectPassword;
+                }
+                match rcrypt::verify(password, user.hash()) {
+                    Ok(true) => {
+                        if username == Self::ROOT_ACCOUNT {
+                            VerifyUser::OkayRoot
+                        } else {
+                            VerifyUser::Okay
+                        }
                     }
-                } else {
-                    VerifyUser::IncorrectPassword
+                    Ok(false) => VerifyUser::IncorrectPassword,
+                    Err(_) => unreachable!(),
                 }
             })
             .unwrap_or(VerifyUser::NotFound)
