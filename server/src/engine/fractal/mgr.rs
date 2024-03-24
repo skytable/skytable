@@ -33,7 +33,7 @@ use {
                 EntityIDRef,
             },
             data::uuid::Uuid,
-            error::ErrorKind,
+            error::StorageError,
             fractal::GlobalInstanceLike,
             storage::{
                 safe_interfaces::{paths_v1, StdModelBatch},
@@ -528,9 +528,7 @@ impl FractalMgr {
         if mdl_driver_.status().is_iffy() {
             // don't mess this up any further
             return Err((
-                super::error::Error::from(ErrorKind::Other(
-                    "model driver is in dirty state".into(),
-                )),
+                super::error::Error::from(StorageError::RawJournalRuntimeDirty),
                 BatchStats::into_inner(BatchStats::new()),
             ));
         }

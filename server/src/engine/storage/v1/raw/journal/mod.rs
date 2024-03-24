@@ -55,7 +55,7 @@ impl JournalAdapter for GNSAdapter {
     fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> RuntimeResult<()> {
         macro_rules! dispatch {
             ($($item:ty),* $(,)?) => {
-                [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::DecodeUnknownTxnOp.into())]
+                [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::V1DecodeUnknownTxnOp.into())]
             };
         }
         static DISPATCH: [fn(&mut BufferedScanner, &GNSData) -> RuntimeResult<()>; 9] = dispatch!(
@@ -69,7 +69,7 @@ impl JournalAdapter for GNSAdapter {
             gns::model::DropModelTxn
         );
         if payload.len() < 2 {
-            return Err(TransactionError::DecodedUnexpectedEof.into());
+            return Err(TransactionError::V1DecodedUnexpectedEof.into());
         }
         let mut scanner = BufferedScanner::new(&payload);
         let opc = unsafe {
@@ -78,7 +78,7 @@ impl JournalAdapter for GNSAdapter {
         };
         match DISPATCH[(opc as usize).min(DISPATCH.len())](&mut scanner, gs) {
             Ok(()) if scanner.eof() => return Ok(()),
-            Ok(_) => Err(TransactionError::DecodeCorruptedPayloadMoreBytes.into()),
+            Ok(_) => Err(TransactionError::V1DecodeCorruptedPayloadMoreBytes.into()),
             Err(e) => Err(e),
         }
     }

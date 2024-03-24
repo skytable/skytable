@@ -169,11 +169,11 @@ enumerate_err! {
     /// Errors that occur when restoring transactional data
     pub enum TransactionError {
         /// corrupted txn payload. has more bytes than expected
-        DecodeCorruptedPayloadMoreBytes = "txn-payload-unexpected-content",
+        V1DecodeCorruptedPayloadMoreBytes = "txn-payload-unexpected-content",
         /// transaction payload is corrupted. has lesser bytes than expected
-        DecodedUnexpectedEof = "txn-payload-unexpected-eof",
+        V1DecodedUnexpectedEof = "txn-payload-unexpected-eof",
         /// unknown transaction operation. usually indicates a corrupted payload
-        DecodeUnknownTxnOp = "txn-payload-unknown-payload",
+        V1DecodeUnknownTxnOp = "txn-payload-unknown-payload",
         /// While restoring a certain item, a non-resolvable conflict was encountered in the global state, because the item was
         /// already present (when it was expected to not be present)
         OnRestoreDataConflictAlreadyExists = "txn-payload-conflict-already-exists",
@@ -246,7 +246,12 @@ enumerate_err! {
         RawJournalDecodeInvalidEvent = "journal-invalid-event-order",
         /// corrupted event within a batch
         RawJournalDecodeCorruptionInBatchMetadata = "journal-batch-corrupted-event-metadata",
-        /// runtime error: the lightweight heartbeat failed
-        RawJournalRuntimeCriticalLwtHBFail = "journal-lwt-heartbeat-failed",
+        /*
+            ----
+            runtime errors
+            ----
+        */
+        RawJournalRuntimeHeartbeatFail = "journal-lwt-heartbeat-failed",
+        RawJournalRuntimeDirty = "journal-in-dirty-state",
     }
 }

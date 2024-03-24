@@ -30,7 +30,7 @@ mod tests;
 use {
     crate::{
         engine::{
-            error::{ErrorKind, StorageError},
+            error::{ErrorKind, StorageError, TransactionError},
             mem::unsafe_apis::memcpy,
             storage::common::{
                 checksum::SCrc64,
@@ -577,7 +577,7 @@ impl<J: RawJournalAdapter> RawJournalWriter<J> {
             Ok(())
         } else {
             // so, the on-disk file probably has some partial state. this is bad. throw an error
-            Err(StorageError::RawJournalRuntimeCriticalLwtHBFail.into())
+            Err(StorageError::RawJournalRuntimeHeartbeatFail.into())
         }
     }
 }
@@ -756,14 +756,50 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                 match e.kind() {
                     ErrorKind::IoError(io) => match io.kind() {
                         IoErrorKind::UnexpectedEof => {
-                            // this is the only kind of error that we can actually repair since it indicates that a part of the
-                            // file is "missing"
+                            /*
+                                this is the only kind of error that we can actually repair since it indicates that a part of the
+                                file is "missing." we can't deal with things like permission errors. that's supposed to be handled
+                                by the admin by looking through the error logs
+                            */
                         }
                         _ => return Err(e),
                     },
-                    ErrorKind::Storage(_) => todo!(),
-                    ErrorKind::Txn(_) => todo!(),
-                    ErrorKind::Other(_) => todo!(),
+                    ErrorKind::Storage(e) => match e {
+                        // unreachable errors (no execution path here)
+                        StorageError::RawJournalRuntimeHeartbeatFail            // can't reach runtime error before driver start
+                        | StorageError::RawJournalRuntimeDirty
+                        | StorageError::FileDecodeHeaderVersionMismatch         // should be caught earlier
+                        | StorageError::FileDecodeHeaderCorrupted               // should be caught earlier
+                        | StorageError::V1JournalDecodeLogEntryCorrupted        // v1 errors can't be raised here
+                        | StorageError::V1JournalDecodeCorrupted
+                        | StorageError::V1DataBatchDecodeCorruptedBatch
+                        | StorageError::V1DataBatchDecodeCorruptedEntry
+                        | StorageError::V1DataBatchDecodeCorruptedBatchFile
+                        | StorageError::V1SysDBDecodeCorrupted
+                        | StorageError::V1DataBatchRuntimeCloseError => unreachable!(),
+                        // possible errors
+                        StorageError::InternalDecodeStructureCorrupted
+                        | StorageError::InternalDecodeStructureCorruptedPayload
+                        | StorageError::InternalDecodeStructureIllegalData
+                        | StorageError::RawJournalDecodeEventCorruptedMetadata
+                        | StorageError::RawJournalDecodeEventCorruptedPayload
+                        | StorageError::RawJournalDecodeBatchContentsMismatch
+                        | StorageError::RawJournalDecodeBatchIntegrityFailure
+                        | StorageError::RawJournalDecodeInvalidEvent
+                        | StorageError::RawJournalDecodeCorruptionInBatchMetadata => {}
+                    },
+                    ErrorKind::Txn(txerr) => match txerr {
+                        // unreachable errors
+                        TransactionError::V1DecodeCorruptedPayloadMoreBytes                 // no v1 errors
+                        | TransactionError::V1DecodedUnexpectedEof
+                        | TransactionError::V1DecodeUnknownTxnOp => unreachable!(),
+                        // possible errors
+                        TransactionError::OnRestoreDataConflictAlreadyExists |
+                        TransactionError::OnRestoreDataMissing |
+                        TransactionError::OnRestoreDataConflictMismatch => {},
+                    },
+                    // these errors do not have an execution pathway
+                    ErrorKind::Other(_) => unreachable!(),
                     ErrorKind::Config(_) => unreachable!(),
                 }
             }
@@ -857,7 +893,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         self.stats.driver_events += 1;
         // update
         Self::__refresh_known_txn(self);
-        // full metadata validated; this is a valid close event but is it actually a close
+        // full metadata validated; this is a valid close event, but is it actually a close?
         if self.tr.is_eof() {
             jtrace_reader!(ClosedAndReachedEof);
             // yes, we're done

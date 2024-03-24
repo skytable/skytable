@@ -177,7 +177,9 @@ impl RawJournalAdapter for SimpleDBJournal {
                 file.tracked_read(&mut keybuf)?;
                 match String::from_utf8(keybuf) {
                     Ok(k) => gs.data.borrow_mut().push(k),
-                    Err(_) => return Err(StorageError::RawJournalDecodeEventCorruptedPayload.into()),
+                    Err(_) => {
+                        return Err(StorageError::RawJournalDecodeEventCorruptedPayload.into())
+                    }
                 }
             }
             EventMeta::Clear => gs.data.borrow_mut().clear(),
