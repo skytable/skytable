@@ -425,10 +425,11 @@ macro_rules! impl_endian {
 
 impl_endian!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
 
+pub fn time_now_string() -> String {
+    chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
+}
+
 pub fn time_now_with_postfix(post_fix: &str) -> String {
-    let now = chrono::Local::now();
-    // Format the current date and time as YYYYMMDD_HHMMSS
-    let formatted_date_time = now.format("%Y%m%d_%H%M%S").to_string();
     // Concatenate the formatted date and time with the postfix
-    format!("{}-{}", formatted_date_time, post_fix)
+    format!("{}-{}", time_now_string(), post_fix)
 }

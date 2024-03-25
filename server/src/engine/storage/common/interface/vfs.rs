@@ -62,6 +62,19 @@ enum VNode {
     File(RwLock<VFile>),
 }
 
+impl VNode {
+    fn clone_into_new_node(&self) -> Self {
+        match self {
+            Self::Dir(d) => Self::Dir(
+                d.iter()
+                    .map(|(id, data)| (id.clone(), data.clone_into_new_node()))
+                    .collect(),
+            ),
+            Self::File(f) => Self::File(RwLock::new(f.read().clone_to_new_file())),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct VFile {
     read: bool,
@@ -103,6 +116,14 @@ impl Drop for VFileDescriptor {
 */
 
 impl VFile {
+    pub fn clone_to_new_file(&self) -> Self {
+        Self {
+            read: false,
+            write: false,
+            data: self.data.clone(),
+            pos: 0,
+        }
+    }
     pub fn truncate(&mut self, to: u64) -> IoResult<()> {
         if !self.write {
             return Err(Error::new(ErrorKind::PermissionDenied, "Write permission denied").into());
@@ -186,6 +207,30 @@ impl VirtualFS {
     }
     pub fn get_data(&self, path: &str) -> IoResult<Vec<u8>> {
         self.with_file(path, |f| Ok(f.data.clone()))
+    }
+    pub fn fs_copy(&mut self, from: &str, to: &str) -> IoResult<()> {
+        let node = self.with_item(from, |node| Ok(node.clone_into_new_node()))?;
+        // process components
+        let (target, components) = util::split_target_and_components(to);
+        let mut current = &mut self.root;
+        for component in components {
+            match current.get_mut(component) {
+                Some(VNode::Dir(dir)) => {
+                    current = dir;
+                }
+                Some(VNode::File(_)) => return err::file_in_dir_path(),
+                None => return err::dir_missing_in_path(),
+            }
+        }
+        match current.entry(target.into()) {
+            Entry::Occupied(mut item) => {
+                item.insert(node);
+            }
+            Entry::Vacant(ve) => {
+                ve.insert(node);
+            }
+        }
+        Ok(())
     }
     pub fn fs_fcreate_rw(&mut self, fpath: &str) -> IoResult<VFileDescriptor> {
         let (target_file, components) = util::split_target_and_components(fpath);
@@ -354,16 +399,13 @@ impl VirtualFS {
         fpath: &str,
         f: impl FnOnce(&VFile) -> IoResult<T>,
     ) -> IoResult<T> {
-        let (target_file, components) = util::split_target_and_components(fpath);
-        let target_dir = util::find_target_dir(components, &self.root)?;
-        match target_dir.get(target_file) {
-            Some(VNode::File(file)) => {
+        self.with_item(fpath, |node| match node {
+            VNode::File(file) => {
                 let f_ = file.read();
                 f(&f_)
             }
-            Some(VNode::Dir(_)) => return err::item_is_not_file(),
-            None => return Err(Error::from(ErrorKind::NotFound).into()),
-        }
+            VNode::Dir(_) => err::item_is_not_file(),
+        })
     }
     fn with_item_mut<T>(
         &mut self,
@@ -385,6 +427,24 @@ impl VirtualFS {
         match current.entry(target.into()) {
             Entry::Occupied(item) => return f(item),
             Entry::Vacant(_) => return err::could_not_find_item(),
+        }
+    }
+    fn with_item<T>(&self, fpath: &str, f: impl FnOnce(&VNode) -> IoResult<T>) -> IoResult<T> {
+        // process components
+        let (target, components) = util::split_target_and_components(fpath);
+        let mut current = &self.root;
+        for component in components {
+            match current.get(component) {
+                Some(VNode::Dir(dir)) => {
+                    current = dir;
+                }
+                Some(VNode::File(_)) => return err::file_in_dir_path(),
+                None => return err::dir_missing_in_path(),
+            }
+        }
+        match current.get(target.into()) {
+            Some(item) => return f(item),
+            None => return err::could_not_find_item(),
         }
     }
     fn dir_delete(&mut self, fpath: &str, allow_if_non_empty: bool) -> IoResult<()> {

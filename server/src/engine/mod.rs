@@ -42,7 +42,7 @@ mod txn;
 #[cfg(test)]
 mod tests;
 // re-export
-pub use error::RuntimeResult;
+pub use {error::RuntimeResult, fractal::Global};
 
 use crate::engine::storage::SELoaded;
 
@@ -197,4 +197,8 @@ pub fn finish(g: fractal::Global) {
         // UNSAFE(@ohsayan): the only thing we do before exit
         g.unload_all();
     }
+}
+
+pub fn repair() -> RuntimeResult<()> {
+    storage::repair()
 }

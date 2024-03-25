@@ -30,6 +30,8 @@
     file system
 */
 
+use crate::util;
+
 #[cfg(test)]
 use super::vfs::{VFileDescriptor, VirtualFS};
 use {
@@ -56,6 +58,28 @@ impl FileSystem {
 }
 
 impl FileSystem {
+    #[inline(always)]
+    pub fn copy_directory(from: &str, to: &str) -> IoResult<()> {
+        #[cfg(test)]
+        {
+            match Self::context() {
+                FSContext::Local => {}
+                FSContext::Virtual => return VirtualFS::instance().write().fs_copy(from, to),
+            }
+        }
+        util::os::recursive_copy(from, to)
+    }
+    #[inline(always)]
+    pub fn copy(from: &str, to: &str) -> IoResult<()> {
+        #[cfg(test)]
+        {
+            match Self::context() {
+                FSContext::Local => {}
+                FSContext::Virtual => return VirtualFS::instance().write().fs_copy(from, to),
+            }
+        }
+        std_fs::copy(from, to).map(|_| ())
+    }
     #[inline(always)]
     pub fn read(path: &str) -> IoResult<Vec<u8>> {
         #[cfg(test)]

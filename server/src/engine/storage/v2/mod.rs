@@ -27,26 +27,32 @@
 use {
     self::{
         impls::mdl_journal::{BatchStats, FullModel},
-        raw::journal::JournalSettings,
+        raw::journal::{JournalSettings, RepairResult},
     },
     super::{common::interface::fs::FileSystem, v1, SELoaded},
-    crate::engine::{
-        config::Configuration,
-        core::{
-            system_db::{SystemDatabase, VerifyUser},
-            GNSData, GlobalNS,
-        },
-        fractal::{context, FractalGNSDriver},
-        storage::common::paths_v1,
-        txn::{
-            gns::{
-                model::CreateModelTxn,
-                space::CreateSpaceTxn,
-                sysctl::{AlterUserTxn, CreateUserTxn},
+    crate::{
+        engine::{
+            config::Configuration,
+            core::{
+                system_db::{SystemDatabase, VerifyUser},
+                EntityIDRef, GNSData, GlobalNS,
             },
-            SpaceIDRef,
+            fractal::{context, FractalGNSDriver},
+            storage::{
+                common::paths_v1,
+                v2::raw::journal::{self, JournalRepairMode},
+            },
+            txn::{
+                gns::{
+                    model::CreateModelTxn,
+                    space::CreateSpaceTxn,
+                    sysctl::{AlterUserTxn, CreateUserTxn},
+                },
+                SpaceIDRef,
+            },
+            RuntimeResult,
         },
-        RuntimeResult,
+        util,
     },
     impls::mdl_journal::ModelDriver,
 };
@@ -158,4 +164,70 @@ pub fn restore(cfg: &Configuration) -> RuntimeResult<SELoaded> {
     Ok(SELoaded {
         gns: GlobalNS::new(gns, FractalGNSDriver::new(gns_driver)),
     })
+}
+
+pub fn repair() -> RuntimeResult<()> {
+    // back up all files
+    let backup_dir = format!("backups/{}-before-repair-backup", util::time_now_string());
+    context::set_dmsg("creating backup directory");
+    FileSystem::create_dir_all(&backup_dir)?;
+    context::set_dmsg("backing up GNS");
+    FileSystem::copy(GNS_PATH, &format!("{backup_dir}/{GNS_PATH}"))?; // backup GNS
+    context::set_dmsg("backing up data directory");
+    FileSystem::copy_directory(DATA_DIR, &format!("{backup_dir}/{DATA_DIR}"))?; // backup data
+    info!("All data backed up in {backup_dir}");
+    // check and attempt repair: GNS
+    let gns = GNSData::empty();
+    context::set_dmsg("repair GNS");
+    print_repair_info(
+        journal::repair_journal::<raw::journal::EventLogAdapter<impls::gns_log::GNSEventLog>>(
+            GNS_PATH,
+            &gns,
+            JournalSettings::default(),
+            JournalRepairMode::Simple,
+        )?,
+        "GNS",
+    );
+    // check and attempt repair: models
+    let models = gns.idx_models().read();
+    for (space_id, space) in gns.idx().read().iter() {
+        for model_id in space.models().iter() {
+            let model = models.get(&EntityIDRef::new(&space_id, &model_id)).unwrap();
+            let model_data_file_path = paths_v1::model_path(
+                &space_id,
+                space.get_uuid(),
+                &model_id,
+                model.data().get_uuid(),
+            );
+            context::set_dmsg(format!("repairing {model_data_file_path}"));
+            print_repair_info(
+                journal::repair_journal::<
+                    raw::journal::BatchAdapter<impls::mdl_journal::ModelDataAdapter>,
+                >(
+                    &model_data_file_path,
+                    model.data(),
+                    JournalSettings::default(),
+                    JournalRepairMode::Simple,
+                )?,
+                &model_data_file_path,
+            )
+        }
+    }
+    Ok(())
+}
+
+fn print_repair_info(result: RepairResult, id: &str) {
+    match result {
+        RepairResult::NoErrors => info!("repair: no errors detected in {id}"),
+        RepairResult::LostBytes(lost) => {
+            warn!("repair: LOST DATA. repaired {id} but lost {lost} trailing bytes")
+        }
+        RepairResult::UnspecifiedLoss(definitely_lost) => {
+            if definitely_lost == 0 {
+                warn!("repair: LOST DATA. repaired {id} but lost an unspecified amount of data")
+            } else {
+                warn!("repair: LOST DATA. repaired {id} but lost atleast {definitely_lost} trailing bytes")
+            }
+        }
+    }
 }

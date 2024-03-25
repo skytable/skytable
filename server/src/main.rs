@@ -72,27 +72,52 @@ fn main() {
             ConfigReturn::HelpMessage(msg) => {
                 exit!(eprintln!("{msg}"), 0x00)
             }
+            ConfigReturn::Repair => return self::repair(),
         },
         Err(e) => exit_fatal!(error!("{e}")),
     };
     self::entrypoint(config)
 }
 
+fn init() -> engine::RuntimeResult<(util::os::FileLock, tokio::runtime::Runtime)> {
+    let f_rt_start = || {
+        engine::set_context_init("locking PID file");
+        let pid_file = util::os::FileLock::new(SKY_PID_FILE)?;
+        engine::set_context_init("initializing runtime");
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("server")
+            .enable_all()
+            .build()?;
+        Ok((pid_file, runtime))
+    };
+    f_rt_start()
+}
+
+fn exit(
+    global: Option<engine::Global>,
+    pid_file: Option<util::os::FileLock>,
+    result: engine::RuntimeResult<()>,
+) {
+    if let Some(g) = global {
+        info!("cleaning up data");
+        engine::finish(g);
+    }
+    if let Some(_) = pid_file {
+        if let Err(e) = std::fs::remove_file(SKY_PID_FILE) {
+            error!("failed to remove PID file: {e}");
+        }
+    }
+    match result {
+        Ok(()) => println!("goodbye"),
+        Err(e) => exit_fatal!(error!("{e}")),
+    }
+}
+
 fn entrypoint(config: engine::config::Configuration) {
     println!("{TEXT}\nSkytable v{VERSION} | {URL}\n");
     let run = || {
-        let f_rt_start = || {
-            engine::set_context_init("locking PID file");
-            let pid_file = util::os::FileLock::new(SKY_PID_FILE)?;
-            engine::set_context_init("initializing runtime");
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .thread_name("server")
-                .enable_all()
-                .build()?;
-            Ok((pid_file, runtime))
-        };
-        let (pid_file, runtime) = match f_rt_start() {
-            Ok((pf, rt)) => (pf, rt),
+        let (pid_file, runtime) = match init() {
+            Ok(pr) => pr,
             Err(e) => return (None, None, Err(e)),
         };
         let f_glob_init = runtime.block_on(async move {
@@ -113,17 +138,22 @@ fn entrypoint(config: engine::config::Configuration) {
         (Some(pid_file), Some(g), result_start)
     };
     let (pid_file, global, result) = run();
-    if let Some(g) = global {
-        info!("cleaning up data");
-        engine::finish(g);
-    }
-    if let Some(_) = pid_file {
-        if let Err(e) = std::fs::remove_file(SKY_PID_FILE) {
-            error!("failed to remove PID file: {e}");
-        }
-    }
-    match result {
-        Ok(()) => println!("goodbye"),
-        Err(e) => exit_fatal!(error!("{e}")),
-    }
+    self::exit(global, pid_file, result);
+}
+
+fn repair() {
+    let (pid_file, rt) = match init() {
+        Ok(init) => init,
+        Err(e) => exit_fatal!(error!("failed to start repair task: {e}")),
+    };
+    let result = rt.block_on(async move {
+        engine::set_context_init("binding system signals");
+        let signal = util::os::TerminationSignal::init()?;
+        let result = tokio::task::spawn_blocking(|| engine::repair())
+            .await
+            .unwrap();
+        drop(signal);
+        result
+    });
+    self::exit(None, Some(pid_file), result)
 }

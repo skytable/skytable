@@ -460,3 +460,7 @@ macro_rules! e {
         r($e)
     }};
 }
+
+macro_rules! l {
+    (let $($name:ident),* = $($expr:expr),*) => { let ($($name),*) = ($($expr),*); }
+}

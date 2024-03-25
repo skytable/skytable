@@ -652,6 +652,7 @@ pub enum CLIConfigParseReturn<T> {
     Version,
     /// We yielded a config
     YieldedConfig(T),
+    Repair,
 }
 
 impl<T> CLIConfigParseReturn<T> {
@@ -670,10 +671,21 @@ impl<T> CLIConfigParseReturn<T> {
 pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
     src: impl Iterator<Item = T>,
 ) -> RuntimeResult<CLIConfigParseReturn<ParsedRawArgs>> {
-    let mut args_iter = src.into_iter().skip(1);
+    let mut args_iter = src.into_iter().skip(1).peekable();
     let mut cli_args: ParsedRawArgs = HashMap::new();
     while let Some(arg) = args_iter.next() {
         let arg = arg.as_ref();
+        if arg == "repair" {
+            if args_iter.peek().is_none() {
+                return Ok(CLIConfigParseReturn::Repair);
+            } else {
+                return Err(ConfigError::with_src(
+                    ConfigSource::Cli,
+                    ConfigErrorKind::ErrorString("to use `repair`, just run `skyd repair`".into()),
+                )
+                .into());
+            }
+        }
         if arg == "--help" || arg == "-h" {
             return Ok(CLIConfigParseReturn::Help);
         }
@@ -978,6 +990,7 @@ pub enum ConfigReturn {
     HelpMessage(String),
     /// A configuration that we have fully validated was provided
     Config(Configuration),
+    Repair,
 }
 
 impl ConfigReturn {
@@ -1105,6 +1118,7 @@ pub fn check_configuration() -> RuntimeResult<ConfigReturn> {
                 libsky::VERSION
             )));
         }
+        CLIConfigParseReturn::Repair => return Ok(ConfigReturn::Repair),
         CLIConfigParseReturn::YieldedConfig(cfg) => Some(cfg),
     };
     match cli_args {

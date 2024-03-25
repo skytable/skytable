@@ -140,6 +140,9 @@ impl<S: FileSpecV1, F: FileWrite + FileWriteExt> SdssFile<S, F> {
         self.file.fwrite_all(data)?;
         self.file.fsync_all()
     }
+    pub fn truncate(&mut self, new_size: u64) -> IoResult<()> {
+        self.file.f_truncate(new_size)
+    }
 }
 
 /*
@@ -258,6 +261,9 @@ impl<S: FileSpecV1> TrackedReader<S> {
     }
     pub fn cursor(&self) -> u64 {
         self.cursor
+    }
+    pub fn cached_size(&self) -> u64 {
+        self.len
     }
 }
 

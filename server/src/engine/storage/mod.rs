@@ -57,6 +57,10 @@ pub struct SELoaded {
     pub gns: GlobalNS,
 }
 
+pub fn repair() -> RuntimeResult<()> {
+    v2::repair()
+}
+
 pub fn load(cfg: &Configuration) -> RuntimeResult<SELoaded> {
     // first determine if this is a new install, an existing install or if it uses the old driver
     if Path::new(v1::SYSDB_PATH).is_file() {
