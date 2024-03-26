@@ -78,7 +78,7 @@ where
     RawJournalWriter::new(initializer, file)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 /// The result of a journal repair operation
 pub enum RepairResult {
     /// No errors were detected
@@ -215,8 +215,8 @@ pub(super) enum JournalWriterTraceEvent {
     DriverClosed,
 }
 
+#[cfg(test)]
 local! {
-    #[cfg(test)]
     static TRACE: Vec<JournalTraceEvent> = Vec::new();
 }
 
@@ -746,10 +746,9 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                     );
                     return Ok(initializer);
                 }
-                Ok(false) => {}
+                Ok(false) => self.state = JournalState::AwaitingEvent,
                 Err(e) => return Err(e),
             }
-            self.state = JournalState::AwaitingEvent;
         }
     }
     fn new(
@@ -807,7 +806,13 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         e: Error,
         repair_mode: JournalRepairMode,
     ) -> RuntimeResult<(RepairResult, JournalInitializer, SdssFile<J::Spec>)> {
-        let lost = self.tr.cached_size() - self.tr.cursor();
+        let lost = if self.last_txn_offset == 0 {
+            // we haven't scanned any events and already hit an error
+            // so essentially, we lost the entire log
+            self.tr.cached_size() - <J::Spec as FileSpecV1>::SIZE as u64
+        } else {
+            self.tr.cached_size() - self.last_txn_offset
+        };
         let mut repair_result = RepairResult::LostBytes(lost);
         match repair_mode {
             JournalRepairMode::Simple => {}
@@ -867,9 +872,13 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         */
         l!(let known_event_id, known_event_offset, known_event_checksum = self.last_txn_id, self.last_txn_offset, self.last_txn_checksum);
         let mut last_logged_checksum = self.tr.checksum();
-        let was_eof = self.tr.is_eof();
         let mut base_log = self.tr.into_inner();
-        base_log.truncate(known_event_offset)?;
+        if known_event_offset == 0 {
+            // no event, so just trim upto header
+            base_log.truncate(<J::Spec as FileSpecV1>::SIZE as _)?;
+        } else {
+            base_log.truncate(known_event_offset)?;
+        }
         /*
             see what needs to be done next
         */
@@ -882,13 +891,22 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                     the log is in a dirty state that can only be resolved by closing it
                 */
                 let drv_close = DriverEvent::new(
-                    (known_event_id + 1) as u128,
+                    if known_event_offset == 0 {
+                        // no event occurred
+                        0
+                    } else {
+                        // something happened prior to this, so we'll use an incremented ID for this event
+                        known_event_id + 1
+                    } as u128,
                     DriverEventKind::Closed,
                     known_event_checksum,
                     known_event_offset,
                     known_event_id,
                 );
-                if matches!(self.state, JournalState::AwaitingClose) & was_eof {
+                if {
+                    (self.state == JournalState::AwaitingClose) | // expecting a close but we couldn't parse it
+                    (self.state == JournalState::AwaitingEvent) // we were awaiting an event but we couldn't get enough metadata to do anything
+                } {
                     // we reached eof and we were expecting a close. definitely lost an unspecified number of bytes
                     repair_result = RepairResult::UnspecifiedLoss(lost);
                 }
