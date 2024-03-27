@@ -154,6 +154,11 @@ pub fn obtain_trace() -> Vec<JournalTraceEvent> {
     local_mut!(TRACE, |t| core::mem::take(t))
 }
 
+#[cfg(test)]
+pub fn obtain_offsets() -> std::collections::BTreeMap<u64, u64> {
+    local_mut!(OFFSETS, |offsets| core::mem::take(offsets))
+}
+
 #[derive(Debug, PartialEq)]
 #[cfg(test)]
 pub enum JournalTraceEvent {
@@ -219,6 +224,23 @@ pub(super) enum JournalWriterTraceEvent {
 #[cfg(test)]
 local! {
     static TRACE: Vec<JournalTraceEvent> = Vec::new();
+    static OFFSETS: std::collections::BTreeMap<u64, u64> = Default::default();
+    static TRACE_OFFSETS: bool = false;
+}
+
+macro_rules! jtrace_event_offset {
+    ($id:expr, $offset:expr) => {
+        #[cfg(test)]
+        {
+            local_ref!(TRACE_OFFSETS, |should_trace| {
+                if *should_trace {
+                    local_mut!(OFFSETS, |offsets| assert!(offsets
+                        .insert($id, $offset)
+                        .is_none()))
+                }
+            })
+        }
+    };
 }
 
 macro_rules! jtrace {
@@ -621,6 +643,7 @@ impl<J: RawJournalAdapter> RawJournalWriter<J> {
         self.txn_id += 1;
         let ret = f(self, id as u128);
         if ret.is_ok() {
+            jtrace_event_offset!(id, self.log_file.cursor());
             self.known_txn_id = id;
             self.known_txn_offset = self.log_file.cursor();
         }

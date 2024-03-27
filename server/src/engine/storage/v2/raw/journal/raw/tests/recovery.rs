@@ -33,7 +33,10 @@ use {
                 common::interface::fs::{File, FileExt, FileSystem, FileWriteExt},
                 v2::raw::journal::{
                     create_journal, open_journal,
-                    raw::{obtain_trace, DriverEvent, JournalReaderTraceEvent, RawJournalWriter},
+                    raw::{
+                        obtain_offsets, obtain_trace, DriverEvent, JournalReaderTraceEvent,
+                        RawJournalWriter,
+                    },
                     repair_journal, JournalRepairMode, JournalSettings, RepairResult,
                 },
             },
@@ -52,16 +55,16 @@ fn create_trimmed_file(from: &str, to: &str, trim_to: u64) -> IoResult<()> {
 
 #[test]
 fn corruption_at_close() {
-    let initializers: Vec<fn() -> RuntimeResult<(&'static str, u64)>> = vec![
-        || {
-            let jrnl_id = "close_event_corruption_empty.db";
+    let initializers: Vec<(&'static str, fn(&str) -> RuntimeResult<u64>)> = vec![
+        // open and close
+        ("close_event_corruption_empty.db", |jrnl_id| {
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
             RawJournalWriter::close_driver(&mut jrnl)?;
-            Ok((jrnl_id, 0))
-        },
-        || {
+            Ok(0)
+        }),
+        // open, apply mix of events, close
+        ("close_event_corruption.db", |jrnl_id| {
             let mut operation_count = 0;
-            let jrnl_id = "close_event_corruption.db";
             let mut sdb = SimpleDB::new();
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
             for num in 1..=100 {
@@ -73,14 +76,40 @@ fn corruption_at_close() {
                 }
             }
             RawJournalWriter::close_driver(&mut jrnl)?;
-            Ok((jrnl_id, operation_count))
-        },
+            Ok(operation_count)
+        }),
+        // open, close, reinit, close
+        (
+            "close_event_corruption_open_close_open_close.db",
+            |jrnl_id| {
+                // open and close
+                let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
+                RawJournalWriter::close_driver(&mut jrnl)?;
+                drop(jrnl);
+                // reinit and close
+                let mut jrnl = open_journal::<SimpleDBJournal>(
+                    jrnl_id,
+                    &SimpleDB::new(),
+                    JournalSettings::default(),
+                )?;
+                RawJournalWriter::close_driver(&mut jrnl)?;
+                Ok(2)
+            },
+        ),
     ];
-    for initializer in initializers {
+    for (journal_id, initializer) in initializers {
         // initialize journal, get size and clear traces
-        let (journal_id, next_id) = initializer().unwrap();
+        let close_event_id = match initializer(journal_id) {
+            Ok(nid) => nid,
+            Err(e) => panic!(
+                "failed to initialize {journal_id} due to {e}. trace: {:?}, file_data={:?}",
+                obtain_trace(),
+                FileSystem::read(journal_id),
+            ),
+        };
         let journal_size = File::open(journal_id).unwrap().f_len().unwrap();
         let _ = obtain_trace();
+        let _ = obtain_offsets();
         // now trim and repeat
         for (trim_size, new_size) in (1..=DriverEvent::FULL_EVENT_SIZE)
             .rev()
@@ -103,7 +132,7 @@ fn corruption_at_close() {
             let trace = obtain_trace();
             if trim_size > (DriverEvent::FULL_EVENT_SIZE - (sizeof!(u128) + sizeof!(u64))) {
                 // the amount of trim from the end of the file causes us to lose valuable metadata
-                if next_id == 0 {
+                if close_event_id == 0 {
                     // empty log
                     assert_eq!(
                         trace,
@@ -122,14 +151,14 @@ fn corruption_at_close() {
                 }
             } else {
                 // the amount of trim still allows us to read some metadata
-                if next_id == 0 {
+                if close_event_id == 0 {
                     // empty log
                     assert_eq!(
                         trace,
                         intovec![
                             JournalReaderTraceEvent::Initialized,
                             JournalReaderTraceEvent::LookingForEvent,
-                            JournalReaderTraceEvent::AttemptingEvent(next_id),
+                            JournalReaderTraceEvent::AttemptingEvent(close_event_id),
                             JournalReaderTraceEvent::DriverEventExpectingClose,
                         ],
                         "failed at trim_size {trim_size} for journal {journal_id}"
@@ -139,7 +168,7 @@ fn corruption_at_close() {
                         &trace[trace.len() - 3..],
                         &into_array![
                             JournalReaderTraceEvent::LookingForEvent,
-                            JournalReaderTraceEvent::AttemptingEvent(next_id),
+                            JournalReaderTraceEvent::AttemptingEvent(close_event_id),
                             JournalReaderTraceEvent::DriverEventExpectingClose
                         ],
                         "failed at trim_size {trim_size} for journal {journal_id}"
@@ -168,6 +197,7 @@ fn corruption_at_close() {
             RawJournalWriter::close_driver(&mut jrnl).unwrap();
             // clear trace
             let _ = obtain_trace();
+            let _ = obtain_offsets();
         }
     }
 }
