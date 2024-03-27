@@ -177,6 +177,7 @@ pub enum JournalReaderTraceEvent {
     ClosedAndReachedEof,
     ReopenSuccess,
     // event
+    LookingForEvent,
     AttemptingEvent(u64),
     DetectedServerEvent,
     ServerEventMetadataParsed,
@@ -734,6 +735,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
     }
     fn _scroll(&mut self, gs: &J::GlobalState) -> RuntimeResult<JournalInitializer> {
         loop {
+            jtrace_reader!(LookingForEvent);
             match self._apply_next_event_and_stop(gs) {
                 Ok(true) => {
                     jtrace_reader!(Completed);

@@ -72,6 +72,7 @@ fn journal_open_close() {
             intovec![
                 // init reader and read close event
                 JournalReaderTraceEvent::Initialized,
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(0),
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
@@ -116,6 +117,7 @@ fn journal_open_close() {
             intovec![
                 // init reader and read reopen event
                 JournalReaderTraceEvent::Initialized,
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(0),
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
@@ -125,6 +127,7 @@ fn journal_open_close() {
                 JournalReaderTraceEvent::DriverEventExpectingReopenGotReopen,
                 JournalReaderTraceEvent::ReopenSuccess,
                 // now read close event
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(2),
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
@@ -198,11 +201,13 @@ fn journal_with_server_single_event() {
             intovec![
                 // init reader and read server event
                 JournalReaderTraceEvent::Initialized,
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(0),
                 JournalReaderTraceEvent::DetectedServerEvent,
                 JournalReaderTraceEvent::ServerEventMetadataParsed,
                 JournalReaderTraceEvent::ServerEventAppliedSuccess,
                 // now read close event
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(1),
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
@@ -246,11 +251,13 @@ fn journal_with_server_single_event() {
             intovec![
                 // init reader and read server event
                 JournalReaderTraceEvent::Initialized,
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(0),
                 JournalReaderTraceEvent::DetectedServerEvent,
                 JournalReaderTraceEvent::ServerEventMetadataParsed,
                 JournalReaderTraceEvent::ServerEventAppliedSuccess,
                 // now read close event
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(1),
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
@@ -261,6 +268,7 @@ fn journal_with_server_single_event() {
                 JournalReaderTraceEvent::DriverEventExpectingReopenGotReopen,
                 JournalReaderTraceEvent::ReopenSuccess,
                 // now read close event
+                JournalReaderTraceEvent::LookingForEvent,
                 JournalReaderTraceEvent::AttemptingEvent(3),
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,

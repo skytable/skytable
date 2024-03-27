@@ -26,94 +26,148 @@
 
 use {
     super::{SimpleDB, SimpleDBJournal},
-    crate::engine::{
-        error::ErrorKind,
-        storage::{
-            common::interface::fs::{File, FileExt, FileSystem, FileWriteExt},
-            v2::raw::journal::{
-                create_journal, open_journal,
-                raw::{obtain_trace, DriverEvent, JournalReaderTraceEvent, RawJournalWriter},
-                repair_journal, JournalRepairMode, JournalSettings, RepairResult,
+    crate::{
+        engine::{
+            error::ErrorKind,
+            storage::{
+                common::interface::fs::{File, FileExt, FileSystem, FileWriteExt},
+                v2::raw::journal::{
+                    create_journal, open_journal,
+                    raw::{obtain_trace, DriverEvent, JournalReaderTraceEvent, RawJournalWriter},
+                    repair_journal, JournalRepairMode, JournalSettings, RepairResult,
+                },
             },
+            RuntimeResult,
         },
+        IoResult,
     },
     std::io::ErrorKind as IoErrorKind,
 };
 
+fn create_trimmed_file(from: &str, to: &str, trim_to: u64) -> IoResult<()> {
+    FileSystem::copy(from, to)?;
+    let mut f = File::open(to)?;
+    f.f_truncate(trim_to)
+}
+
 #[test]
-fn close_event_corruption() {
-    let full_file_size;
-    {
-        // open and close a journal (and clear traces)
-        let mut jrnl = create_journal::<SimpleDBJournal>("close_event_corruption.db").unwrap();
-        RawJournalWriter::close_driver(&mut jrnl).unwrap();
+fn corruption_at_close() {
+    let initializers: Vec<fn() -> RuntimeResult<(&'static str, u64)>> = vec![
+        || {
+            let jrnl_id = "close_event_corruption_empty.db";
+            let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
+            RawJournalWriter::close_driver(&mut jrnl)?;
+            Ok((jrnl_id, 0))
+        },
+        || {
+            let mut operation_count = 0;
+            let jrnl_id = "close_event_corruption.db";
+            let mut sdb = SimpleDB::new();
+            let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
+            for num in 1..=100 {
+                operation_count += 1;
+                sdb.push(&mut jrnl, format!("key-{num}"))?;
+                if num % 10 == 0 {
+                    operation_count += 1;
+                    sdb.pop(&mut jrnl)?;
+                }
+            }
+            RawJournalWriter::close_driver(&mut jrnl)?;
+            Ok((jrnl_id, operation_count))
+        },
+    ];
+    for initializer in initializers {
+        // initialize journal, get size and clear traces
+        let (journal_id, next_id) = initializer().unwrap();
+        let journal_size = File::open(journal_id).unwrap().f_len().unwrap();
         let _ = obtain_trace();
-        full_file_size = {
-            let f = File::open("close_event_corruption.db").unwrap();
-            f.f_len().unwrap()
-        };
-    }
-    for (trim_size, new_size) in (1..=DriverEvent::FULL_EVENT_SIZE)
-        .rev()
-        .map(|trim_size| (trim_size, full_file_size - trim_size as u64))
-    {
-        // create a copy of the "good" journal
-        let trimmed_journal_path = format!("close_event_corruption-trimmed-{trim_size}.db");
-        FileSystem::copy("close_event_corruption.db", &trimmed_journal_path).unwrap();
-        let simple_db = SimpleDB::new();
-        let open_journal_fn = || {
-            open_journal::<SimpleDBJournal>(
-                &trimmed_journal_path,
-                &simple_db,
-                JournalSettings::default(),
-            )
-        };
-        // trim this journal to simulate loss of data
-        let mut f = File::open(&trimmed_journal_path).unwrap();
-        f.f_truncate(new_size).unwrap();
-        // open the journal and validate failure
-        let open_err = open_journal_fn().unwrap_err();
-        let trace = obtain_trace();
-        if trim_size > (DriverEvent::FULL_EVENT_SIZE - (sizeof!(u128) + sizeof!(u64))) {
-            // the amount of trim from the end of the file causes us to lose valuable metadata
+        // now trim and repeat
+        for (trim_size, new_size) in (1..=DriverEvent::FULL_EVENT_SIZE)
+            .rev()
+            .map(|trim_size| (trim_size, journal_size - trim_size as u64))
+        {
+            // create a copy of the "good" journal and trim to simulate data loss
+            let trimmed_journal_path = format!("{journal_id}-trimmed-{trim_size}.db");
+            create_trimmed_file(journal_id, &trimmed_journal_path, new_size).unwrap();
+            // init misc
+            let simple_db = SimpleDB::new();
+            let open_journal_fn = || {
+                open_journal::<SimpleDBJournal>(
+                    &trimmed_journal_path,
+                    &simple_db,
+                    JournalSettings::default(),
+                )
+            };
+            // open the journal and validate failure
+            let open_err = open_journal_fn().unwrap_err();
+            let trace = obtain_trace();
+            if trim_size > (DriverEvent::FULL_EVENT_SIZE - (sizeof!(u128) + sizeof!(u64))) {
+                // the amount of trim from the end of the file causes us to lose valuable metadata
+                if next_id == 0 {
+                    // empty log
+                    assert_eq!(
+                        trace,
+                        intovec![
+                            JournalReaderTraceEvent::Initialized,
+                            JournalReaderTraceEvent::LookingForEvent
+                        ],
+                        "failed at trim_size {trim_size} for journal {journal_id}"
+                    )
+                } else {
+                    assert_eq!(
+                        *trace.last().unwrap(),
+                        JournalReaderTraceEvent::LookingForEvent.into(),
+                        "failed at trim_size {trim_size} for journal {journal_id}"
+                    );
+                }
+            } else {
+                // the amount of trim still allows us to read some metadata
+                if next_id == 0 {
+                    // empty log
+                    assert_eq!(
+                        trace,
+                        intovec![
+                            JournalReaderTraceEvent::Initialized,
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(next_id),
+                            JournalReaderTraceEvent::DriverEventExpectingClose,
+                        ],
+                        "failed at trim_size {trim_size} for journal {journal_id}"
+                    )
+                } else {
+                    assert_eq!(
+                        &trace[trace.len() - 3..],
+                        &into_array![
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(next_id),
+                            JournalReaderTraceEvent::DriverEventExpectingClose
+                        ],
+                        "failed at trim_size {trim_size} for journal {journal_id}"
+                    );
+                }
+            }
             assert_eq!(
-                trace,
-                intovec![JournalReaderTraceEvent::Initialized],
-                "failed at trim_size {trim_size}"
+                open_err.kind(),
+                &ErrorKind::IoError(IoErrorKind::UnexpectedEof.into()),
+                "failed at trim_size {trim_size} for journal {journal_id}"
             );
-        } else {
-            // the amount of trim still allows us to read some metadata
+            // now repair this log
             assert_eq!(
-                trace,
-                intovec![
-                    JournalReaderTraceEvent::Initialized,
-                    JournalReaderTraceEvent::AttemptingEvent(0),
-                    JournalReaderTraceEvent::DriverEventExpectingClose
-                ],
-                "failed at trim_size {trim_size}"
+                repair_journal::<SimpleDBJournal>(
+                    &trimmed_journal_path,
+                    &simple_db,
+                    JournalSettings::default(),
+                    JournalRepairMode::Simple,
+                )
+                .unwrap(),
+                RepairResult::UnspecifiedLoss((DriverEvent::FULL_EVENT_SIZE - trim_size) as _),
+                "failed at trim_size {trim_size} for journal {journal_id}"
             );
+            // now reopen log and ensure it's repaired
+            let mut jrnl = open_journal_fn().unwrap();
+            RawJournalWriter::close_driver(&mut jrnl).unwrap();
+            // clear trace
+            let _ = obtain_trace();
         }
-        assert_eq!(
-            open_err.kind(),
-            &ErrorKind::IoError(IoErrorKind::UnexpectedEof.into()),
-            "failed at trim_size {trim_size}"
-        );
-        // now repair this log
-        assert_eq!(
-            repair_journal::<SimpleDBJournal>(
-                &trimmed_journal_path,
-                &simple_db,
-                JournalSettings::default(),
-                JournalRepairMode::Simple,
-            )
-            .unwrap(),
-            RepairResult::UnspecifiedLoss((DriverEvent::FULL_EVENT_SIZE - trim_size) as _),
-            "failed at trim_size {trim_size}"
-        );
-        // now reopen log and ensure it's repaired
-        let mut jrnl = open_journal_fn().unwrap();
-        RawJournalWriter::close_driver(&mut jrnl).unwrap();
-        // clear trace
-        let _ = obtain_trace();
     }
 }
