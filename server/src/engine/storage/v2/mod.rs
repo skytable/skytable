@@ -219,9 +219,6 @@ pub fn repair() -> RuntimeResult<()> {
 fn print_repair_info(result: RepairResult, id: &str) {
     match result {
         RepairResult::NoErrors => info!("repair: no errors detected in {id}"),
-        RepairResult::LostBytes(lost) => {
-            warn!("repair: LOST DATA. repaired {id} but lost {lost} trailing bytes")
-        }
         RepairResult::UnspecifiedLoss(definitely_lost) => {
             if definitely_lost == 0 {
                 warn!("repair: LOST DATA. repaired {id} but lost an unspecified amount of data")

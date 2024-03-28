@@ -30,14 +30,19 @@ use {
         engine::{
             error::ErrorKind,
             storage::{
-                common::interface::fs::{File, FileExt, FileSystem, FileWriteExt},
+                common::{
+                    interface::fs::{File, FileExt, FileSystem, FileWriteExt},
+                    sdss::sdss_r1::FileSpecV1,
+                },
                 v2::raw::journal::{
                     create_journal, open_journal,
                     raw::{
-                        obtain_offsets, obtain_trace, DriverEvent, DriverEventKind,
-                        JournalReaderTraceEvent, JournalWriterTraceEvent, RawJournalWriter,
+                        debug_get_offsets, debug_get_trace, debug_set_offset_tracking, DriverEvent,
+                        DriverEventKind, JournalReaderTraceEvent, JournalWriterTraceEvent,
+                        RawJournalWriter,
                     },
-                    repair_journal, JournalRepairMode, JournalSettings, RepairResult,
+                    repair_journal, JournalRepairMode, JournalSettings, RawJournalAdapter,
+                    RepairResult,
                 },
             },
             RuntimeResult,
@@ -47,7 +52,24 @@ use {
     std::io::ErrorKind as IoErrorKind,
 };
 
-type Initializer = (&'static str, fn(&str) -> RuntimeResult<u64>);
+struct Initializer {
+    journal_id: &'static str,
+    initializer_fn: fn(&str) -> RuntimeResult<u64>,
+    last_event_size: usize,
+}
+
+impl Initializer {
+    fn new(name: &'static str, f: fn(&str) -> RuntimeResult<u64>, last_event_size: usize) -> Self {
+        Self {
+            journal_id: name,
+            initializer_fn: f,
+            last_event_size,
+        }
+    }
+    fn new_driver_type(name: &'static str, f: fn(&str) -> RuntimeResult<u64>) -> Self {
+        Self::new(name, f, DriverEvent::FULL_EVENT_SIZE)
+    }
+}
 
 fn create_trimmed_file(from: &str, to: &str, trim_to: u64) -> IoResult<()> {
     FileSystem::copy(from, to)?;
@@ -65,21 +87,26 @@ fn emulate_corrupted_final_event(
         RuntimeResult<RawJournalWriter<SimpleDBJournal>>,
     ),
 ) {
-    for (journal_id, initializer) in initializers {
+    for Initializer {
+        journal_id,
+        initializer_fn,
+        last_event_size,
+    } in initializers
+    {
         // initialize journal, get size and clear traces
-        let repaired_last_event_id = match initializer(journal_id) {
+        let repaired_last_event_id = match initializer_fn(journal_id) {
             Ok(nid) => nid,
             Err(e) => panic!(
                 "failed to initialize {journal_id} due to {e}. trace: {:?}, file_data={:?}",
-                obtain_trace(),
+                debug_get_trace(),
                 FileSystem::read(journal_id),
             ),
         };
         let journal_size = File::open(journal_id).unwrap().f_len().unwrap();
-        let _ = obtain_trace();
-        let _ = obtain_offsets();
+        let _ = debug_get_trace();
+        let _ = debug_get_offsets();
         // now trim and repeat
-        for (trim_size, new_size) in (1..=DriverEvent::FULL_EVENT_SIZE)
+        for (trim_size, new_size) in (1..=last_event_size)
             .rev()
             .map(|trim_size| (trim_size, journal_size - trim_size as u64))
         {
@@ -138,22 +165,22 @@ fn apply_event_mix(jrnl: &mut RawJournalWriter<SimpleDBJournal>) -> RuntimeResul
 
 #[test]
 fn corruption_before_close() {
-    let initializers: Vec<Initializer> = vec![
+    let initializers = vec![
         // open and close
-        ("close_event_corruption_empty.db", |jrnl_id| {
+        Initializer::new_driver_type("close_event_corruption_empty.db", |jrnl_id| {
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
             RawJournalWriter::close_driver(&mut jrnl)?;
             Ok(0)
         }),
         // open, apply mix of events, close
-        ("close_event_corruption.db", |jrnl_id| {
+        Initializer::new_driver_type("close_event_corruption.db", |jrnl_id| {
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
             let operation_count = apply_event_mix(&mut jrnl)?;
             RawJournalWriter::close_driver(&mut jrnl)?;
             Ok(operation_count)
         }),
         // open, close, reinit, close
-        (
+        Initializer::new_driver_type(
             "close_event_corruption_open_close_open_close.db",
             |jrnl_id| {
                 // open and close
@@ -176,7 +203,7 @@ fn corruption_before_close() {
         |journal_id, repaired_last_event_id, trim_size, open_result| {
             // open the journal and validate failure
             let open_err = open_result.unwrap_err();
-            let trace = obtain_trace();
+            let trace = debug_get_trace();
             if trim_size > (DriverEvent::FULL_EVENT_SIZE - (sizeof!(u128) + sizeof!(u64))) {
                 // the amount of trim from the end of the file causes us to lose valuable metadata
                 if repaired_last_event_id == 0 {
@@ -234,20 +261,18 @@ fn corruption_before_close() {
                 RepairResult::UnspecifiedLoss((DriverEvent::FULL_EVENT_SIZE - trim_size) as _),
                 "failed at trim_size {trim_size} for journal {journal_id}"
             );
-            let mut jrnl = reopen_result.unwrap();
-            // now reopen log and ensure it's repaired
-            RawJournalWriter::close_driver(&mut jrnl).unwrap();
+            let _ = reopen_result.unwrap();
             // clear trace
-            let _ = obtain_trace();
-            let _ = obtain_offsets();
+            let _ = debug_get_trace();
+            let _ = debug_get_offsets();
         },
     )
 }
 
 #[test]
 fn corruption_after_reopen() {
-    let initializers: Vec<Initializer> = vec![
-        ("corruption_after_reopen.db", |jrnl_id| {
+    let initializers = vec![
+        Initializer::new_driver_type("corruption_after_reopen.db", |jrnl_id| {
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
             RawJournalWriter::close_driver(&mut jrnl)?;
             drop(jrnl);
@@ -255,7 +280,7 @@ fn corruption_after_reopen() {
             open_journal::<SimpleDBJournal>(jrnl_id, &SimpleDB::new(), JournalSettings::default())?;
             Ok(1)
         }),
-        ("corruption_after_ropen_multi_before_close.db", |jrnl_id| {
+        Initializer::new_driver_type("corruption_after_ropen_multi_before_close.db", |jrnl_id| {
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
             let operation_count = apply_event_mix(&mut jrnl)?;
             RawJournalWriter::close_driver(&mut jrnl)?;
@@ -268,7 +293,7 @@ fn corruption_after_reopen() {
     emulate_corrupted_final_event(
         initializers,
         |journal_id, repaired_last_event_id, trim_size, open_result| {
-            let trace = obtain_trace();
+            let trace = debug_get_trace();
             if trim_size == DriverEvent::FULL_EVENT_SIZE {
                 /*
                     IMPORTANT IFFY SITUATION: undetectable error. if an entire "correct" part of the log vanishes, it's not going to be detected.
@@ -330,8 +355,8 @@ fn corruption_after_reopen() {
                 }
                 // now close this so that this works with the post repair handler
                 RawJournalWriter::close_driver(&mut jrnl).unwrap();
-                let _ = obtain_offsets();
-                let _ = obtain_trace();
+                let _ = debug_get_offsets();
+                let _ = debug_get_trace();
             } else {
                 assert_eq!(
                     open_result.unwrap_err().kind(),
@@ -378,11 +403,130 @@ fn corruption_after_reopen() {
             } else {
                 assert_eq!(
                     repair_result.unwrap(),
-                    RepairResult::LostBytes((DriverEvent::FULL_EVENT_SIZE - trim_size) as u64)
+                    RepairResult::UnspecifiedLoss(
+                        (DriverEvent::FULL_EVENT_SIZE - trim_size) as u64
+                    )
                 );
             }
-            let _ = obtain_trace();
-            let _ = obtain_offsets();
+            let _ = debug_get_trace();
+            let _ = debug_get_offsets();
+        },
+    )
+}
+
+#[test]
+fn corruption_at_runtime() {
+    // first get the offsets to compute the size of the event
+    const KEY: &str = "hello, universe";
+    let offset = {
+        debug_set_offset_tracking(true);
+        let mut sdb = SimpleDB::new();
+        let mut jrnl = create_journal("corruption_at_runtime_test_log.db").unwrap();
+        sdb.push(&mut jrnl, KEY).unwrap();
+        let (_, offset) = debug_get_offsets().pop_last().unwrap();
+        let ret =
+            offset as usize - <<SimpleDBJournal as RawJournalAdapter>::Spec as FileSpecV1>::SIZE;
+        debug_set_offset_tracking(false);
+        let _ = debug_get_trace();
+        ret
+    };
+    let initializers = vec![
+        Initializer::new(
+            "corruption_at_runtime_open_commit_corrupt",
+            |jrnl_id| {
+                let mut sdb = SimpleDB::new();
+                let mut jrnl = create_journal(jrnl_id)?;
+                sdb.push(&mut jrnl, KEY)?;
+                // don't close
+                Ok(0)
+            },
+            offset,
+        ),
+        Initializer::new(
+            "corruption_at_runtime_open_multi_commit_then_corrupt",
+            |jrnl_id| {
+                let mut op_count = 0;
+                let mut sdb = SimpleDB::new();
+                let mut jrnl = create_journal(jrnl_id)?;
+                for _ in 0..100 {
+                    sdb.push(&mut jrnl, KEY)?;
+                    op_count += 1;
+                }
+                // don't close
+                Ok(op_count)
+            },
+            offset,
+        ),
+    ];
+    emulate_corrupted_final_event(
+        initializers,
+        |journal_id, repaired_last_event_id, trim_size, open_result| {
+            let trace = debug_get_trace();
+            let err = open_result.unwrap_err();
+            assert_eq!(
+                err.kind(),
+                &ErrorKind::IoError(IoErrorKind::UnexpectedEof.into()),
+                "failed for journal {journal_id} with trim_size {trim_size}"
+            );
+            if trim_size > offset - (sizeof!(u128) + sizeof!(u64)) {
+                if repaired_last_event_id == 0 {
+                    assert_eq!(
+                        trace,
+                        intovec![
+                            JournalReaderTraceEvent::Initialized,
+                            JournalReaderTraceEvent::LookingForEvent,
+                        ],
+                        "failed for journal {journal_id} with trim_size {trim_size}"
+                    )
+                } else {
+                    assert_eq!(
+                        &trace[trace.len() - 4..],
+                        intovec![
+                            JournalReaderTraceEvent::DetectedServerEvent,
+                            JournalReaderTraceEvent::ServerEventMetadataParsed,
+                            JournalReaderTraceEvent::ServerEventAppliedSuccess,
+                            JournalReaderTraceEvent::LookingForEvent,
+                        ],
+                        "failed for journal {journal_id} with trim_size {trim_size}"
+                    )
+                }
+            } else {
+                if repaired_last_event_id == 0 {
+                    // empty log
+                    assert_eq!(
+                        trace,
+                        intovec![
+                            JournalReaderTraceEvent::Initialized,
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(0),
+                            JournalReaderTraceEvent::DetectedServerEvent,
+                            JournalReaderTraceEvent::ServerEventMetadataParsed,
+                        ],
+                        "failed for journal {journal_id} with trim_size {trim_size}"
+                    );
+                } else {
+                    assert_eq!(
+                        &trace[trace.len() - 4..],
+                        intovec![
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(repaired_last_event_id - 1),
+                            JournalReaderTraceEvent::DetectedServerEvent,
+                            JournalReaderTraceEvent::ServerEventMetadataParsed,
+                        ],
+                        "failed for journal {journal_id} with trim_size {trim_size}"
+                    );
+                }
+            }
+        },
+        |journal_id, trim_size, repair_result, reopen_result| {
+            assert!(reopen_result.is_ok());
+            assert_eq!(
+                repair_result.unwrap(),
+                RepairResult::UnspecifiedLoss((offset - trim_size) as u64),
+                "failed for journal {journal_id} with trim_size {trim_size}"
+            );
+            let _ = debug_get_trace();
+            let _ = debug_get_offsets();
         },
     )
 }

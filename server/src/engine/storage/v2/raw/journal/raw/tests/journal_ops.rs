@@ -27,7 +27,7 @@
 use {
     super::{
         super::{
-            create_journal, obtain_trace, open_journal, DriverEventKind, JournalReaderTraceEvent,
+            create_journal, debug_get_trace, open_journal, DriverEventKind, JournalReaderTraceEvent,
             JournalSettings, JournalWriterTraceEvent, RawJournalWriter,
         },
         SimpleDB, SimpleDBJournal,
@@ -42,12 +42,12 @@ fn journal_open_close() {
         // new boot
         let mut j = create_journal::<SimpleDBJournal>(JOURNAL_NAME).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![JournalWriterTraceEvent::Initialized]
         );
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 JournalWriterTraceEvent::DriverEventAttemptCommit {
                     event: DriverEventKind::Closed,
@@ -68,7 +68,7 @@ fn journal_open_close() {
         )
         .unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 // init reader and read close event
                 JournalReaderTraceEvent::Initialized,
@@ -92,7 +92,7 @@ fn journal_open_close() {
         );
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 JournalWriterTraceEvent::DriverEventAttemptCommit {
                     event: DriverEventKind::Closed,
@@ -113,7 +113,7 @@ fn journal_open_close() {
         )
         .unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 // init reader and read reopen event
                 JournalReaderTraceEvent::Initialized,
@@ -147,7 +147,7 @@ fn journal_open_close() {
         );
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 JournalWriterTraceEvent::DriverEventAttemptCommit {
                     event: DriverEventKind::Closed,
@@ -171,7 +171,7 @@ fn journal_with_server_single_event() {
         db.push(&mut j, "hello world").unwrap();
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 JournalWriterTraceEvent::Initialized,
                 JournalWriterTraceEvent::CommitAttemptForEvent(0),
@@ -192,12 +192,12 @@ fn journal_with_server_single_event() {
         let db = SimpleDB::new();
         // second boot
         let mut j = open_journal::<SimpleDBJournal>(JOURNAL_NAME, &db, JournalSettings::default())
-            .set_dmsg_fn(|| format!("{:?}", obtain_trace()))
+            .set_dmsg_fn(|| format!("{:?}", debug_get_trace()))
             .unwrap();
         assert_eq!(db.data().len(), 1);
         assert_eq!(db.data()[0], "hello world");
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 // init reader and read server event
                 JournalReaderTraceEvent::Initialized,
@@ -227,7 +227,7 @@ fn journal_with_server_single_event() {
         );
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 JournalWriterTraceEvent::DriverEventAttemptCommit {
                     event: DriverEventKind::Closed,
@@ -247,7 +247,7 @@ fn journal_with_server_single_event() {
         assert_eq!(db.data().len(), 1);
         assert_eq!(db.data()[0], "hello world");
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 // init reader and read server event
                 JournalReaderTraceEvent::Initialized,
@@ -288,7 +288,7 @@ fn journal_with_server_single_event() {
         );
         RawJournalWriter::close_driver(&mut j).unwrap();
         assert_eq!(
-            obtain_trace(),
+            debug_get_trace(),
             intovec![
                 JournalWriterTraceEvent::DriverEventAttemptCommit {
                     event: DriverEventKind::Closed,

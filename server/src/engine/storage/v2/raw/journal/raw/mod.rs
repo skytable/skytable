@@ -83,8 +83,6 @@ where
 pub enum RepairResult {
     /// No errors were detected
     NoErrors,
-    /// Lost n bytes
-    LostBytes(u64),
     /// Definitely lost n bytes, but might have lost more
     UnspecifiedLoss(u64),
 }
@@ -150,13 +148,18 @@ impl JournalInitializer {
 */
 
 #[cfg(test)]
-pub fn obtain_trace() -> Vec<JournalTraceEvent> {
+pub fn debug_get_trace() -> Vec<JournalTraceEvent> {
     local_mut!(TRACE, |t| core::mem::take(t))
 }
 
 #[cfg(test)]
-pub fn obtain_offsets() -> std::collections::BTreeMap<u64, u64> {
+pub fn debug_get_offsets() -> std::collections::BTreeMap<u64, u64> {
     local_mut!(OFFSETS, |offsets| core::mem::take(offsets))
+}
+
+#[cfg(test)]
+pub fn debug_set_offset_tracking(track: bool) {
+    local_mut!(TRACE_OFFSETS, |track_| *track_ = track)
 }
 
 #[derive(Debug, PartialEq)]
@@ -838,7 +841,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         } else {
             self.tr.cached_size() - self.last_txn_offset
         };
-        let mut repair_result = RepairResult::LostBytes(lost);
+        let repair_result = RepairResult::UnspecifiedLoss(lost);
         match repair_mode {
             JournalRepairMode::Simple => {}
         }
@@ -928,13 +931,6 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
                     known_event_offset,
                     known_event_id,
                 );
-                if {
-                    (self.state == JournalState::AwaitingClose) | // expecting a close but we couldn't parse it
-                    (self.state == JournalState::AwaitingEvent) // we were awaiting an event but we couldn't get enough metadata to do anything
-                } {
-                    // we reached eof and we were expecting a close. definitely lost an unspecified number of bytes
-                    repair_result = RepairResult::UnspecifiedLoss(lost);
-                }
                 let drv_close_event = drv_close.encode_self();
                 last_logged_checksum.update(&drv_close_event);
                 base_log.fsynced_write(&drv_close_event)?;
