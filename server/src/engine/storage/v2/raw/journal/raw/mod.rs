@@ -1054,11 +1054,11 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
             return Ok(true);
         }
         self.state = JournalState::AwaitingReopen;
+        jtrace_reader!(DriverEventExpectingReopenBlock);
         return self.handle_reopen();
     }
     fn handle_reopen(&mut self) -> RuntimeResult<bool> {
         jtrace_reader!(AttemptingEvent(self.txn_id as u64));
-        jtrace_reader!(DriverEventExpectingReopenBlock);
         // now we must look for a reopen event
         let event_block = self.tr.read_block::<{ DriverEvent::FULL_EVENT_SIZE }>()?;
         let reopen_event = match DriverEvent::decode(event_block) {
