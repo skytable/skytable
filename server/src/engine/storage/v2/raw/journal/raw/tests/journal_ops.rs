@@ -122,8 +122,8 @@ fn journal_open_close() {
                 JournalReaderTraceEvent::DriverEventExpectingClose,
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
                 JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
-                JournalReaderTraceEvent::AttemptingEvent(1),
                 JournalReaderTraceEvent::DriverEventExpectingReopenBlock,
+                JournalReaderTraceEvent::AttemptingEvent(1),
                 JournalReaderTraceEvent::DriverEventExpectingReopenGotReopen,
                 JournalReaderTraceEvent::ReopenSuccess,
                 // now read close event
@@ -263,8 +263,8 @@ fn journal_with_server_single_event() {
                 JournalReaderTraceEvent::DriverEventCompletedBlockRead,
                 JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
                 // now read reopen event
-                JournalReaderTraceEvent::AttemptingEvent(2),
                 JournalReaderTraceEvent::DriverEventExpectingReopenBlock,
+                JournalReaderTraceEvent::AttemptingEvent(2),
                 JournalReaderTraceEvent::DriverEventExpectingReopenGotReopen,
                 JournalReaderTraceEvent::ReopenSuccess,
                 // now read close event

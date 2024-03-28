@@ -122,6 +122,20 @@ fn emulate_corrupted_final_event(
     }
 }
 
+fn apply_event_mix(jrnl: &mut RawJournalWriter<SimpleDBJournal>) -> RuntimeResult<u64> {
+    let mut op_count = 0;
+    let mut sdb = SimpleDB::new();
+    for num in 1..=100 {
+        op_count += 1;
+        sdb.push(jrnl, format!("key-{num}"))?;
+        if num % 10 == 0 {
+            op_count += 1;
+            sdb.pop(jrnl)?;
+        }
+    }
+    Ok(op_count)
+}
+
 #[test]
 fn corruption_before_close() {
     let initializers: Vec<Initializer> = vec![
@@ -133,17 +147,8 @@ fn corruption_before_close() {
         }),
         // open, apply mix of events, close
         ("close_event_corruption.db", |jrnl_id| {
-            let mut operation_count = 0;
-            let mut sdb = SimpleDB::new();
             let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
-            for num in 1..=100 {
-                operation_count += 1;
-                sdb.push(&mut jrnl, format!("key-{num}"))?;
-                if num % 10 == 0 {
-                    operation_count += 1;
-                    sdb.pop(&mut jrnl)?;
-                }
-            }
+            let operation_count = apply_event_mix(&mut jrnl)?;
             RawJournalWriter::close_driver(&mut jrnl)?;
             Ok(operation_count)
         }),
@@ -241,14 +246,25 @@ fn corruption_before_close() {
 
 #[test]
 fn corruption_after_reopen() {
-    let initializers: Vec<Initializer> = vec![("corruption_after_reopen.db", |jrnl_id| {
-        let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
-        RawJournalWriter::close_driver(&mut jrnl)?;
-        drop(jrnl);
-        // reopen, but don't close
-        open_journal::<SimpleDBJournal>(jrnl_id, &SimpleDB::new(), JournalSettings::default())?;
-        Ok(1)
-    })];
+    let initializers: Vec<Initializer> = vec![
+        ("corruption_after_reopen.db", |jrnl_id| {
+            let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
+            RawJournalWriter::close_driver(&mut jrnl)?;
+            drop(jrnl);
+            // reopen, but don't close
+            open_journal::<SimpleDBJournal>(jrnl_id, &SimpleDB::new(), JournalSettings::default())?;
+            Ok(1)
+        }),
+        ("corruption_after_ropen_multi_before_close.db", |jrnl_id| {
+            let mut jrnl = create_journal::<SimpleDBJournal>(jrnl_id)?;
+            let operation_count = apply_event_mix(&mut jrnl)?;
+            RawJournalWriter::close_driver(&mut jrnl)?;
+            drop(jrnl);
+            // reopen, but don't close
+            open_journal::<SimpleDBJournal>(jrnl_id, &SimpleDB::new(), JournalSettings::default())?;
+            Ok(operation_count + 1) // + 1 since we have the reopen event which is the next event that'll vanish
+        }),
+    ];
     emulate_corrupted_final_event(
         initializers,
         |journal_id, repaired_last_event_id, trim_size, open_result| {
@@ -265,28 +281,53 @@ fn corruption_after_reopen() {
                 */
                 let mut jrnl =
                     open_result.expect(&format!("failed at {trim_size} for journal {journal_id}"));
-                assert_eq!(
-                    trace,
-                    intovec![
-                        JournalReaderTraceEvent::Initialized,
-                        JournalReaderTraceEvent::LookingForEvent,
-                        JournalReaderTraceEvent::AttemptingEvent(0),
-                        JournalReaderTraceEvent::DriverEventExpectingClose,
-                        JournalReaderTraceEvent::DriverEventCompletedBlockRead,
-                        JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
-                        JournalReaderTraceEvent::ClosedAndReachedEof,
-                        JournalReaderTraceEvent::Completed,
-                        JournalWriterTraceEvent::ReinitializeAttempt,
-                        JournalWriterTraceEvent::DriverEventAttemptCommit {
-                            event: DriverEventKind::Reopened,
-                            event_id: repaired_last_event_id,
-                            prev_id: 0
-                        },
-                        JournalWriterTraceEvent::DriverEventCompleted,
-                        JournalWriterTraceEvent::ReinitializeComplete,
-                    ],
-                    "failed at {trim_size} for journal {journal_id}"
-                );
+                if repaired_last_event_id == 1 {
+                    // empty log, only the reopen
+                    assert_eq!(
+                        trace,
+                        intovec![
+                            JournalReaderTraceEvent::Initialized,
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(0),
+                            JournalReaderTraceEvent::DriverEventExpectingClose,
+                            JournalReaderTraceEvent::DriverEventCompletedBlockRead,
+                            JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
+                            JournalReaderTraceEvent::ClosedAndReachedEof,
+                            JournalReaderTraceEvent::Completed,
+                            JournalWriterTraceEvent::ReinitializeAttempt,
+                            JournalWriterTraceEvent::DriverEventAttemptCommit {
+                                event: DriverEventKind::Reopened,
+                                event_id: repaired_last_event_id,
+                                prev_id: 0
+                            },
+                            JournalWriterTraceEvent::DriverEventCompleted,
+                            JournalWriterTraceEvent::ReinitializeComplete,
+                        ],
+                        "failed at {trim_size} for journal {journal_id}"
+                    );
+                } else {
+                    assert_eq!(
+                        &trace[trace.len() - 12..],
+                        intovec![
+                            JournalReaderTraceEvent::ServerEventAppliedSuccess,
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(repaired_last_event_id - 1), // close event
+                            JournalReaderTraceEvent::DriverEventExpectingClose,
+                            JournalReaderTraceEvent::DriverEventCompletedBlockRead,
+                            JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
+                            JournalReaderTraceEvent::ClosedAndReachedEof,
+                            JournalReaderTraceEvent::Completed,
+                            JournalWriterTraceEvent::ReinitializeAttempt,
+                            JournalWriterTraceEvent::DriverEventAttemptCommit {
+                                event: DriverEventKind::Reopened,
+                                event_id: repaired_last_event_id,
+                                prev_id: repaired_last_event_id - 1 // close event
+                            },
+                            JournalWriterTraceEvent::DriverEventCompleted,
+                            JournalWriterTraceEvent::ReinitializeComplete
+                        ]
+                    )
+                }
                 // now close this so that this works with the post repair handler
                 RawJournalWriter::close_driver(&mut jrnl).unwrap();
                 let _ = obtain_offsets();
@@ -296,19 +337,33 @@ fn corruption_after_reopen() {
                     open_result.unwrap_err().kind(),
                     &ErrorKind::IoError(IoErrorKind::UnexpectedEof.into())
                 );
-                assert_eq!(
-                    trace,
-                    intovec![
-                        JournalReaderTraceEvent::Initialized,
-                        JournalReaderTraceEvent::LookingForEvent,
-                        JournalReaderTraceEvent::AttemptingEvent(0),
-                        JournalReaderTraceEvent::DriverEventExpectingClose,
-                        JournalReaderTraceEvent::DriverEventCompletedBlockRead,
-                        JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
-                        JournalReaderTraceEvent::DriverEventExpectingReopenBlock,
-                        JournalReaderTraceEvent::AttemptingEvent(repaired_last_event_id)
-                    ]
-                );
+                if repaired_last_event_id == 1 {
+                    // empty log, only the reopen
+                    assert_eq!(
+                        trace,
+                        intovec![
+                            JournalReaderTraceEvent::Initialized,
+                            JournalReaderTraceEvent::LookingForEvent,
+                            JournalReaderTraceEvent::AttemptingEvent(0),
+                            JournalReaderTraceEvent::DriverEventExpectingClose,
+                            JournalReaderTraceEvent::DriverEventCompletedBlockRead,
+                            JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
+                            JournalReaderTraceEvent::DriverEventExpectingReopenBlock,
+                            JournalReaderTraceEvent::AttemptingEvent(repaired_last_event_id)
+                        ]
+                    );
+                } else {
+                    assert_eq!(
+                        &trace[trace.len() - 5..],
+                        intovec![
+                            JournalReaderTraceEvent::DriverEventExpectingClose,
+                            JournalReaderTraceEvent::DriverEventCompletedBlockRead,
+                            JournalReaderTraceEvent::DriverEventExpectedCloseGotClose,
+                            JournalReaderTraceEvent::DriverEventExpectingReopenBlock,
+                            JournalReaderTraceEvent::AttemptingEvent(repaired_last_event_id)
+                        ]
+                    );
+                }
             }
         },
         |journal_id, trim_size, repair_result, reopen_result| {
