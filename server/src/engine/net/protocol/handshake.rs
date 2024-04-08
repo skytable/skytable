@@ -50,6 +50,34 @@ pub enum ProtocolError {
     RejectAuth = 5,
 }
 
+impl ProtocolError {
+    #[cold]
+    unsafe fn get_error(
+        invalid_first_byte: bool,
+        invalid_hs_version: bool,
+        invalid_proto_version: bool,
+        invalid_exchange_mode: bool,
+        invalid_query_mode: bool,
+        invalid_auth_mode: bool,
+    ) -> ProtocolError {
+        if invalid_first_byte {
+            ProtocolError::CorruptedHSPacket
+        } else if invalid_hs_version {
+            ProtocolError::RejectHSVersion
+        } else if invalid_proto_version {
+            ProtocolError::RejectProtocol
+        } else if invalid_exchange_mode {
+            ProtocolError::RejectExchangeMode
+        } else if invalid_query_mode {
+            ProtocolError::RejectQueryMode
+        } else if invalid_auth_mode {
+            ProtocolError::RejectAuth
+        } else {
+            impossible!()
+        }
+    }
+}
+
 /*
     handshake meta
 */
@@ -290,23 +318,17 @@ impl<'a> CHandshake<'a> {
                 | invalid_query_mode
                 | invalid_auth_mode,
         ) {
-            static ERROR: [ProtocolError; 6] = [
-                ProtocolError::CorruptedHSPacket,
-                ProtocolError::RejectHSVersion,
-                ProtocolError::RejectProtocol,
-                ProtocolError::RejectExchangeMode,
-                ProtocolError::RejectQueryMode,
-                ProtocolError::RejectAuth,
-            ];
-            return HandshakeResult::Error(
-                ERROR[((invalid_first_byte as u8 * 1)
-                    | (invalid_hs_version as u8 * 2)
-                    | (invalid_proto_version as u8 * 3)
-                    | (invalid_exchange_mode as u8 * 4)
-                    | (invalid_query_mode as u8 * 5)
-                    | (invalid_auth_mode as u8) * 6) as usize
-                    - 1usize],
-            );
+            return HandshakeResult::Error(unsafe {
+                // UNSAFE(@ohsayan): it is guaranteed by the branch that one or more of these booleans are true
+                ProtocolError::get_error(
+                    invalid_first_byte,
+                    invalid_hs_version,
+                    invalid_proto_version,
+                    invalid_exchange_mode,
+                    invalid_query_mode,
+                    invalid_auth_mode,
+                )
+            });
         }
         // init header
         let static_header = CHandshakeStatic::new(

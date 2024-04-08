@@ -62,6 +62,42 @@ const STATIC_HANDSHAKE_WITH_AUTH: CHandshakeStatic = CHandshakeStatic::new(
 */
 
 #[test]
+fn handshake_with_multiple_errors() {
+    for (bad_hs, error) in [
+        // all incorrect
+        (
+            b"H\xFF\xFF\xFF\xFF\xFF5\n8\nsayanpass1234",
+            ProtocolError::RejectHSVersion,
+        ),
+        // protocol and continuing bytes
+        (
+            b"H\x00\xFF\xFF\xFF\xFF5\n8\nsayanpass1234",
+            ProtocolError::RejectProtocol,
+        ),
+        // xchg and continuing bytes
+        (
+            b"H\x00\x00\xFF\xFF\xFF5\n8\nsayanpass1234",
+            ProtocolError::RejectExchangeMode,
+        ),
+        // qmode and continuing bytes
+        (
+            b"H\x00\x00\x00\xFF\xFF5\n8\nsayanpass1234",
+            ProtocolError::RejectQueryMode,
+        ),
+        // auth
+        (
+            b"H\x00\x00\x00\x00\xFF5\n8\nsayanpass1234",
+            ProtocolError::RejectAuth,
+        ),
+    ] {
+        assert_eq!(
+            CHandshake::resume_with(&mut BufferedScanner::new(bad_hs), HandshakeState::Initial),
+            HandshakeResult::Error(error)
+        );
+    }
+}
+
+#[test]
 fn parse_staged_with_auth() {
     for i in 0..FULL_HANDSHAKE_WITH_AUTH.len() {
         let buf = &FULL_HANDSHAKE_WITH_AUTH[..i + 1];
