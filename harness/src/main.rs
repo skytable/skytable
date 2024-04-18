@@ -31,6 +31,7 @@ mod util;
 mod build;
 mod bundle;
 mod cli;
+mod diagnostics;
 mod error;
 mod linuxpkg;
 mod presetup;
@@ -65,6 +66,7 @@ fn main() {
 
 fn runner() -> HarnessResult<()> {
     let harness = cli::HarnessWhat::from_env()?;
+    diagnostics::report_if_not_official_target();
     presetup::install_deps()?;
     match harness {
         HarnessWhat::Test => test::run_test()?,

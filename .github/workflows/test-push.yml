@@ -9,7 +9,16 @@ on:
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  tests-pass:
+  tests:
+    name: Full Test Suite (All tiers)
+    runs-on: ubuntu-latest
+    needs:
+      - tests_t1
+      - tests_t2
+    steps:
+      - name: Finish full test suite
+        run: exit 0
+  tests_t1:
     name: Tier 1 Tests
     runs-on: ubuntu-latest
     needs:
@@ -18,8 +27,16 @@ jobs:
     steps:
       - name: Finish Tier 1 Tests
         run: exit 0
+  tests_t2:
+      name: Tier 2 Tests
+      runs-on: ubuntu-latest
+      needs:
+        - test_tier2
+      steps:
+        - name: Finish Tier 2 Tests
+          run: exit 0
   test_64bit:
-    name: Test (64-bit)
+    name: Test (Tier 1) (64-bit) ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -69,16 +86,14 @@ jobs:
           TARGET: ${{ matrix.rust }}
 
   test_32bit:
-    name: Test (32-bit)
+    name: Test (Tier 1) (32-bit) ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
             rust: i686-unknown-linux-gnu
-          - os: windows-latest
-            rust: i686-pc-windows-msvc
     steps:
       - name: Checkout source code
         uses: actions/checkout@v2
@@ -111,15 +126,17 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
 
-  test_musl64:
-    name: Test MUSL x86_64 (Tier 2)
+  test_tier2:
+    name: Test (Tier 2) ${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         include:
           - os: ubuntu-latest
             rust: x86_64-unknown-linux-musl
+          - os: windows-latest
+            rust: i686-pc-windows-msvc
     steps:
       - name: Checkout source code
         uses: actions/checkout@v2
