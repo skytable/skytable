@@ -29,5 +29,6 @@ NOTES:
     endpoint is `{default_tls_endpoint}`
     - If you choose to use a TLS endpoint, you must provide a certificate.
     Failing to do so will throw an error, as expected
-    - All history is stored in the `.sky_history` file, in the user's home directory.
-    If you wish to delete it, simply remove the file
+    - All history is stored in the `.sky_history` file, in the user's home directory unless
+      otherwise configured using the `SKYSH_HISTORY_FILE` environment variable. If you wish
+      to delete your shell history, simply remove the file

@@ -6,23 +6,26 @@ All changes in this project will be noted in this file.
 
 ### Additions
 
-- Skyhash/2: Restored support for pipelines
-- Enable online (runtime) recovery of transactional failures due to disk errors
-- Added BlueQL shorthands:
-  - `INSERT`: `INS`
-  - `SELECT`: `SEL`
-  - `UPDATE`: `UPD`
-  - `DELETE`: `DEL`
-- Added new `UPSERT` (shorthand: `UPS`) query
+- Server:
+  - Skyhash/2: Restored support for pipelines
+  - Enable online (runtime) recovery of transactional failures due to disk errors
+  - Added BlueQL shorthands:
+    - `INSERT`: `INS`
+    - `SELECT`: `SEL`
+    - `UPDATE`: `UPD`
+    - `DELETE`: `DEL`
+  - Added new `UPSERT` (shorthand: `UPS`) query
+- CLI:
+  - Enable setting custom history file location using the `SKYSH_HISTORY_FILE` environment variable
 
 ### Fixes
 
-- `skyd`:
+- Server:
   - Fixed an issue where an incorrect handshake with multiple errors caused the client connection
     to be terminated without yielding an error
   - Fixed SE bug that resulted in unsafe cleanup of journals when multiple failures occur in sequence
   - Fixed SE memory management bug in delta diff algorithm: In rare cases, a crash might occur on startup (*only during startup* and *not* at runtime)
-- `skysh`:
+- CLI:
   - Fixed transient history file location. History is now always saved to $HOME/.sky_history
 
 ### Platform notes
