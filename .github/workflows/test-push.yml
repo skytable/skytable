@@ -40,7 +40,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             rust: x86_64-unknown-linux-gnu
@@ -50,6 +49,8 @@ jobs:
             rust: x86_64-pc-windows-msvc
           - os: [self-hosted, ARM64]
             rust: aarch64-unknown-linux-gnu
+          - os: macos-14
+            rust: aarch64-apple-darwin
 
     steps:
       - name: Checkout source code
@@ -92,7 +93,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
             rust: i686-unknown-linux-gnu
@@ -133,7 +133,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
         include:
           - os: ubuntu-latest
             rust: x86_64-unknown-linux-musl

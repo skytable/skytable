@@ -26,11 +26,13 @@
 
 use crate::util;
 
-const OFFICIAL_TARGETS: [&str; 4] = [
-    "i686-unknown-linux-gnu",
-    "x86_64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-    "x86_64-unknown-linux-gnu",
+const OFFICIAL_TARGETS: [&str; 6] = [
+    "i686-unknown-linux-gnu",    // GNU Linux x86
+    "x86_64-apple-darwin",       // macOS x86_64
+    "x86_64-pc-windows-msvc",    // Windows x86_64
+    "x86_64-unknown-linux-gnu",  // Linux x86_64
+    "aarch64-unknown-linux-gnu", // Linux ARM64
+    "aarch64-apple-darwin",      // macOS ARM64
 ];
 
 const THIS_TARGET: &str = env!("RUSTC_TARGET");

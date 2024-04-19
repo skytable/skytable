@@ -31,6 +31,9 @@ jobs:
           - rust: aarch64-unknown-linux-gnu
             os: [self-hosted, ARM64]
             artifact: arm64-linux-gnu
+          - rust: aarch64-apple-darwin
+            os: macos-14
+            artifact: arm64-macos
     env:
       RUST_BACKTRACE: 1
       TARGET: ${{ matrix.rust }}

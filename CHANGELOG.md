@@ -31,6 +31,8 @@ All changes in this project will be noted in this file.
 ### Platform notes
 
 - 32-bit Windows (MSVC) has been downgraded to a Tier-2 platform and will likely be deprecated in the future
+- Linux ARM64 is now a Tier-1 platform
+- macOS ARM64 is a now a Tier-1X platform
 
 ## Version 0.8.1
 
