@@ -51,6 +51,7 @@ pub mod test_utils {
 use std::{
     collections::{hash_map::Entry, HashMap},
     env,
+    path::PathBuf,
 };
 
 /// Returns a formatted version message `{binary} vx.y.z`
@@ -225,5 +226,21 @@ pub mod build_scripts {
         let mut f = File::create(&dest_path)?;
         f.write_all(content.as_bytes())?;
         Ok(())
+    }
+}
+
+/*
+    other utils
+*/
+
+pub fn get_home_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        env::var("USERPROFILE").map(PathBuf::from).ok()
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        env::var("HOME").map(PathBuf::from).ok()
     }
 }

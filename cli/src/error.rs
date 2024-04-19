@@ -34,6 +34,7 @@ pub enum CliError {
     ArgsErr(String),
     ClientError(skytable::error::Error),
     IoError(std::io::Error),
+    OtherError(&'static str),
 }
 
 impl From<libsky::ArgParseError> for CliError {
@@ -68,6 +69,7 @@ impl fmt::Display for CliError {
             Self::ClientError(e) => write!(f, "client error. {e}"),
             Self::IoError(e) => write!(f, "i/o error. {e}"),
             Self::QueryError(e) => write!(f, "invalid query. {e}"),
+            Self::OtherError(e) => write!(f, "{e}"),
         }
     }
 }

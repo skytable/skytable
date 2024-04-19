@@ -44,6 +44,9 @@ pub fn start(cfg: ClientConfig) -> CliResult<()> {
 }
 
 fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
+    let mut home_directory =
+        libsky::get_home_dir().ok_or(CliError::OtherError("could not find home directory"))?;
+    home_directory.push(SKYSH_HISTORY_FILE);
     let init_editor = || {
         let mut editor = DefaultEditor::new()?;
         editor.set_auto_add_history(true);
@@ -55,7 +58,7 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
             ),
             rustyline::Cmd::Noop,
         );
-        match editor.load_history(SKYSH_HISTORY_FILE) {
+        match editor.load_history(&home_directory) {
             Ok(()) => {}
             Err(e) => match e {
                 ReadlineError::Io(ref ioe) => match ioe.kind() {
@@ -130,7 +133,7 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
         }
     }
     editor
-        .save_history(SKYSH_HISTORY_FILE)
+        .save_history(&home_directory)
         .expect("failed to save history");
     println!("Goodbye!");
     Ok(())

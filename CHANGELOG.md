@@ -17,10 +17,13 @@ All changes in this project will be noted in this file.
 
 ### Fixes
 
-- Fixed an issue where an incorrect handshake with multiple errors caused the client connection
-  to be terminated without yielding an error
-- Fixed SE bug that resulted in unsafe cleanup of journals when multiple failures occur in sequence
-- Fixed SE memory management bug in delta diff algorithm: In rare cases, a crash might occur on startup (*only during startup* and *not* at runtime)
+- `skyd`:
+  - Fixed an issue where an incorrect handshake with multiple errors caused the client connection
+    to be terminated without yielding an error
+  - Fixed SE bug that resulted in unsafe cleanup of journals when multiple failures occur in sequence
+  - Fixed SE memory management bug in delta diff algorithm: In rare cases, a crash might occur on startup (*only during startup* and *not* at runtime)
+- `skysh`:
+  - Fixed transient history file location. History is now always saved to $HOME/.sky_history
 
 ### Platform notes
 

@@ -17,7 +17,8 @@ OPTIONS:
     --eval          Execute and print the query (password must be set)
 
 NOTES:
-    - skysh will also look for the `{password_env_var}` environment variable
+    - If no password is supplied, we look for the `{password_env_var}`
+      environment variable
     - When no endpoint is specified, skysh will attempt to connect to the default
     TCP endpoint `{default_tcp_endpoint}`
     - When no user is specified, skysh will attempt to authenticate as root
@@ -28,5 +29,5 @@ NOTES:
     endpoint is `{default_tls_endpoint}`
     - If you choose to use a TLS endpoint, you must provide a certificate.
     Failing to do so will throw an error, as expected
-    - All history is stored in the `.sky_history` file. If you wish to delete
-    it, simply remove the file
+    - All history is stored in the `.sky_history` file, in the user's home directory.
+    If you wish to delete it, simply remove the file
