@@ -14,7 +14,7 @@ OPTIONS:
     --user          Set the user for this client session
     --password      Set the password for this client session
     --tls-cert      Set the TLS certificate to use (for TLS endpoints)
-    --eval          Execute and print the query (password must be set)
+    --eval, -e      Execute and print the query (password must be set)
 
 NOTES:
     - If no password is supplied, we look for the `{password_env_var}`

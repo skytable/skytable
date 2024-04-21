@@ -117,6 +117,16 @@ pub enum ExecKind {
     PrintSpecial(Query),
 }
 
+impl ExecKind {
+    pub fn into_query(self) -> Query {
+        match self {
+            Self::Standard(q) | Self::UseSpace(q, _) | Self::UseNull(q) | Self::PrintSpecial(q) => {
+                q
+            }
+        }
+    }
+}
+
 impl Parameterizer {
     pub fn new(q: String) -> Self {
         Self {

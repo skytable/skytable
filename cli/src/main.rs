@@ -37,7 +37,7 @@ mod query;
 mod repl;
 mod resp;
 
-use args::Task;
+use {args::Task, query::Parameterizer};
 
 fn main() {
     match run() {
@@ -51,7 +51,7 @@ fn run() -> error::CliResult<()> {
         Task::HelpMessage(msg) => println!("{msg}"),
         Task::OpenShell(cfg) => repl::start(cfg)?,
         Task::ExecOnce(cfg, query) => {
-            let query = skytable::query!(query);
+            let query = Parameterizer::new(query).parameterize()?.into_query();
             let resp = query::connect(
                 cfg,
                 false,

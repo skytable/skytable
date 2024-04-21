@@ -19,6 +19,7 @@ All changes in this project will be noted in this file.
   - Allow manual compaction with `skyd compact` subcommand
 - CLI:
   - Enable setting custom history file location using the `SKYSH_HISTORY_FILE` environment variable
+  - Correctly format rows as CSV when using `--eval`
 
 ### Fixes
 
@@ -30,6 +31,7 @@ All changes in this project will be noted in this file.
   - Fixed DCL command `sysctl alter user` not working properly (preventing change of any data)
 - CLI:
   - Fixed transient history file location. History is now always saved to $HOME/.sky_history
+  - Fixed an issue where queries were not correctly parameterized when using `--eval`
 
 ### Platform notes
 

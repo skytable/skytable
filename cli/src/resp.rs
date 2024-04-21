@@ -74,8 +74,6 @@ pub fn format_response(resp: Response, print_special: bool, in_repl: bool) -> bo
                     if in_repl {
                         let fmt = format!("({i})").grey().italic();
                         print!("{fmt}")
-                    } else {
-                        print!("({i})")
                     }
                     print_row(row, in_repl);
                     println!();
@@ -87,22 +85,30 @@ pub fn format_response(resp: Response, print_special: bool, in_repl: bool) -> bo
 }
 
 fn print_row(r: Row, pretty_format: bool) {
-    print!("(");
+    if pretty_format {
+        print!("(");
+    }
     let mut columns = r.into_values().into_iter().peekable();
     while let Some(cell) = columns.next() {
         print_value(cell, false, pretty_format);
         if columns.peek().is_some() {
-            print!(", ");
+            if pretty_format {
+                print!(", ");
+            } else {
+                print!(",");
+            }
         }
     }
-    print!(")");
+    if pretty_format {
+        print!(")");
+    }
 }
 
-fn print_value(v: Value, print_special: bool, pretty_format: bool) {
+fn print_value(v: Value, print_special: bool, in_repl: bool) {
     match v {
-        Value::Null => pprint!(pretty_format, "null".grey().italic()),
-        Value::String(s) => print_string(&s, print_special, pretty_format),
-        Value::Binary(b) => print_binary(&b),
+        Value::Null => pprint!(in_repl, "null".grey().italic()),
+        Value::String(s) => print_string(&s, print_special, in_repl),
+        Value::Binary(b) => print_binary(&b, !in_repl),
         Value::Bool(b) => print!("{b}"),
         Value::UInt8(i) => print!("{i}"),
         Value::UInt16(i) => print!("{i}"),
@@ -118,7 +124,7 @@ fn print_value(v: Value, print_special: bool, pretty_format: bool) {
             print!("[");
             let mut items = items.into_iter().peekable();
             while let Some(item) = items.next() {
-                print_value(item, print_special, pretty_format);
+                print_value(item, print_special, in_repl);
                 if items.peek().is_some() {
                     print!(", ");
                 }
@@ -128,38 +134,48 @@ fn print_value(v: Value, print_special: bool, pretty_format: bool) {
     }
 }
 
-fn print_binary(b: &[u8]) {
+fn print_binary(b: &[u8], escape: bool) {
     let mut it = b.into_iter().peekable();
-    print!("[");
+    if escape {
+        print!("\"[");
+    } else {
+        print!("[");
+    }
     while let Some(byte) = it.next() {
         print!("{byte}");
         if it.peek().is_some() {
-            print!(", ");
+            if escape {
+                print!(",");
+            } else {
+                print!(", ");
+            }
         }
     }
-    print!("]");
+    if escape {
+        print!("]\"");
+    } else {
+        print!("]");
+    }
 }
 
 fn print_string(s: &str, print_special: bool, pretty_format: bool) {
-    if !pretty_format {
-        print!("{s}");
-    } else {
-        if print_special {
+    if print_special {
+        if pretty_format {
             print!("{}", s.italic().grey());
-        } else {
-            print!("\"");
-            for ch in s.chars() {
-                if ch == '"' {
-                    print!("\\{ch}");
-                } else if ch == '\t' {
-                    print!("\\t");
-                } else if ch == '\n' {
-                    print!("\\n");
-                } else {
-                    print!("{ch}");
-                }
-            }
-            print!("\"");
         }
+    } else {
+        print!("\"");
+        for ch in s.chars() {
+            if ch == '"' {
+                print!("\\{ch}");
+            } else if ch == '\t' {
+                print!("\\t");
+            } else if ch == '\n' {
+                print!("\\n");
+            } else {
+                print!("{ch}");
+            }
+        }
+        print!("\"");
     }
 }

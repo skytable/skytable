@@ -157,7 +157,7 @@ pub fn parse() -> CliResult<Task> {
             }
         }
     };
-    let eval = args.remove("--eval");
+    let eval = args.remove("--eval").or_else(|| args.remove("-e"));
     if args.is_empty() {
         let client = ClientConfig::new(endpoint, username, password);
         match eval {
