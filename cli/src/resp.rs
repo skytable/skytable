@@ -72,7 +72,7 @@ pub fn format_response(resp: Response, print_special: bool, in_repl: bool) -> bo
             } else {
                 for (i, row) in rows.into_iter().enumerate().map(|(i, r)| (i + 1, r)) {
                     if in_repl {
-                        let fmt = format!("({i})").grey().italic();
+                        let fmt = format!("({i}) ").grey().italic();
                         print!("{fmt}")
                     }
                     print_row(row, in_repl);
