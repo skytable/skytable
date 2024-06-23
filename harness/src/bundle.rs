@@ -35,7 +35,7 @@ use {
         io::{Read, Write},
         path::{Path, PathBuf},
     },
-    zip::{write::FileOptions, ZipWriter},
+    zip::{write::SimpleFileOptions, ZipWriter},
 };
 
 /// Returns the bundle name
@@ -71,7 +71,7 @@ fn package_binaries(target_folder: PathBuf, mode: BuildMode) -> HarnessResult<()
     // create a temp buffer
     let mut buffer = Vec::new();
     // ZIP settings
-    let options = FileOptions::default()
+    let options = SimpleFileOptions::default()
         .unix_permissions(0o755)
         .compression_method(mode.get_compression_method());
     for file in file_index {

@@ -11,7 +11,7 @@ proc-macro = true
 
 [dependencies]
 # external deps
-proc-macro2 = "1.0.79"
-quote = "1.0.35"
+proc-macro2 = "1.0.86"
+quote = "1.0.36"
 syn = { version = "1.0.109", features = ["full"] }
 libsky = { path = "../libsky" }

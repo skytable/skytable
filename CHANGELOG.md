@@ -2,6 +2,15 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.8.4
+
+### Fixes
+
+- Server:
+  - Improved diagnostic messages (and output formatting)
+- CLI:
+  - Upgraded client driver to fix loading of large blob/string fetches from the database
+
 ## Version 0.8.3
 
 ### Additions

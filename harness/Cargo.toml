@@ -11,6 +11,6 @@ libsky = { path = "../libsky" }
 # external deps
 env_logger = "0.11.3"
 log = "0.4.21"
-zip = { version = "0.6.6", features = ["deflate"] }
+zip = { version = "2.1.3", features = ["deflate"] }
 powershell_script = "1.1.0"
 openssl = { version = "0.10.64", features = ["vendored"] }

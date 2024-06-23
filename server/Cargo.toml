@@ -21,21 +21,21 @@ env_logger = "0.11.3"
 log = "0.4.21"
 openssl = { version = "0.10.64", features = ["vendored"] }
 crossbeam-epoch = { version = "0.9.18" }
-parking_lot = "0.12.1"
-serde = { version = "1.0.197", features = ["derive"] }
-tokio = { version = "1.37.0", features = ["full"] }
+parking_lot = "0.12.3"
+serde = { version = "1.0.203", features = ["derive"] }
+tokio = { version = "1.38.0", features = ["full"] }
 tokio-openssl = "0.6.4"
 uuid = { version = "1.8.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
-crc = "3.0.1"
+crc = "3.2.1"
 serde_yaml = "0.9.33"
-chrono = "0.4.37"
+chrono = "0.4.38"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
 jemallocator = "0.5.4"
 [target.'cfg(target_os = "windows")'.dependencies]
 # external deps
-windows = { version = "0.54.0", features = [
+windows = { version = "0.57.0", features = [
   "Win32_Foundation",
   "Win32_System_IO",
   "Win32_Storage_FileSystem",
@@ -44,12 +44,12 @@ windows = { version = "0.54.0", features = [
 
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.153"
+libc = "0.2.155"
 
 [dev-dependencies]
 # external deps
 rand = "0.8.5"
-tokio = { version = "1.37.0", features = ["test-util"] }
+tokio = { version = "1.38.0", features = ["test-util"] }
 skytable = { git = "https://github.com/skytable/client-rust.git", branch = "devel" }
 
 [features]
