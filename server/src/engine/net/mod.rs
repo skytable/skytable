@@ -132,10 +132,10 @@ impl<S: Socket> ConnectionHandler<S> {
                     socket.flush().await?;
                     match ret {
                         Ok(QueryLoopResult::Fin) => return Ok(()),
-                        Ok(QueryLoopResult::Rst) => error!("connection reset while talking to client"),
-                        Ok(QueryLoopResult::HSFailed) => error!("failed to handshake with client"),
+                        Ok(QueryLoopResult::Rst) => error!("client io: connection reset"),
+                        Ok(QueryLoopResult::HSFailed) => error!("client: client handshake failed"),
                         Err(e) => {
-                            error!("error while handling connection: {e}");
+                            error!("client io: error while handling connection: {e}");
                             return Err(e);
                         }
                     }
@@ -175,7 +175,7 @@ impl Listener {
         let (sig_inflight, sig_inflight_wait) = mpsc::channel(1);
         let listener = TcpListener::bind((host, port))
             .await
-            .set_dmsg(format!("failed to bind to port `{host}:{port}`"))?;
+            .set_dmsg(format!("failed to bind to port {host}:{port}"))?;
         Ok(Self {
             global,
             listener,
@@ -220,7 +220,7 @@ impl Listener {
                     /*
                         SECURITY: IGNORE THIS ERROR
                     */
-                    warn!("failed to accept connection on TCP socket: `{e}`");
+                    warn!("tcp: failed to accept connection: {e}");
                     continue;
                 }
             };
@@ -232,7 +232,7 @@ impl Listener {
             );
             tokio::spawn(async move {
                 if let Err(e) = handler.run().await {
-                    warn!("error handling client connection: `{e}`");
+                    warn!("tcp: error handling client connection: {e}");
                 }
             });
             // return the permit
@@ -274,7 +274,7 @@ impl Listener {
                     /*
                         SECURITY: Once again, ignore this error
                     */
-                    warn!("failed to accept connection on TLS socket: `{e}`");
+                    warn!("tls: failed to accept connection: {e}");
                     continue;
                 }
             };
@@ -286,7 +286,7 @@ impl Listener {
             );
             tokio::spawn(async move {
                 if let Err(e) = handler.run().await {
-                    warn!("error handling client TLS connection: `{e}`");
+                    warn!("tls: error handling client connection: {e}");
                 }
             });
         }

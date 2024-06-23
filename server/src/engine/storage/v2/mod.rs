@@ -307,7 +307,7 @@ fn _full_backup(
     FileSystem::copy(GNS_PATH, pathbuf!(&backup_dir, GNS_PATH))?;
     context::set_dmsg("backing up data directory");
     FileSystem::copy_directory(DATA_DIR, pathbuf!(&backup_dir, DATA_DIR))?;
-    info!("All data backed up in {backup_dir}");
+    info!("backup: All data backed up in {backup_dir}");
     Ok(())
 }
 
@@ -330,7 +330,7 @@ pub fn compact() -> RuntimeResult<()> {
     context::set_dmsg("reading GNS");
     let stats = journal::read_journal::<GNSAdapter>(GNS_PATH, &gns, JournalSettings::default())?;
     if !stats.recommended_action().needs_compaction() {
-        warn!("GNS does not need compaction");
+        warn!("compact: GNS does not need compaction");
     }
     journal::compact_journal_direct::<true, GNSAdapter, _>(GNS_PATH, None, &gns, true, |_| Ok(()))?;
     for (id, model) in gns.idx_models().write().iter_mut() {
@@ -348,7 +348,7 @@ pub fn compact() -> RuntimeResult<()> {
         .needs_compaction()
         {
             warn!(
-                "model {}.{} does not need compaction",
+                "compact: model {}.{} does not need compaction",
                 id.space(),
                 id.entity()
             );
@@ -377,7 +377,7 @@ pub fn backup(settings: BackupSettings) -> RuntimeResult<()> {
     // first lock directory
     let mut locks = FileLocks::new();
     if settings.allow_dirty {
-        warn!("potentially unsafe backup operation has been started (dirty read allowed)");
+        warn!("backup: potentially unsafe backup operation has been started (dirty read allowed)");
     } else {
         context::set_dmsg("locking data directory for backup");
         match settings.from.as_ref() {
@@ -434,7 +434,7 @@ pub fn restore(settings: RestoreSettings) -> RuntimeResult<()> {
             || real_md.header_version() != backup_md.header_version()
         {
             if settings.flag_allow_incompatible {
-                warn!("incompatible backup detected, but incompatible restore is enabled")
+                warn!("restore: incompatible backup detected, but incompatible restore is enabled")
             } else {
                 context::set_dmsg(
                     "incompatible backup detected, but incompatible restore is enabled",
@@ -446,7 +446,7 @@ pub fn restore(settings: RestoreSettings) -> RuntimeResult<()> {
     if backup_manifest.hostname() != this_host_name.as_str() {
         if settings.flag_allow_different_host {
             warn!(
-                "this backup is from a different host ({})",
+                "restore: this backup is from a different host ({})",
                 backup_manifest.hostname()
             )
         } else {
@@ -461,7 +461,7 @@ pub fn restore(settings: RestoreSettings) -> RuntimeResult<()> {
     if backup_manifest.date() >= chrono::Utc::now().naive_utc() {
         if settings.flag_allow_invalid_date {
             warn!(
-                "the date of this backup is in the future ({})",
+                "restore: the date of this backup is in the future ({})",
                 backup_manifest.date()
             )
         } else {
@@ -474,7 +474,7 @@ pub fn restore(settings: RestoreSettings) -> RuntimeResult<()> {
     }
     // output backup information
     let mut backup_info_fmt = format!(
-        "this backup was created {}",
+        "restore: this backup was created {}",
         backup_manifest.context().context_str()
     );
     if let Some(description) = backup_manifest.description() {
@@ -512,8 +512,8 @@ pub fn restore(settings: RestoreSettings) -> RuntimeResult<()> {
     if settings.flag_delete_on_restore_completion {
         context::set_dmsg("removing backup directory that was recently restored");
         FileSystem::remove_dir_all(&settings.from)?;
-        info!("successfully removed the backup directory that was used for the restore process");
+        info!("restore: successfully removed the backup directory that was used for the restore process");
     }
-    info!("restore completed successfully");
+    info!("restore: completed successfully");
     Ok(())
 }

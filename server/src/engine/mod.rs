@@ -178,12 +178,12 @@ pub async fn start(
     tokio::select! {
         _ = endpoint_handles.listen() => {}
         _ = termsig => {
-            info!("received terminate signal. waiting for inflight tasks to complete ...");
+            info!("received terminate signal. waiting for inflight tasks to complete");
         }
     }
     drop(signal);
     endpoint_handles.finish().await;
-    info!("waiting for fractal engine to exit ...");
+    info!("waiting for fractal engine to exit");
     let (hp_handle, lp_handle) = tokio::join!(fractal_handle.hp_handle, fractal_handle.lp_handle);
     match (hp_handle, lp_handle) {
         (Err(e1), Err(e2)) => {

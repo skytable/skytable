@@ -322,15 +322,15 @@ impl FractalMgr {
         // TODO(@ohsayan): check threshold and update hooks
         match task {
             CriticalTask::CheckGNSDriver => {
-                info!("trying to autorecover GNS driver");
+                info!("fhp: trying to autorecover GNS driver");
                 match global.state().gns_driver().txn_driver.lock().__rollback() {
                     Ok(()) => {
-                        info!("GNS driver has been successfully auto-recovered");
+                        info!("fhp: GNS driver has been successfully auto-recovered");
                         global.state().gns_driver().status().set_okay();
                         global.health().report_recovery();
                     }
                     Err(e) => {
-                        error!("failed to autorecover GNS driver with error `{e}`. will try again");
+                        error!("fhp: failed to autorecover GNS driver with error `{e}`. will try again");
                         self.hp_dispatcher
                             .send(Task::new(CriticalTask::CheckGNSDriver))
                             .unwrap();
@@ -338,7 +338,7 @@ impl FractalMgr {
                 }
             }
             CriticalTask::TryModelAutorecover(mdl_id) => {
-                info!("trying to autorecover model {mdl_id}");
+                info!("fhp: trying to autorecover model {mdl_id}");
                 match global
                     .state()
                     .namespace()
@@ -353,10 +353,12 @@ impl FractalMgr {
                             Ok(()) => {
                                 mdl.driver().status().set_okay();
                                 global.health().report_recovery();
-                                info!("model driver for {mdl_id} has been successfully auto-recovered");
+                                info!("fhp: model driver for {mdl_id} has been successfully auto-recovered");
                             }
                             Err(e) => {
-                                error!("failed to autorecover {mdl_id} with {e}. will try again");
+                                error!(
+                                    "fhp: failed to autorecover {mdl_id} with {e}. will try again"
+                                );
                                 self.hp_dispatcher
                                     .send(Task::new(CriticalTask::TryModelAutorecover(mdl_id)))
                                     .unwrap()

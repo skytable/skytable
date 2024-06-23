@@ -168,7 +168,10 @@ where
     */
     if let Some(mut original_journal) = original_journal {
         context::set_dmsg("closing current journal");
-        iff!(LOG, info!("safely closing journal {original_journal_path}"));
+        iff!(
+            LOG,
+            info!("compact: safely closing journal {original_journal_path}")
+        );
         RawJournalWriter::close_driver(&mut original_journal)?;
         drop(original_journal);
     }
@@ -179,7 +182,7 @@ where
     iff!(
         LOG,
         info!(
-            "beginning compaction of journal {original_journal_path} into {temporary_journal_path}"
+            "compact: beginning compaction of journal {original_journal_path} into {temporary_journal_path}"
         )
     );
     context::set_dmsg("creating new journal for compaction");
@@ -190,7 +193,7 @@ where
     context::set_dmsg("syncing optimized journal");
     iff!(
         LOG,
-        info!("syncing optimized journal into {temporary_journal_path}")
+        info!("compact: syncing optimized journal into {temporary_journal_path}")
     );
     J::rewrite_full_journal(&mut intermediary_jrnl, full_sync_ctx)?;
     /*
@@ -206,7 +209,7 @@ where
         (5) point to new journal
     */
     context::set_dmsg("pointing {temporary_journal_path} to {original_journal_path}");
-    iff!(LOG, info!("updating currently active journal"));
+    iff!(LOG, info!("compact: updating currently active journal"));
     FileSystem::rename(&temporary_journal_path, original_journal_path)?;
     /*
         (6) reopen
@@ -214,7 +217,10 @@ where
         resume state, only verify I/O stream position
     */
     let ret = f_reopen(compacted_jrnl_state)?;
-    iff!(LOG, info!("successfully compacted {original_journal_path}"));
+    iff!(
+        LOG,
+        info!("compact: successfully compacted {original_journal_path}")
+    );
     Ok(ret)
 }
 
