@@ -34,7 +34,7 @@ use crate::engine::ql::{
     entity
 */
 
-#[sky_macros::test]
+#[test]
 fn entity_current() {
     let t = lex_insecure(b"hello").unwrap();
     let mut state = State::new_inplace(&t);
@@ -43,7 +43,7 @@ fn entity_current() {
     assert_eq!(r, ("apps", "hello").into());
 }
 
-#[sky_macros::test]
+#[test]
 fn entity_full() {
     let t = lex_insecure(b"hello.world").unwrap();
     let mut state = State::new_inplace(&t);
@@ -57,7 +57,7 @@ fn entity_full() {
     use
 */
 
-#[sky_macros::test]
+#[test]
 fn use_new() {
     let t = lex_insecure(b"use myspace").unwrap();
     let mut state = State::new_inplace(&t[1..]);
@@ -67,14 +67,14 @@ fn use_new() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn use_null() {
     let t = lex_insecure(b"use null").unwrap();
     let mut state = State::new_inplace(&t[1..]);
     assert_eq!(Use::test_parse_from_state(&mut state).unwrap(), Use::Null);
 }
 
-#[sky_macros::test]
+#[test]
 fn use_current() {
     let t = lex_insecure(b"use $current").unwrap();
     let mut state = State::new_inplace(&t[1..]);
@@ -84,7 +84,7 @@ fn use_current() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn inspect_global() {
     let t = lex_insecure(b"inspect global").unwrap();
     let mut state = State::new_inplace(&t[1..]);
@@ -94,7 +94,7 @@ fn inspect_global() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn inspect_space() {
     let t = lex_insecure(b"inspect space myspace").unwrap();
     let mut state = State::new_inplace(&t[1..]);
@@ -104,7 +104,7 @@ fn inspect_space() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn inspect_model() {
     let t = lex_insecure(b"inspect model myspace.mymodel").unwrap();
     let mut state = State::new_inplace(&t[1..]);

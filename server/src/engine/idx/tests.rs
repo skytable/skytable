@@ -54,41 +54,41 @@ mod idx_st_seq_dll {
     fn s(s: &str) -> String {
         s.to_owned()
     }
-    #[sky_macros::test]
+    #[test]
     fn empty_drop() {
         let idx = Index::idx_init();
         assert_eq!(idx.idx_metrics().raw_f(), 0);
         drop(idx);
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_read_nx() {
         let idx = IndexSTSeqLib::<usize, String>::idx_init();
         for int in SPAM_CNT..SPAM_CNT * 2 {
             assert!(idx.st_get(&int).is_none());
         }
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_insert_ex() {
         let mut idx = mkidx();
         for int in 0..SPAM_CNT {
             assert!(!idx.st_insert(int, (int + 2).to_string()));
         }
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_update_nx() {
         let mut idx = IndexSTSeqLib::<usize, String>::idx_init();
         for int in 0..SPAM_CNT {
             assert!(!idx.st_update(&int, (int + 2).to_string()));
         }
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_delete_nx() {
         let mut idx = IndexSTSeqLib::<usize, String>::idx_init();
         for int in 0..SPAM_CNT {
             assert!(!idx.st_delete(&int));
         }
     }
-    #[sky_macros::test]
+    #[test]
     fn simple_crud() {
         let mut idx = Index::idx_init();
         assert!(idx.st_insert(s("hello"), s("world")));
@@ -98,7 +98,7 @@ mod idx_st_seq_dll {
         assert_eq!(idx.st_delete_return("hello").unwrap(), "world2");
         assert_eq!(idx.idx_metrics().raw_f(), 1);
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_crud() {
         let mut idx = IndexSTSeqLib::idx_init();
         for int in 0..SPAM_CNT {
@@ -110,7 +110,7 @@ mod idx_st_seq_dll {
         }
         assert_eq!(idx.idx_metrics().raw_f(), 1);
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_read() {
         let mut idx = IndexSTSeqLib::idx_init();
         for int in 0..SPAM_CNT {
@@ -120,7 +120,7 @@ mod idx_st_seq_dll {
         }
         assert_eq!(idx.idx_metrics().raw_f(), 0);
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_update() {
         let mut idx = mkidx();
         for int in 0..SPAM_CNT {
@@ -131,7 +131,7 @@ mod idx_st_seq_dll {
         }
         assert_eq!(idx.idx_metrics().raw_f(), 0);
     }
-    #[sky_macros::test]
+    #[test]
     fn spam_delete() {
         let mut idx = mkidx();
         for int in 0..SPAM_CNT {
@@ -140,7 +140,7 @@ mod idx_st_seq_dll {
         }
         assert_eq!(idx.idx_metrics().raw_f(), SPAM_CNT);
     }
-    #[sky_macros::test]
+    #[test]
     fn compact() {
         let mut idx = mkidx();
         assert_eq!(idx.idx_metrics().raw_f(), 0);
@@ -154,7 +154,7 @@ mod idx_st_seq_dll {
         assert_eq!(idx.idx_metrics().raw_f(), 0);
     }
     // pointless testing random iterators
-    #[sky_macros::test]
+    #[test]
     fn iter_ord() {
         let idx1 = mkidx();
         let idx2: Vec<(usize, String)> =
@@ -167,7 +167,7 @@ mod idx_st_seq_dll {
                 assert_eq!((i + 1).to_string(), v);
             });
     }
-    #[sky_macros::test]
+    #[test]
     fn iter_ord_rev() {
         let idx1 = mkidx();
         let idx2: Vec<(usize, String)> = idx1

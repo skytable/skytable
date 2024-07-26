@@ -101,12 +101,12 @@ where
     }
 }
 
-#[sky_macros::test]
+#[test]
 fn dwordnn_all() {
     check_primitives::<NativeDword>(|_| {}, |_| {});
 }
 
-#[sky_macros::test]
+#[test]
 fn dwordqn_all() {
     check_primitives::<SpecialPaddedWord>(
         |minword| {
@@ -120,17 +120,17 @@ fn dwordqn_all() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn twordnnn_all() {
     check_primitives::<NativeTword>(|_| {}, |_| {});
 }
 
-#[sky_macros::test]
+#[test]
 fn qwordnnn_all() {
     check_primitives::<NativeQword>(|_| {}, |_| {});
 }
 
-#[sky_macros::test]
+#[test]
 fn dwordqn_promotions() {
     let x = SpecialPaddedWord::store(u64::MAX);
     let y: NativeTword = x.dwordqn_promote();
@@ -154,7 +154,7 @@ fn eval_special_case(x: SpecialPaddedWord, qw: u64, nw: usize) {
     assert_eq!(z.dwordqn_load_qw_nw(), (qw, nw));
 }
 
-#[sky_macros::test]
+#[test]
 fn dwordqn_special_case_ldpk() {
     let hello = "hello, world";
     eval_special_case(

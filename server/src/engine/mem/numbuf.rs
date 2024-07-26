@@ -131,42 +131,42 @@ mod tests {
         let mut buf = super::IntegerRepr::new();
         assert_eq!(buf.as_str(v), v.to_string());
     }
-    #[sky_macros::test]
+    #[test]
     fn u8() {
         ibufeq(u8::MIN);
         ibufeq(u8::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn i8() {
         ibufeq(i8::MIN);
         ibufeq(i8::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn u16() {
         ibufeq(u16::MIN);
         ibufeq(u16::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn i16() {
         ibufeq(i16::MIN);
         ibufeq(i16::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn u32() {
         ibufeq(u32::MIN);
         ibufeq(u32::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn i32() {
         ibufeq(i32::MIN);
         ibufeq(i32::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn u64() {
         ibufeq(u64::MIN);
         ibufeq(u64::MAX);
     }
-    #[sky_macros::test]
+    #[test]
     fn i64() {
         ibufeq(i64::MIN);
         ibufeq(i64::MAX);

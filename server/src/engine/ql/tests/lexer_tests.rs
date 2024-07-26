@@ -41,7 +41,7 @@ macro_rules! v(
     }};
 );
 
-#[sky_macros::test]
+#[test]
 fn lex_ident() {
     let src = v!("hello");
     assert_eq!(
@@ -51,7 +51,7 @@ fn lex_ident() {
 }
 
 // literals
-#[sky_macros::test]
+#[test]
 fn lex_unsigned_int() {
     let number = v!("123456");
     assert_eq!(
@@ -59,7 +59,7 @@ fn lex_unsigned_int() {
         vec![Token::Lit(Lit::new_uint(123456))]
     );
 }
-#[sky_macros::test]
+#[test]
 fn lex_signed_int() {
     let number = v!("-123456");
     assert_eq!(
@@ -67,7 +67,7 @@ fn lex_signed_int() {
         vec![Token::Lit(Lit::new_sint(-123456))]
     );
 }
-#[sky_macros::test]
+#[test]
 fn lex_bool() {
     let (t, f) = v!("true", "false");
     assert_eq!(
@@ -79,7 +79,7 @@ fn lex_bool() {
         vec![Token::Lit(Lit::new_bool(false))]
     );
 }
-#[sky_macros::test]
+#[test]
 fn lex_string() {
     let s = br#" "hello, world" "#;
     assert_eq!(
@@ -92,7 +92,7 @@ fn lex_string() {
         vec![Token::Lit(Lit::new_string("hello, world".into()))]
     );
 }
-#[sky_macros::test]
+#[test]
 fn lex_string_test_escape_quote() {
     let s = br#" "\"hello world\"" "#; // == "hello world"
     assert_eq!(
@@ -105,7 +105,7 @@ fn lex_string_test_escape_quote() {
         vec![Token::Lit(Lit::new_string("'hello world'".into()))]
     );
 }
-#[sky_macros::test]
+#[test]
 fn lex_string_use_different_quote_style() {
     let s = br#" "he's on it" "#;
     assert_eq!(
@@ -120,7 +120,7 @@ fn lex_string_use_different_quote_style() {
         ))]
     )
 }
-#[sky_macros::test]
+#[test]
 fn lex_string_escape_bs() {
     let s = v!(r#" "windows has c:\\" "#);
     assert_eq!(
@@ -140,31 +140,31 @@ fn lex_string_escape_bs() {
         "lol"
     )
 }
-#[sky_macros::test]
+#[test]
 fn lex_string_bad_escape() {
     let wth = br#" '\a should be an alert on windows apparently' "#;
     assert_eq!(lex_insecure(wth).unwrap_err(), QueryError::LexInvalidInput);
 }
-#[sky_macros::test]
+#[test]
 fn lex_string_unclosed() {
     let wth = br#" 'omg where did the end go "#;
     assert_eq!(lex_insecure(wth).unwrap_err(), QueryError::LexInvalidInput);
     let wth = br#" 'see, we escaped the end\' "#;
     assert_eq!(lex_insecure(wth).unwrap_err(), QueryError::LexInvalidInput);
 }
-#[sky_macros::test]
+#[test]
 fn lex_unsafe_literal_mini() {
     let usl = lex_insecure("\r0\n".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
     assert_eq!(Token::Lit(Lit::new_bin(b"")), usl[0]);
 }
-#[sky_macros::test]
+#[test]
 fn lex_unsafe_literal() {
     let usl = lex_insecure("\r9\nabcdefghi".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
     assert_eq!(Token::Lit(Lit::new_bin(b"abcdefghi")), usl[0]);
 }
-#[sky_macros::test]
+#[test]
 fn lex_unsafe_literal_pro() {
     let usl = lex_insecure("\r18\nabcdefghi123456789".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
@@ -182,7 +182,7 @@ fn make_safe_query(a: &[u8], b: &[u8]) -> (Vec<u8>, usize) {
     (s, a.len())
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_param_empty() {
     for i in 0..100 {
         let (query, query_window) = make_safe_query(&b"?".repeat(i), b"");
@@ -194,7 +194,7 @@ fn safe_query_param_empty() {
     }
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_less_param() {
     for i in 1..=10 {
         /*
@@ -219,7 +219,7 @@ fn safe_query_less_param() {
     }
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_all_literals() {
     let (query, query_window) = make_safe_query(
         b"? ? ? ? ? ? ?",
@@ -249,14 +249,14 @@ const SFQ_FLOAT: &[u8] = b"\x043.141592654\n";
 const SFQ_BINARY: &[u8] = "\x0546\ncringe😃😄😁😆😅😂🤣😊😸😺".as_bytes();
 const SFQ_STRING: &[u8] = "\x0646\ncringe😃😄😁😆😅😂🤣😊😸😺".as_bytes();
 
-#[sky_macros::test]
+#[test]
 fn safe_query_null() {
     let (query, query_window) = make_safe_query(b"?", SFQ_NULL);
     let r = lex_secure(&query, query_window).unwrap();
     assert_eq!(r, vec![Token![null]])
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_bool() {
     let (query, query_window) = make_safe_query(b"?", SFQ_BOOL_FALSE);
     let b_false = lex_secure(&query, query_window).unwrap();
@@ -271,28 +271,28 @@ fn safe_query_bool() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_uint() {
     let (query, query_window) = make_safe_query(b"?", SFQ_UINT);
     let int = lex_secure(&query, query_window).unwrap();
     assert_eq!(int, vec![Token::Lit(Lit::new_uint(u64::MAX))]);
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_sint() {
     let (query, query_window) = make_safe_query(b"?", SFQ_SINT);
     let int = lex_secure(&query, query_window).unwrap();
     assert_eq!(int, vec![Token::Lit(Lit::new_sint(i64::MIN))]);
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_float() {
     let (query, query_window) = make_safe_query(b"?", SFQ_FLOAT);
     let float = lex_secure(&query, query_window).unwrap();
     assert_eq!(float, vec![Token::Lit(Lit::new_float(3.141592654))]);
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_binary() {
     for (test_payload_string, expected) in [
         (b"\x050\n".as_slice(), b"".as_slice()),
@@ -304,7 +304,7 @@ fn safe_query_binary() {
     }
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_query_string() {
     for (test_payload_string, expected) in [
         (b"\x060\n".as_slice(), ""),
@@ -316,7 +316,7 @@ fn safe_query_string() {
     }
 }
 
-#[sky_macros::test]
+#[test]
 fn safe_params_shuffled() {
     let expected = [
         (SFQ_NULL, Token![null]),

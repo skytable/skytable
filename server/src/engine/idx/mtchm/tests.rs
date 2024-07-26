@@ -91,19 +91,19 @@ impl Default for LolState {
 type ChmU8 = Chm<u8, u8>;
 
 // empty
-#[sky_macros::test]
+#[test]
 fn drop_empty() {
     let idx = ChmU8::idx_init();
     drop(idx);
 }
 
-#[sky_macros::test]
+#[test]
 fn get_empty() {
     let idx = ChmU8::idx_init();
     assert!(idx.mt_get(&10, &cpin()).is_none());
 }
 
-#[sky_macros::test]
+#[test]
 fn update_empty() {
     let idx = ChmU8::idx_init();
     assert!(!idx.mt_update((10, 20), &cpin()));
@@ -251,7 +251,7 @@ fn _verify_eq<C: Config>(
     });
 }
 
-#[sky_macros::test]
+#[test]
 fn multispam_insert() {
     let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
@@ -260,7 +260,7 @@ fn multispam_insert() {
     modify_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
 }
 
-#[sky_macros::test]
+#[test]
 fn multispam_update() {
     let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
@@ -302,7 +302,7 @@ fn multispam_update() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn multispam_delete() {
     let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
@@ -332,7 +332,7 @@ fn multispam_delete() {
     );
 }
 
-#[sky_macros::test]
+#[test]
 fn multispam_lol() {
     let idx = Arc::new(super::RawTree::<StringTup, super::meta::Config2B<LolState>>::new());
     let token = ControlToken::new();

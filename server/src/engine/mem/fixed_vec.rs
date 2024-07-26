@@ -189,13 +189,13 @@ impl<T: fmt::Debug, const CAP: usize> fmt::Debug for FixedVec<T, CAP> {
     }
 }
 
-#[sky_macros::test]
+#[test]
 fn empty() {
     let x = FixedVec::<String, 100>::allocate();
     drop(x);
 }
 
-#[sky_macros::test]
+#[test]
 fn push_clear() {
     let mut x: FixedVec<_, 100> = FixedVec::allocate();
     for v in 0..50 {
@@ -211,7 +211,7 @@ fn push_clear() {
     assert_eq!(x.len(), 50);
 }
 
-#[sky_macros::test]
+#[test]
 fn clear_range() {
     let mut x: FixedVec<_, 100> = FixedVec::allocate();
     for v in 0..100 {
