@@ -552,7 +552,7 @@ impl<'a> Clone for VirtualDatacell<'a> {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn vdc_check() {
     let dc = Lit::new_str("hello, world");
     assert_eq!(
@@ -561,7 +561,7 @@ fn vdc_check() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn empty_slice() {
     let dc1 = Datacell::from(Lit::new_bin(b""));
     assert_eq!(dc1, Datacell::new_bin(b"".to_vec().into_boxed_slice()));

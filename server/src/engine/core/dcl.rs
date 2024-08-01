@@ -29,6 +29,7 @@ use crate::engine::{
     data::{tag::TagClass, DictEntryGeneric},
     error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
+    mem::unsafe_apis::BoxStr,
     net::protocol::ClientLocalState,
     ql::dcl::{SysctlCommand, UserDecl, UserDel},
 };
@@ -73,7 +74,7 @@ fn guard_root_or_self(me: &ClientLocalState, target_username: &str) -> QueryResu
     Ok(())
 }
 
-fn get_user_data<'a>(mut user: UserDecl<'a>) -> Result<(String, String), QueryError> {
+fn get_user_data<'a>(mut user: UserDecl<'a>) -> Result<(BoxStr, String), QueryError> {
     let password = match user.options_mut().remove(KEY_PASSWORD) {
         Some(DictEntryGeneric::Data(d))
             if d.kind() == TagClass::Str && user.options().is_empty() =>
@@ -83,8 +84,7 @@ fn get_user_data<'a>(mut user: UserDecl<'a>) -> Result<(String, String), QueryEr
             return Err(QueryError::QExecDdlInvalidProperties);
         }
     };
-    let username = user.username().to_owned();
-    Ok((username, password))
+    Ok((BoxStr::new(user.username()), password))
 }
 
 fn create_user(global: &impl GlobalInstanceLike, user: UserDecl) -> QueryResult<()> {
@@ -93,7 +93,7 @@ fn create_user(global: &impl GlobalInstanceLike, user: UserDecl) -> QueryResult<
         .state()
         .namespace()
         .sys_db()
-        .create_user(global, username.into_boxed_str(), &password)
+        .create_user(global, username, &password)
 }
 
 fn alter_user(

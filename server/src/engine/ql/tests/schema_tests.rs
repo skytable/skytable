@@ -31,13 +31,13 @@ use {
 
 mod alter_space {
     use {super::*, crate::engine::ql::ddl::alt::AlterSpace};
-    #[test]
+    #[sky_macros::test]
     fn alter_space_mini() {
         fullparse_verify_substmt("alter model mymodel with {}", |r: AlterSpace| {
             assert_eq!(r, AlterSpace::new(Ident::from("mymodel"), null_dict! {}));
         })
     }
-    #[test]
+    #[sky_macros::test]
     fn alter_space() {
         fullparse_verify_substmt(
             r#"
@@ -66,19 +66,19 @@ mod tymeta {
         ast::{parse_ast_node_full, State},
         ddl::syn::{DictTypeMeta, DictTypeMetaSplit},
     };
-    #[test]
+    #[sky_macros::test]
     fn tymeta_mini() {
         let tok = lex_insecure(b"{}").unwrap();
         let tymeta = parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
         assert_eq!(tymeta, null_dict!());
     }
-    #[test]
+    #[sky_macros::test]
     #[should_panic]
     fn tymeta_mini_fail() {
         let tok = lex_insecure(b"{,}").unwrap();
         parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
     }
-    #[test]
+    #[sky_macros::test]
     fn tymeta() {
         let tok = lex_insecure(br#"{hello: "world", loading: true, size: 100 }"#).unwrap();
         let tymeta = parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
@@ -91,7 +91,7 @@ mod tymeta {
             }
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn tymeta_pro() {
         // list { maxlen: 100, type: string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^ cursor should be at string
@@ -114,7 +114,7 @@ mod tymeta {
             }
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn tymeta_pro_max() {
         // list { maxlen: 100, this: { is: "cool" }, type: string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cursor should be at string
@@ -146,7 +146,7 @@ mod tymeta {
 mod layer {
     use super::*;
     use crate::engine::ql::{ast::parse_ast_node_multiple_full, ddl::syn::LayerSpec};
-    #[test]
+    #[sky_macros::test]
     fn layer_mini() {
         let tok = lex_insecure(b"string").unwrap();
         let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
@@ -155,7 +155,7 @@ mod layer {
             vec![LayerSpec::new(Ident::from("string"), null_dict! {})]
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn layer() {
         let tok = lex_insecure(b"string { maxlen: 100 }").unwrap();
         let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
@@ -169,7 +169,7 @@ mod layer {
             )]
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn layer_plus() {
         let tok = lex_insecure(b"list { type: string }").unwrap();
         let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
@@ -181,7 +181,7 @@ mod layer {
             ]
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn layer_pro() {
         let tok = lex_insecure(b"list { unique: true, type: string, maxlen: 10 }").unwrap();
         let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
@@ -199,7 +199,7 @@ mod layer {
             ]
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn layer_pro_max() {
         let tok = lex_insecure(
             b"list { unique: true, type: string { ascii_only: true, maxlen: 255 }, maxlen: 10 }",
@@ -227,7 +227,7 @@ mod layer {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     #[cfg(not(miri))]
     fn fuzz_layer() {
         let tok = b"
@@ -270,7 +270,7 @@ mod fields {
             ddl::syn::{FieldSpec, LayerSpec},
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn field_mini() {
         let tok = lex_insecure(b"username: string").unwrap();
         let f = parse_ast_node_full::<FieldSpec>(&tok).unwrap();
@@ -284,7 +284,7 @@ mod fields {
             )
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn field() {
         let tok = lex_insecure(b"primary username: string").unwrap();
         let f = parse_ast_node_full::<FieldSpec>(&tok).unwrap();
@@ -298,7 +298,7 @@ mod fields {
             )
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn field_pro() {
         let tok = lex_insecure(
             b"
@@ -327,7 +327,7 @@ mod fields {
             )
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn field_pro_max() {
         let tok = lex_insecure(
             b"
@@ -374,7 +374,7 @@ mod schemas {
         crt::CreateModel,
         syn::{FieldSpec, LayerSpec},
     };
-    #[test]
+    #[sky_macros::test]
     fn schema_mini() {
         let mut ret = CreateModel::new(
             ("apps", "mymodel").into(),
@@ -413,7 +413,7 @@ mod schemas {
             |r: CreateModel| assert_eq!(r, ret),
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn schema() {
         let mut ret = CreateModel::new(
             ("apps", "mymodel").into(),
@@ -461,7 +461,7 @@ mod schemas {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn schema_pro() {
         let mut ret = CreateModel::new(
             ("apps", "mymodel").into(),
@@ -519,7 +519,7 @@ mod schemas {
             |r: CreateModel| assert_eq!(ret, r),
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn schema_pro_max() {
         let mut ret = CreateModel::new(
             ("apps", "mymodel").into(),
@@ -593,7 +593,7 @@ mod dict_field_syntax {
         ast::parse_ast_node_full,
         ddl::syn::{ExpandedField, LayerSpec},
     };
-    #[test]
+    #[sky_macros::test]
     fn field_syn_mini() {
         let tok = lex_insecure(b"username { type: string }").unwrap();
         let ef = parse_ast_node_full::<ExpandedField>(&tok).unwrap();
@@ -606,7 +606,7 @@ mod dict_field_syntax {
             )
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn field_syn() {
         let tok = lex_insecure(
             b"
@@ -629,7 +629,7 @@ mod dict_field_syntax {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn field_syn_pro() {
         let tok = lex_insecure(
             b"
@@ -663,7 +663,7 @@ mod dict_field_syntax {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn field_syn_pro_max() {
         let tok = lex_insecure(
             b"
@@ -713,7 +713,7 @@ mod alter_model_remove {
         ast::parse_ast_node_full_with_space,
         ddl::alt::{AlterKind, AlterModel},
     };
-    #[test]
+    #[sky_macros::test]
     fn alter_mini() {
         let tok = lex_insecure(b"alter model mymodel remove myfield").unwrap();
         let remove = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
@@ -725,7 +725,7 @@ mod alter_model_remove {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn alter_mini_2() {
         let tok = lex_insecure(b"alter model mymodel remove (myfield)").unwrap();
         let remove = parse_ast_node_full_with_space::<AlterModel>(&tok[2..], "apps").unwrap();
@@ -737,7 +737,7 @@ mod alter_model_remove {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn alter() {
         let tok =
             lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)")
@@ -766,7 +766,7 @@ mod alter_model_add {
             syn::{ExpandedField, LayerSpec},
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn add_mini() {
         let tok = lex_insecure(
             b"
@@ -789,7 +789,7 @@ mod alter_model_add {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn add() {
         let tok = lex_insecure(
             b"
@@ -815,7 +815,7 @@ mod alter_model_add {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn add_pro() {
         let tok = lex_insecure(
             b"
@@ -841,7 +841,7 @@ mod alter_model_add {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn add_pro_max() {
         let tok = lex_insecure(
             b"
@@ -915,7 +915,7 @@ mod alter_model_update {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn alter_mini() {
         let tok = lex_insecure(
             b"
@@ -939,7 +939,7 @@ mod alter_model_update {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn alter_mini_2() {
         let tok = lex_insecure(
             b"
@@ -963,7 +963,7 @@ mod alter_model_update {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn alter() {
         let tok = lex_insecure(
             b"
@@ -994,7 +994,7 @@ mod alter_model_update {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn alter_pro() {
         let tok = lex_insecure(
             b"
@@ -1035,7 +1035,7 @@ mod alter_model_update {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn alter_pro_max() {
         let tok = lex_insecure(
             b"
@@ -1092,7 +1092,7 @@ mod ddl_other_query_tests {
             ddl::drop::{DropModel, DropSpace},
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn drop_space() {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
@@ -1105,7 +1105,7 @@ mod ddl_other_query_tests {
             DropSpace::new(Ident::from("myspace"), false, true)
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn drop_space_force() {
         let src = lex_insecure(br"drop space allow not empty myspace").unwrap();
         assert_eq!(
@@ -1118,7 +1118,7 @@ mod ddl_other_query_tests {
             DropSpace::new(Ident::from("myspace"), true, true)
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn drop_model() {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
@@ -1131,7 +1131,7 @@ mod ddl_other_query_tests {
             DropModel::new(("apps", "mymodel").into(), false, true)
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn drop_model_force() {
         let src = lex_insecure(br"drop model allow not empty mymodel").unwrap();
         assert_eq!(

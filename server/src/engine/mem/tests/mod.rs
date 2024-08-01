@@ -31,7 +31,7 @@ mod word;
 mod vinline {
     use super::VInline;
     const CAP: usize = 8;
-    #[test]
+    #[sky_macros::test]
     fn drop_empty() {
         let vi = VInline::<CAP, String>::new();
         drop(vi);
@@ -64,17 +64,17 @@ mod vinline {
     fn mkvi_str(upto: usize) -> VInline<CAP, String> {
         cmkvi(upto, |v| v.to_string())
     }
-    #[test]
+    #[sky_macros::test]
     fn push_on_stack() {
         let vi = mkvi(CAP);
         assert!(vi.on_stack());
     }
-    #[test]
+    #[sky_macros::test]
     fn push_on_heap() {
         let vi = mkvi(CAP + 1);
         assert_eq!(vi.capacity(), CAP * 2);
     }
-    #[test]
+    #[sky_macros::test]
     fn remove_on_stack() {
         let mut vi = mkvi(CAP);
         assert_eq!(vi.remove(6), 6);
@@ -82,7 +82,7 @@ mod vinline {
         assert_eq!(vi.capacity(), CAP);
         assert_eq!(vi.as_ref(), [0, 1, 2, 3, 4, 5, 7]);
     }
-    #[test]
+    #[sky_macros::test]
     fn remove_on_heap() {
         let mut vi = mkvi(CAP + 1);
         assert_eq!(vi.remove(6), 6);
@@ -90,14 +90,14 @@ mod vinline {
         assert_eq!(vi.capacity(), CAP * 2);
         assert_eq!(vi.as_ref(), [0, 1, 2, 3, 4, 5, 7, 8]);
     }
-    #[test]
+    #[sky_macros::test]
     fn optimize_capacity_none_on_stack() {
         let mut vi = mkvi(CAP);
         vi.optimize_capacity();
         assert_eq!(vi.capacity(), CAP);
         assert!(vi.on_stack());
     }
-    #[test]
+    #[sky_macros::test]
     fn optimize_capacity_none_on_heap() {
         let mut vi = mkvi(CAP + 1);
         assert_eq!(vi.capacity(), CAP * 2);
@@ -106,14 +106,14 @@ mod vinline {
         vi.optimize_capacity();
         assert_eq!(vi.capacity(), CAP * 2);
     }
-    #[test]
+    #[sky_macros::test]
     fn optimize_capacity_on_heap() {
         let mut vi = mkvi(CAP + 1);
         assert_eq!(vi.capacity(), CAP * 2);
         vi.optimize_capacity();
         assert_eq!(vi.capacity(), CAP + 1);
     }
-    #[test]
+    #[sky_macros::test]
     fn optimize_capacity_mv_stack() {
         let mut vi = mkvi(CAP + 1);
         assert_eq!(vi.capacity(), CAP * 2);
@@ -122,33 +122,33 @@ mod vinline {
         assert_eq!(vi.capacity(), CAP);
         assert!(vi.on_stack());
     }
-    #[test]
+    #[sky_macros::test]
     fn clear_stack() {
         let mut vi = mkvi(CAP);
         vi.clear();
         assert_eq!(vi.capacity(), CAP);
         assert_eq!(vi.len(), 0);
     }
-    #[test]
+    #[sky_macros::test]
     fn clear_heap() {
         let mut vi = mkvi(CAP + 1);
         vi.clear();
         assert_eq!(vi.capacity(), CAP * 2);
         assert_eq!(vi.len(), 0);
     }
-    #[test]
+    #[sky_macros::test]
     fn clone_stack() {
         let v1 = mkvi(CAP);
         let v2 = v1.clone();
         assert_eq!(v1, v2);
     }
-    #[test]
+    #[sky_macros::test]
     fn clone_heap() {
         let v1 = mkvi(CAP + 1);
         let v2 = v1.clone();
         assert_eq!(v1, v2);
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_stack() {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().collect();
@@ -156,7 +156,7 @@ mod vinline {
             .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_stack_partial() {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().take(CAP / 2).collect();
@@ -164,7 +164,7 @@ mod vinline {
             .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_heap() {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().collect();
@@ -172,7 +172,7 @@ mod vinline {
             .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_heap_partial() {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().take(CAP / 2).collect();
@@ -180,7 +180,7 @@ mod vinline {
             .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_rev_stack() {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().rev().collect();
@@ -189,7 +189,7 @@ mod vinline {
             .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_rev_stack_partial() {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().rev().take(CAP / 2).collect();
@@ -198,7 +198,7 @@ mod vinline {
             .zip(v.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_rev_heap() {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().rev().collect();
@@ -207,7 +207,7 @@ mod vinline {
             .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_rev_heap_partial() {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().rev().take(CAP / 2).collect();
@@ -220,12 +220,12 @@ mod vinline {
 mod uarray {
     use super::UArray;
     const CAP: usize = 8;
-    #[test]
+    #[sky_macros::test]
     fn empty() {
         let a = UArray::<CAP, u8>::new();
         drop(a);
     }
-    #[test]
+    #[sky_macros::test]
     fn push_okay() {
         let mut a = UArray::<CAP, u8>::new();
         a.push(1);
@@ -233,7 +233,7 @@ mod uarray {
         a.push(3);
         a.push(4);
     }
-    #[test]
+    #[sky_macros::test]
     #[should_panic(expected = "stack,capof")]
     fn push_panic() {
         let mut a = UArray::<CAP, u8>::new();
@@ -247,24 +247,24 @@ mod uarray {
         a.push(8);
         a.push(9);
     }
-    #[test]
+    #[sky_macros::test]
     fn slice() {
         let a: UArray<CAP, _> = (1u8..=8).collect();
         assert_eq!(a.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8]);
     }
-    #[test]
+    #[sky_macros::test]
     fn slice_mut() {
         let mut a: UArray<CAP, _> = (0u8..8).collect();
         a.iter_mut().for_each(|v| *v += 1);
         assert_eq!(a.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8])
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_empty() {
         let a: UArray<CAP, u8> = UArray::new();
         let r: Vec<u8> = a.into_iter().collect();
         assert!(r.is_empty());
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter() {
         let a: UArray<CAP, _> = (0u8..8).collect();
         let r: Vec<u8> = a.into_iter().collect();
@@ -272,7 +272,7 @@ mod uarray {
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x, y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_partial() {
         let a: UArray<CAP, String> = (0u8..8).map(|v| ToString::to_string(&v)).collect();
         let r: Vec<String> = a.into_iter().take(4).collect();
@@ -280,13 +280,13 @@ mod uarray {
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn clone() {
         let a: UArray<CAP, u8> = (0u8..CAP as _).collect();
         let b = a.clone();
         assert_eq!(a, b);
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_rev() {
         let a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         let r: Vec<String> = a.into_iter().rev().collect();
@@ -295,7 +295,7 @@ mod uarray {
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn into_iter_rev_partial() {
         let a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         let r: Vec<String> = a.into_iter().rev().take(4).collect();
@@ -304,13 +304,13 @@ mod uarray {
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
-    #[test]
+    #[sky_macros::test]
     fn pop_array() {
         let mut a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         assert_eq!(a.pop().unwrap(), "7");
         assert_eq!(a.len(), CAP - 1);
     }
-    #[test]
+    #[sky_macros::test]
     fn clear_array() {
         let mut a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         a.clear();

@@ -126,6 +126,7 @@ mod test_upgrade {
         }
     }
     #[sky_macros::test]
+    #[cfg(not(miri))]
     fn upgrade_test() {
         const FILE_PATH: &str = "upgrade_test_file.db";
         const FILE_DATA: &[u8] = b"hello freaking world";

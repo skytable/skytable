@@ -35,7 +35,7 @@ mod validation {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn simple() {
         let model =
             create("create model myspace.mymodel(username: string, password: binary)").unwrap();
@@ -58,7 +58,7 @@ mod validation {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn idiotic_order() {
         let model =
             create("create model myspace.mymodel(password: binary, primary username: string)")
@@ -82,7 +82,7 @@ mod validation {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn duplicate_primary_key() {
         assert_eq!(
             create(
@@ -93,7 +93,7 @@ mod validation {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn duplicate_fields() {
         assert_eq!(
             create("create model myspace.mymodel(primary username: string, username: binary)")
@@ -102,7 +102,7 @@ mod validation {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn illegal_props() {
         assert_eq!(
         create("create model myspace.mymodel(primary username: string, password: binary) with { lol_prop: false }").unwrap_err(),
@@ -110,7 +110,7 @@ mod validation {
     );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn illegal_pk() {
         assert_eq!(
         create(
@@ -144,7 +144,7 @@ mod exec {
 
     const SPACE: &str = "myspace";
 
-    #[test]
+    #[sky_macros::test]
     fn simple() {
         let global = TestGlobal::new_with_driver_id("exec_simple_create");
         exec_create_new_space(

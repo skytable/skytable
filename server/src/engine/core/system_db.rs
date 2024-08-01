@@ -29,6 +29,7 @@ use {
     crate::engine::{
         error::{QueryError, QueryResult},
         fractal::GlobalInstanceLike,
+        mem::unsafe_apis::BoxStr,
         txn::gns::sysctl::{AlterUserTxn, CreateUserTxn, DropUserTxn},
     },
     std::collections::hash_map::Entry,
@@ -36,7 +37,7 @@ use {
 
 #[derive(Debug)]
 pub struct SystemDatabase {
-    users: RWLIdx<Box<str>, User>,
+    users: RWLIdx<BoxStr, User>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -76,7 +77,7 @@ impl SystemDatabase {
             users: RWLIdx::default(),
         }
     }
-    pub fn users(&self) -> &RWLIdx<Box<str>, User> {
+    pub fn users(&self) -> &RWLIdx<BoxStr, User> {
         &self.users
     }
     pub fn verify_user(&self, username: &str, password: &[u8]) -> VerifyUser {
@@ -104,7 +105,7 @@ impl SystemDatabase {
 }
 
 impl SystemDatabase {
-    pub fn __raw_create_user(&self, username: Box<str>, password_hash: Box<[u8]>) -> bool {
+    pub fn __raw_create_user(&self, username: BoxStr, password_hash: Box<[u8]>) -> bool {
         match self.users.write().entry(username) {
             Entry::Vacant(ve) => {
                 ve.insert(User::new(password_hash));
@@ -131,7 +132,7 @@ impl SystemDatabase {
     pub fn create_user(
         &self,
         global: &impl GlobalInstanceLike,
-        username: Box<str>,
+        username: BoxStr,
         password: &str,
     ) -> QueryResult<()> {
         let mut users = self.users.write();

@@ -29,7 +29,7 @@ use crate::engine::data::{
     dict::{self, DictEntryGeneric, DictGeneric},
 };
 
-#[test]
+#[sky_macros::test]
 fn t_simple_flatten() {
     let generic_dict: DictGeneric = into_dict! {
         "a_valid_key" => DictEntryGeneric::Data(100u64.into()),
@@ -42,7 +42,7 @@ fn t_simple_flatten() {
     assert_eq!(ret, expected);
 }
 
-#[test]
+#[sky_macros::test]
 fn t_simple_patch() {
     let mut current: DictGeneric = into_dict! {
         "a" => Datacell::new_uint_default(2),
@@ -62,7 +62,7 @@ fn t_simple_patch() {
     assert_eq!(current, expected);
 }
 
-#[test]
+#[sky_macros::test]
 fn t_bad_patch() {
     let mut current: DictGeneric = into_dict! {
         "a" => Datacell::new_uint_default(2),
@@ -79,7 +79,7 @@ fn t_bad_patch() {
     assert_eq!(current, backup);
 }
 
-#[test]
+#[sky_macros::test]
 fn patch_null_out_dict() {
     let mut current: DictGeneric = into_dict! {
         "a" => Datacell::new_uint_default(2),

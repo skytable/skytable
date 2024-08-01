@@ -228,12 +228,12 @@ fn process_enum_tags(
 }
 
 #[proc_macro_attribute]
-pub fn miri_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
+pub fn miri_leaky_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attrs as AttributeArgs);
     assert!(attr_args.is_empty(), "no args allowed here");
     let input_fn = parse_macro_input!(item as ItemFn);
     quote! {
-        #[cfg(miri)]
+        #[cfg(feature = "miri-leaks")]
         #[::core::prelude::v1::test]
         #input_fn
     }
@@ -246,7 +246,7 @@ pub fn test(attrs: TokenStream, item: TokenStream) -> TokenStream {
     assert!(attr_args.is_empty(), "no args allowed here");
     let input_fn = parse_macro_input!(item as ItemFn);
     quote! {
-        #[cfg(not(miri))]
+        #[cfg(not(feature = "miri-leaks"))]
         #[::core::prelude::v1::test]
         #input_fn
     }

@@ -39,7 +39,7 @@ use {
             },
             error::{RuntimeResult, StorageError},
             idx::IndexSTSeqCns,
-            mem::{BufferedScanner, VInline},
+            mem::{unsafe_apis::BoxStr, BufferedScanner, VInline},
         },
         util::{compiler::TaggedEnum, EndianQW},
     },
@@ -446,9 +446,9 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let key = dec::utils::decode_string(scanner, md.p_key_len as usize)?;
+        let key = dec::utils::decode_string_into(scanner, md.p_key_len as usize, BoxStr::new)?;
         let fieldmap = <super::map::PersistMapImpl<
-            super::map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>,
+            super::map::FieldMapSpec<IndexSTSeqCns<BoxStr, _>>,
         > as PersistObject>::obj_dec(
             scanner, super::map::MapIndexSizeMD(md.field_c as usize)
         )?;
@@ -459,7 +459,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         };
         Ok(ModelData::new_restore(
             md.model_uuid,
-            key.into_boxed_str(),
+            key,
             ptag.into_full(),
             fieldmap,
         ))

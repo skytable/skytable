@@ -42,7 +42,7 @@ pub fn audit() -> HarnessResult<()> {
             "RUSTFLAGS",
             "-A dead_code -A unused_imports -A unused_macros",
         )
-        .env("MIRIFLAGS", "-Zmiri-permissive-provenance");
+        .env("MIRIFLAGS", "-Zmiri-tree-borrows");
     util::handle_child(&format!("audit skyd using miri"), cmd)?;
     info!("successfully completed audit of skyd (miri)");
     Ok(())

@@ -306,9 +306,12 @@ impl<K, V> OrderedOwnedIteratorRaw<K, V> {
             unsafe {
                 // UNSAFE(@ohsayan): +nullck
                 let this = ptr::read(self.h);
+                // ptr of next node
+                let ptr = (*self.h).p;
                 // destroy this node
                 IndexSTSeqDllNode::dealloc_headless(self.h);
-                self.h = (*self.h).p;
+                // update head ptr
+                self.h = ptr;
                 Some((this.k, this.v))
             }
         }

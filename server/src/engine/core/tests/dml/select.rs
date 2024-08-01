@@ -29,7 +29,7 @@ use {
     std::collections::HashMap,
 };
 
-#[test]
+#[sky_macros::test]
 fn simple_select_wildcard() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_select_simple_select_wildcard");
     assert_eq!(
@@ -44,7 +44,7 @@ fn simple_select_wildcard() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn simple_select_specified_same_order() {
     let global = TestGlobal::new_with_driver_id_instant_update(
         "dml_select_simple_select_specified_same_order",
@@ -61,7 +61,7 @@ fn simple_select_specified_same_order() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn simple_select_specified_reversed_order() {
     let global = TestGlobal::new_with_driver_id_instant_update(
         "dml_select_simple_select_specified_reversed_order",
@@ -78,7 +78,7 @@ fn simple_select_specified_reversed_order() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn select_null() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_null");
     assert_eq!(
@@ -93,7 +93,7 @@ fn select_null() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn select_nonexisting() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_nonexisting");
     assert_eq!(
@@ -112,7 +112,7 @@ fn select_nonexisting() {
     select all
 */
 
-#[test]
+#[sky_macros::test]
 fn select_all_wildcard() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_all_wildcard");
     let ret = super::exec_select_all(
@@ -139,7 +139,7 @@ fn select_all_wildcard() {
     assert_eq!(ret.get("orwell").unwrap(), &intovec!["1984"]);
 }
 
-#[test]
+#[sky_macros::test]
 fn select_all_onefield() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_select_select_all_onefield");
     let ret = super::exec_select_all(

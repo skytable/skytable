@@ -34,12 +34,9 @@
     -- Sayan (@ohsayan); July, 2024
 */
 
-use {
-    crate::engine::{data::cell::Datacell, ql::lex::Token},
-    sky_macros::miri_test,
-};
+use crate::engine::{data::cell::Datacell, ql::lex::Token};
 
-#[miri_test]
+#[sky_macros::test]
 fn token_vector_swap() {
     let data = vec![
         Datacell::new_list(vec![

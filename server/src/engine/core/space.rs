@@ -31,6 +31,7 @@ use {
         error::{QueryError, QueryResult},
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::STIndex,
+        mem::unsafe_apis::BoxStr,
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
         txn::{self, SpaceIDRef},
     },
@@ -40,20 +41,20 @@ use {
 #[derive(Debug, PartialEq)]
 pub struct Space {
     uuid: Uuid,
-    models: HashSet<Box<str>>,
+    models: HashSet<BoxStr>,
     props: DictGeneric,
 }
 
 #[derive(Debug, PartialEq)]
 /// Procedure for `create space`
 struct ProcedureCreate {
-    space_name: Box<str>,
+    space_name: BoxStr,
     space: Space,
     if_not_exists: bool,
 }
 
 impl Space {
-    pub fn new(uuid: Uuid, models: HashSet<Box<str>>, props: DictGeneric) -> Self {
+    pub fn new(uuid: Uuid, models: HashSet<BoxStr>, props: DictGeneric) -> Self {
         Self {
             uuid,
             models,
@@ -73,13 +74,13 @@ impl Space {
     pub fn new_empty_auto(props: DictGeneric) -> Self {
         Self::new_auto(Default::default(), props)
     }
-    pub fn new_auto(models: HashSet<Box<str>>, props: DictGeneric) -> Self {
+    pub fn new_auto(models: HashSet<BoxStr>, props: DictGeneric) -> Self {
         Self::new(Uuid::new(), models, props)
     }
-    pub fn models(&self) -> &HashSet<Box<str>> {
+    pub fn models(&self) -> &HashSet<BoxStr> {
         &self.models
     }
-    pub fn models_mut(&mut self) -> &mut HashSet<Box<str>> {
+    pub fn models_mut(&mut self) -> &mut HashSet<BoxStr> {
         &mut self.models
     }
     pub fn props(&self) -> &DictGeneric {
@@ -108,7 +109,7 @@ impl Space {
             if_not_exists,
         }: CreateSpace,
     ) -> QueryResult<ProcedureCreate> {
-        let space_name = space_name.to_string().into_boxed_str();
+        let space_name = BoxStr::new(space_name.as_str());
         // now let's check our props
         match props.get(Self::KEY_ENV) {
             Some(d) if props.len() == 1 => {
@@ -119,14 +120,19 @@ impl Space {
                     }
                     DictEntryGeneric::Data(_) => {
                         // a null? make it empty
-                        let _ =
-                            props.insert(Self::KEY_ENV.into(), DictEntryGeneric::Map(into_dict!()));
+                        let _ = props.insert(
+                            BoxStr::new(Self::KEY_ENV),
+                            DictEntryGeneric::Map(into_dict!()),
+                        );
                     }
                     DictEntryGeneric::Map(_) => {}
                 }
             }
             None if props.is_empty() => {
-                let _ = props.st_insert(Self::KEY_ENV.into(), DictEntryGeneric::Map(into_dict!()));
+                let _ = props.st_insert(
+                    BoxStr::new(Self::KEY_ENV),
+                    DictEntryGeneric::Map(into_dict!()),
+                );
             }
             _ => {
                 // in all the other cases, we have illegal properties
@@ -226,9 +232,10 @@ impl Space {
                 dict::rmerge_data_with_patch(space.props_mut(), patch);
                 // the `env` key may have been popped, so put it back (setting `env: null` removes the env key and we don't want to waste time enforcing this in the
                 // merge algorithm)
-                let _ = space
-                    .props_mut()
-                    .st_insert(Self::KEY_ENV.into(), DictEntryGeneric::Map(into_dict!()));
+                let _ = space.props_mut().st_insert(
+                    BoxStr::new(Self::KEY_ENV),
+                    DictEntryGeneric::Map(into_dict!()),
+                );
                 Ok(())
             })
     }

@@ -31,9 +31,15 @@
 
 */
 
+use core::str;
 use std::{
     alloc::{self, Layout},
+    borrow::Borrow,
+    fmt,
+    hash::{Hash, Hasher},
+    ops::Deref,
     ptr::{self, NonNull},
+    slice,
 };
 
 /// Allocate the given layout. This will panic if the allocator returns an error
@@ -87,4 +93,89 @@ pub unsafe fn memcpy<const N: usize>(src: &[u8]) -> [u8; N] {
     let mut dst = [0u8; N];
     src.as_ptr().copy_to_nonoverlapping(dst.as_mut_ptr(), N);
     dst
+}
+
+pub struct BoxStr {
+    p: *mut u8,
+    l: usize,
+}
+
+impl BoxStr {
+    pub fn new(b: &str) -> Self {
+        let b = b.as_bytes();
+        let p;
+        unsafe {
+            p = alloc_array::<u8>(b.len());
+            ptr::copy_nonoverlapping(b.as_ptr(), p, b.len());
+        }
+        Self { p, l: b.len() }
+    }
+}
+
+impl Deref for BoxStr {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe {
+            // UNSAFE(@ohsayan): we own this!
+            str::from_utf8_unchecked(slice::from_raw_parts(self.p, self.l))
+        }
+    }
+}
+
+impl Drop for BoxStr {
+    fn drop(&mut self) {
+        unsafe {
+            // UNSAFE(@ohsayan): we are an unique owner of this very allocation
+            dealloc_array(self.p, self.l)
+        }
+    }
+}
+
+impl AsRef<str> for BoxStr {
+    fn as_ref(&self) -> &str {
+        self
+    }
+}
+
+impl<T: AsRef<str>> PartialEq<T> for BoxStr {
+    fn eq(&self, other: &T) -> bool {
+        self.as_ref().eq(other.as_ref())
+    }
+}
+
+impl Eq for BoxStr {}
+
+impl Hash for BoxStr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
+}
+
+impl fmt::Debug for BoxStr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_ref().fmt(f)
+    }
+}
+
+impl Clone for BoxStr {
+    fn clone(&self) -> Self {
+        Self::new(self.as_ref())
+    }
+}
+
+impl Borrow<str> for BoxStr {
+    fn borrow(&self) -> &str {
+        self
+    }
+}
+
+unsafe impl Send for BoxStr {}
+unsafe impl Sync for BoxStr {}
+
+#[cfg(test)]
+impl<'a> From<&'a str> for BoxStr {
+    fn from(s: &'a str) -> Self {
+        BoxStr::new(s)
+    }
 }

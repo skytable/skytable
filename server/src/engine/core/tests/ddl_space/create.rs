@@ -31,7 +31,7 @@ use crate::engine::{
     fractal::test_utils::TestGlobal,
 };
 
-#[test]
+#[sky_macros::test]
 fn exec_create_space_simple() {
     let global = TestGlobal::new_with_driver_id("exec_create_space_simple");
     super::exec_create(&global, "create space myspace", |spc| {
@@ -40,7 +40,7 @@ fn exec_create_space_simple() {
     .unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn exec_create_space_with_env() {
     let global = TestGlobal::new_with_driver_id("exec_create_space_with_env");
     super::exec_create(
@@ -67,7 +67,7 @@ fn exec_create_space_with_env() {
     .unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn exec_create_space_with_bad_env_type() {
     let global = TestGlobal::new_with_driver_id("exec_create_space_with_bad_env_type");
     assert_eq!(
@@ -76,7 +76,7 @@ fn exec_create_space_with_bad_env_type() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn exec_create_space_with_random_property() {
     let global = TestGlobal::new_with_driver_id("exec_create_space_with_random_property");
     assert_eq!(

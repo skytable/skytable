@@ -41,6 +41,7 @@ use {
             },
             error::StorageError,
             fractal::{context, FractalGNSDriver},
+            mem::unsafe_apis::BoxStr,
             storage::{
                 common::{interface::fs::FileSystem, paths_v1, sdss::sdss_r1::rw::SdssFile},
                 v1,
@@ -119,7 +120,7 @@ pub fn initialize_new(config: &Configuration) -> RuntimeResult<SELoaded> {
         &password_hash,
     ))?;
     assert!(gns.sys_db().__raw_create_user(
-        SystemDatabase::ROOT_ACCOUNT.to_owned().into_boxed_str(),
+        BoxStr::new(SystemDatabase::ROOT_ACCOUNT),
         password_hash.into_boxed_slice(),
     ));
     Ok(SELoaded {

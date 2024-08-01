@@ -27,6 +27,7 @@
 use crate::engine::{
     core::model::{Field, ModelData},
     idx::{IndexST, IndexSTSeqCns},
+    mem::unsafe_apis::BoxStr,
     ql::lex::Ident,
     txn::{ModelIDRef, SpaceIDRef},
 };
@@ -70,13 +71,13 @@ impl<'a> CreateModelTxn<'a> {
 /// Transaction commit payload for an `alter model add ...` query
 pub struct AlterModelAddTxn<'a> {
     model_id: ModelIDRef<'a>,
-    new_fields: &'a IndexSTSeqCns<Box<str>, Field>,
+    new_fields: &'a IndexSTSeqCns<BoxStr, Field>,
 }
 
 impl<'a> AlterModelAddTxn<'a> {
     pub const fn new(
         model_id: ModelIDRef<'a>,
-        new_fields: &'a IndexSTSeqCns<Box<str>, Field>,
+        new_fields: &'a IndexSTSeqCns<BoxStr, Field>,
     ) -> Self {
         Self {
             model_id,
@@ -86,7 +87,7 @@ impl<'a> AlterModelAddTxn<'a> {
     pub fn model_id(&self) -> ModelIDRef<'_> {
         self.model_id
     }
-    pub fn new_fields(&self) -> &IndexSTSeqCns<Box<str>, Field> {
+    pub fn new_fields(&self) -> &IndexSTSeqCns<BoxStr, Field> {
         self.new_fields
     }
 }
@@ -116,14 +117,11 @@ impl<'a> AlterModelRemoveTxn<'a> {
 /// Transaction commit payload for an `alter model update ...` query
 pub struct AlterModelUpdateTxn<'a> {
     model_id: ModelIDRef<'a>,
-    updated_fields: &'a IndexST<Box<str>, Field>,
+    updated_fields: &'a IndexST<BoxStr, Field>,
 }
 
 impl<'a> AlterModelUpdateTxn<'a> {
-    pub const fn new(
-        model_id: ModelIDRef<'a>,
-        updated_fields: &'a IndexST<Box<str>, Field>,
-    ) -> Self {
+    pub const fn new(model_id: ModelIDRef<'a>, updated_fields: &'a IndexST<BoxStr, Field>) -> Self {
         Self {
             model_id,
             updated_fields,
@@ -134,7 +132,7 @@ impl<'a> AlterModelUpdateTxn<'a> {
         self.model_id
     }
 
-    pub fn updated_fields(&self) -> &IndexST<Box<str>, Field> {
+    pub fn updated_fields(&self) -> &IndexST<BoxStr, Field> {
         self.updated_fields
     }
 }

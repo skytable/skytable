@@ -38,7 +38,7 @@ use {
             data::dict::DictEntryGeneric,
             error::{RuntimeResult, StorageError},
             idx::{IndexSTSeqCns, STIndexSeq},
-            mem::{BufferedScanner, StatelessLen},
+            mem::{unsafe_apis::BoxStr, BufferedScanner, StatelessLen},
         },
         util::{compiler::TaggedEnum, copy_slice_to_array as memcpy, EndianQW},
     },
@@ -156,7 +156,7 @@ impl GenericDictEntryMetadata {
 
 impl MapStorageSpec for GenericDictSpec {
     type InMemoryMap = HashMap<Self::InMemoryKey, Self::InMemoryVal>;
-    type InMemoryKey = Box<str>;
+    type InMemoryKey = BoxStr;
     type InMemoryVal = DictEntryGeneric;
     type InMemoryMapIter<'a> =
         std::collections::hash_map::Iter<'a, Self::InMemoryKey, Self::InMemoryVal>;
@@ -213,9 +213,7 @@ impl MapStorageSpec for GenericDictSpec {
         s: &mut BufferedScanner,
         md: &Self::EntryMetadata,
     ) -> Option<Self::RestoredKey> {
-        super::dec::utils::decode_string(s, md.klen as usize)
-            .map(|s| s.into_boxed_str())
-            .ok()
+        super::dec::utils::decode_string_into(s, md.klen as usize, BoxStr::new).ok()
     }
     unsafe fn decode_entry_val(
         scanner: &mut BufferedScanner,
@@ -265,10 +263,10 @@ pub trait FieldMapAny: StatelessLen {
         Self: 'a;
 }
 
-impl FieldMapAny for HashMap<Box<str>, Field> {
+impl FieldMapAny for HashMap<BoxStr, Field> {
     type Iterator<'a> = std::iter::Map<
-        std::collections::hash_map::Iter<'a, Box<str>, Field>,
-        fn((&Box<str>, &Field)) -> (&'a str, &'a Field),
+        std::collections::hash_map::Iter<'a, BoxStr, Field>,
+        fn((&BoxStr, &Field)) -> (&'a str, &'a Field),
     >;
     fn get_iter<'a>(&'a self) -> Self::Iterator<'a>
     where
@@ -293,10 +291,10 @@ impl FieldMapAny for IndexSTSeqCns<crate::engine::mem::RawStr, Field> {
             .map(|(k, v)| unsafe { core::mem::transmute((k.as_str(), v)) })
     }
 }
-impl FieldMapAny for IndexSTSeqCns<Box<str>, Field> {
+impl FieldMapAny for IndexSTSeqCns<BoxStr, Field> {
     type Iterator<'a> = std::iter::Map<
-    crate::engine::idx::stdord_iter::IndexSTSeqDllIterOrdKV<'a, Box<str>, Field>,
-    fn((&Box<str>, &Field)) -> (&'a str, &'a Field)>
+    crate::engine::idx::stdord_iter::IndexSTSeqDllIterOrdKV<'a, BoxStr, Field>,
+    fn((&BoxStr, &Field)) -> (&'a str, &'a Field)>
     where
         Self: 'a;
 
@@ -315,9 +313,9 @@ impl<FM: FieldMapAny> MapStorageSpec for FieldMapSpec<FM> {
     type InMemoryKey = str;
     type InMemoryVal = Field;
     type InMemoryMapIter<'a> = FM::Iterator<'a> where FM: 'a;
-    type RestoredKey = Box<str>;
+    type RestoredKey = BoxStr;
     type RestoredVal = Field;
-    type RestoredMap = IndexSTSeqCns<Box<str>, Field>;
+    type RestoredMap = IndexSTSeqCns<BoxStr, Field>;
     type EntryMetadata = FieldMapEntryMetadata;
     const ENC_AS_ENTRY: bool = false;
     const DEC_AS_ENTRY: bool = false;
@@ -365,9 +363,7 @@ impl<FM: FieldMapAny> MapStorageSpec for FieldMapSpec<FM> {
         scanner: &mut BufferedScanner,
         md: &Self::EntryMetadata,
     ) -> Option<Self::RestoredKey> {
-        super::dec::utils::decode_string(scanner, md.field_id_l as usize)
-            .map(|s| s.into_boxed_str())
-            .ok()
+        super::dec::utils::decode_string_into(scanner, md.field_id_l as usize, BoxStr::new).ok()
     }
     unsafe fn decode_entry_val(
         scanner: &mut BufferedScanner,

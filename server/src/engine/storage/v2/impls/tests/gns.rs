@@ -43,6 +43,7 @@ use crate::engine::{
 };
 
 #[sky_macros::test]
+#[cfg(not(miri))]
 fn compaction_test() {
     FileSystem::set_context(FSContext::Local);
     let mut fs = FileSystem::instance();

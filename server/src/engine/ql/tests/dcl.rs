@@ -30,14 +30,14 @@ use crate::engine::ql::{
     tests::lex_insecure,
 };
 
-#[test]
+#[sky_macros::test]
 fn report_status_simple() {
     let query = lex_insecure(b"sysctl report status").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
     assert_eq!(q, SysctlCommand::ReportStatus)
 }
 
-#[test]
+#[sky_macros::test]
 fn create_user_simple() {
     let query = lex_insecure(b"sysctl create user sayan with { password: 'mypass123' }").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
@@ -50,7 +50,7 @@ fn create_user_simple() {
     )
 }
 
-#[test]
+#[sky_macros::test]
 fn alter_user_simple() {
     let query = lex_insecure(b"sysctl alter user sayan with { password: 'mypass123' }").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();
@@ -63,7 +63,7 @@ fn alter_user_simple() {
     )
 }
 
-#[test]
+#[sky_macros::test]
 fn delete_user_simple() {
     let query = lex_insecure(b"sysctl drop user monster").unwrap();
     let q = ast::parse_ast_node_full::<dcl::SysctlCommand>(&query[1..]).unwrap();

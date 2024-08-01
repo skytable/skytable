@@ -51,6 +51,7 @@ use crate::{
             dict::{DictEntryGeneric, DictGeneric},
         },
         error::{QueryError, QueryResult},
+        mem::unsafe_apis::BoxStr,
         ql::{
             ast::{QueryData, State},
             lex::{Ident, Token},
@@ -160,10 +161,10 @@ where
                 };
                 state.poison_if_not(
                     dict.insert(
-                        unsafe {
+                        BoxStr::new(unsafe {
                             // UNSAFE(@ohsayan): we switch to this state only when we are in the LIT_OR_OB state. this means that we've already read in a key
-                            key.take().as_str().into()
-                        },
+                            key.take().as_str()
+                        }),
                         v,
                     )
                     .is_none(),
@@ -175,10 +176,10 @@ where
                 // found a null
                 state.poison_if_not(
                     dict.insert(
-                        unsafe {
+                        BoxStr::new(unsafe {
                             // UNSAFE(@ohsayan): we only switch to this when we've already read in a key
-                            key.take().as_str().into()
-                        },
+                            key.take().as_str()
+                        }),
                         DictEntryGeneric::Data(Datacell::null()),
                     )
                     .is_none(),
@@ -192,10 +193,10 @@ where
                 _rfold_dict::<Qd, NoBreakpoint>(DictFoldState::CB_OR_IDENT, state, &mut ndict);
                 state.poison_if_not(
                     dict.insert(
-                        unsafe {
+                        BoxStr::new(unsafe {
                             // UNSAFE(@ohsayan): correct again because whenever we hit an expression position, we've already read in a key (ident)
-                            key.take().as_str().into()
-                        },
+                            key.take().as_str()
+                        }),
                         DictEntryGeneric::Map(ndict),
                     )
                     .is_none(),

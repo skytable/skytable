@@ -29,7 +29,7 @@ mod list_parse {
     use super::*;
     use crate::engine::ql::{ast::parse_ast_node_full, dml::ins::List};
 
-    #[test]
+    #[sky_macros::test]
     fn list_mini() {
         let tok = lex_insecure(
             b"
@@ -40,7 +40,7 @@ mod list_parse {
         let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(r, vec![])
     }
-    #[test]
+    #[sky_macros::test]
     fn list() {
         let tok = lex_insecure(
             b"
@@ -51,7 +51,7 @@ mod list_parse {
         let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
     }
-    #[test]
+    #[sky_macros::test]
     fn list_pro() {
         let tok = lex_insecure(
             b"
@@ -75,7 +75,7 @@ mod list_parse {
             ]
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn list_pro_max() {
         let tok = lex_insecure(
             b"
@@ -105,14 +105,14 @@ mod tuple_syntax {
     use super::*;
     use crate::engine::ql::{ast::parse_ast_node_full, dml::ins::DataTuple};
 
-    #[test]
+    #[sky_macros::test]
     fn tuple_mini() {
         let tok = lex_insecure(b"()").unwrap();
         let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap();
         assert_eq!(r, vec![]);
     }
 
-    #[test]
+    #[sky_macros::test]
     fn tuple() {
         let tok = lex_insecure(
             br#"
@@ -127,7 +127,7 @@ mod tuple_syntax {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn tuple_pro() {
         let tok = lex_insecure(
             br#"
@@ -152,7 +152,7 @@ mod tuple_syntax {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn tuple_pro_max() {
         let tok = lex_insecure(
             br#"
@@ -195,14 +195,14 @@ mod map_syntax {
     use super::*;
     use crate::engine::ql::{ast::parse_ast_node_full, dml::ins::DataMap};
 
-    #[test]
+    #[sky_macros::test]
     fn map_mini() {
         let tok = lex_insecure(b"{}").unwrap();
         let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap();
         assert_eq!(r, null_dict! {})
     }
 
-    #[test]
+    #[sky_macros::test]
     fn map() {
         let tok = lex_insecure(
             br#"
@@ -227,7 +227,7 @@ mod map_syntax {
         )
     }
 
-    #[test]
+    #[sky_macros::test]
     fn map_pro() {
         let tok = lex_insecure(
             br#"
@@ -254,7 +254,7 @@ mod map_syntax {
         )
     }
 
-    #[test]
+    #[sky_macros::test]
     fn map_pro_max() {
         let tok = lex_insecure(br#"
                 {
@@ -301,7 +301,7 @@ mod stmt_insert {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn insert_tuple_mini() {
         let x = lex_insecure(
             br#"
@@ -316,7 +316,7 @@ mod stmt_insert {
         );
         assert_eq!(e, r);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_tuple() {
         let x = lex_insecure(
             br#"
@@ -340,7 +340,7 @@ mod stmt_insert {
         );
         assert_eq!(e, r);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_tuple_pro() {
         let x = lex_insecure(
             br#"
@@ -377,7 +377,7 @@ mod stmt_insert {
         );
         assert_eq!(e, r);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_map_mini() {
         let tok = lex_insecure(
             br#"
@@ -395,7 +395,7 @@ mod stmt_insert {
         );
         assert_eq!(e, r);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_map() {
         let tok = lex_insecure(
             br#"
@@ -425,7 +425,7 @@ mod stmt_insert {
         );
         assert_eq!(e, r);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_map_pro() {
         let tok = lex_insecure(
             br#"
@@ -461,7 +461,7 @@ mod stmt_insert {
         );
         assert_eq!(r, e);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_tuple_fnsub() {
         let tok =
             lex_insecure(br#"insert into jotsy.app(@uuidstr(), "sayan", @timesec())"#).unwrap();
@@ -474,7 +474,7 @@ mod stmt_insert {
         );
         assert_eq!(ret, expected);
     }
-    #[test]
+    #[sky_macros::test]
     fn insert_map_fnsub() {
         let tok = lex_insecure(
             br#"insert into jotsy.app { uuid: @uuidstr(), username: "sayan", signup_time: @timesec() }"#
@@ -505,7 +505,7 @@ mod stmt_select {
             },
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn select_mini() {
         let tok = lex_insecure(
             br#"
@@ -526,7 +526,7 @@ mod stmt_select {
         );
         assert_eq!(r, e);
     }
-    #[test]
+    #[sky_macros::test]
     fn select() {
         let tok = lex_insecure(
             br#"
@@ -547,7 +547,7 @@ mod stmt_select {
         );
         assert_eq!(r, e);
     }
-    #[test]
+    #[sky_macros::test]
     fn select_pro() {
         let tok = lex_insecure(
             br#"
@@ -568,7 +568,7 @@ mod stmt_select {
         );
         assert_eq!(r, e);
     }
-    #[test]
+    #[sky_macros::test]
     fn select_pro_max() {
         let tok = lex_insecure(
             br#"
@@ -599,7 +599,7 @@ mod expression_tests {
             ql::{ast::parse_ast_node_full, dml::upd::AssignmentExpression, lex::Ident},
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn expr_assign() {
         let src = lex_insecure(b"username = 'sayan'").unwrap();
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
@@ -612,7 +612,7 @@ mod expression_tests {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_add_assign() {
         let src = lex_insecure(b"followers += 100").unwrap();
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
@@ -625,7 +625,7 @@ mod expression_tests {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_sub_assign() {
         let src = lex_insecure(b"following -= 150").unwrap();
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
@@ -638,7 +638,7 @@ mod expression_tests {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_mul_assign() {
         let src = lex_insecure(b"product_qty *= 2").unwrap();
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
@@ -651,7 +651,7 @@ mod expression_tests {
             )
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_div_assign() {
         let src = lex_insecure(b"image_crop_factor /= 2").unwrap();
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
@@ -681,7 +681,7 @@ mod update_statement {
             },
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn update_mini() {
         let tok = lex_insecure(
             br#"
@@ -707,7 +707,7 @@ mod update_statement {
         );
         assert_eq!(r, e);
     }
-    #[test]
+    #[sky_macros::test]
     fn update() {
         let tok = lex_insecure(
             br#"
@@ -760,7 +760,7 @@ mod delete_stmt {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn delete_mini() {
         let tok = lex_insecure(
             br#"
@@ -783,7 +783,7 @@ mod delete_stmt {
             e
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn delete() {
         let tok = lex_insecure(
             br#"
@@ -816,7 +816,7 @@ mod relational_expr {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn expr_eq() {
         let expr = lex_insecure(b"primary_key = 10").unwrap();
         let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
@@ -829,7 +829,7 @@ mod relational_expr {
             }
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_ne() {
         let expr = lex_insecure(b"primary_key != 10").unwrap();
         let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
@@ -842,7 +842,7 @@ mod relational_expr {
             }
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_gt() {
         let expr = lex_insecure(b"primary_key > 10").unwrap();
         let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
@@ -855,7 +855,7 @@ mod relational_expr {
             }
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_ge() {
         let expr = lex_insecure(b"primary_key >= 10").unwrap();
         let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
@@ -868,7 +868,7 @@ mod relational_expr {
             }
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_lt() {
         let expr = lex_insecure(b"primary_key < 10").unwrap();
         let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
@@ -881,7 +881,7 @@ mod relational_expr {
             }
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn expr_le() {
         let expr = lex_insecure(b"primary_key <= 10").unwrap();
         let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
@@ -907,7 +907,7 @@ mod where_clause {
             },
         },
     };
-    #[test]
+    #[sky_macros::test]
     fn where_single() {
         let tok = lex_insecure(
             br#"
@@ -924,7 +924,7 @@ mod where_clause {
         });
         assert_eq!(expected, parse_ast_node_full::<WhereClause>(&tok).unwrap());
     }
-    #[test]
+    #[sky_macros::test]
     fn where_double() {
         let tok = lex_insecure(
             br#"
@@ -946,7 +946,7 @@ mod where_clause {
         });
         assert_eq!(expected, parse_ast_node_full::<WhereClause>(&tok).unwrap());
     }
-    #[test]
+    #[sky_macros::test]
     fn where_duplicate_condition() {
         let tok = lex_insecure(
             br#"
@@ -967,7 +967,7 @@ mod select_all {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn select_all_wildcard() {
         let tok = lex_insecure(b"select all * from mymodel limit 100").unwrap();
         assert_eq!(
@@ -976,7 +976,7 @@ mod select_all {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn select_all_multiple_fields() {
         let tok = lex_insecure(b"select all username, password from mymodel limit 100").unwrap();
         assert_eq!(
@@ -990,7 +990,7 @@ mod select_all {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn select_all_missing_limit() {
         let tok = lex_insecure(b"select all * from mymodel").unwrap();
         assert_eq!(
@@ -1017,7 +1017,7 @@ mod truncate {
         },
     };
 
-    #[test]
+    #[sky_macros::test]
     fn truncate_model() {
         let tok = lex_insecure(b"truncate model myspace.mymodel").unwrap();
         assert_eq!(
@@ -1046,7 +1046,7 @@ mod insert_dyn_list {
     const LIST_CLOSE: char = PROTO_PARAM_SYM_LIST_CLOSE as char;
     const LIST_OPEN: char = PROTO_PARAM_SYM_LIST_OPEN as char;
 
-    #[test]
+    #[sky_macros::test]
     fn insert_dyn_list() {
         let query = "insert into twitter.users (?, ?)";
         let params = format!(

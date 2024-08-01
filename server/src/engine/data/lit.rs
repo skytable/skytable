@@ -359,7 +359,7 @@ impl<'a> ToString for Lit<'a> {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn stk_variants() {
     let stk1 = [
         Lit::new_bool(true),
@@ -373,7 +373,7 @@ fn stk_variants() {
     assert_eq!(stk1, stk2);
 }
 
-#[test]
+#[sky_macros::test]
 fn hp_variants() {
     let hp1 = [
         Lit::new_string("hello".into()),
@@ -383,14 +383,14 @@ fn hp_variants() {
     assert_eq!(hp1, hp2);
 }
 
-#[test]
+#[sky_macros::test]
 fn lt_link() {
     let l = Lit::new_string("hello".into());
     let l_ir = l.as_ir();
     assert_eq!(l, l_ir);
 }
 
-#[test]
+#[sky_macros::test]
 fn token_array_lt_test() {
     let tokens = vec![Lit::new_string("hello".to_string()), Lit::new_str("hi")];
     #[derive(Debug)]

@@ -34,7 +34,7 @@ fn s(b: &[u8]) -> BufferedScanner {
     lf separated
 */
 
-#[test]
+#[sky_macros::test]
 fn read_u64_lf_separated() {
     let mut s = s(b"18446744073709551615\n");
     assert_eq!(
@@ -45,7 +45,7 @@ fn read_u64_lf_separated() {
     assert_eq!(s.cursor(), s.buffer_len());
 }
 
-#[test]
+#[sky_macros::test]
 fn read_u64_lf_separated_missing() {
     let mut s = s(b"18446744073709551615");
     assert!(s
@@ -54,7 +54,7 @@ fn read_u64_lf_separated_missing() {
     assert_eq!(s.cursor(), 0);
 }
 
-#[test]
+#[sky_macros::test]
 fn read_u64_lf_separated_invalid() {
     let mut scn = s(b"1844674407370955161A\n");
     assert!(scn
@@ -68,7 +68,7 @@ fn read_u64_lf_separated_invalid() {
     assert_eq!(scn.cursor(), 0);
 }
 
-#[test]
+#[sky_macros::test]
 fn read_u64_lf_separated_zero() {
     let mut s = s(b"0\n");
     assert_eq!(
@@ -79,7 +79,7 @@ fn read_u64_lf_separated_zero() {
     assert_eq!(s.cursor(), s.buffer_len());
 }
 
-#[test]
+#[sky_macros::test]
 fn read_u64_lf_overflow() {
     let mut s = s(b"184467440737095516155\n");
     assert!(s
@@ -92,7 +92,7 @@ fn read_u64_lf_overflow() {
     lf separated allow unbuffered
 */
 
-#[test]
+#[sky_macros::test]
 fn incomplete_read_u64_okay() {
     let mut scn = s(b"18446744073709551615\n");
     assert_eq!(
@@ -102,7 +102,7 @@ fn incomplete_read_u64_okay() {
     assert_eq!(scn.cursor(), scn.buffer_len());
 }
 
-#[test]
+#[sky_macros::test]
 fn incomplete_read_u64_missing_lf() {
     let mut scn = s(b"18446744073709551615");
     assert_eq!(
@@ -112,7 +112,7 @@ fn incomplete_read_u64_missing_lf() {
     assert_eq!(scn.cursor(), 0);
 }
 
-#[test]
+#[sky_macros::test]
 fn incomplete_read_u64_lf_error() {
     let mut scn = s(b"1844674407370955161A\n");
     assert_eq!(
@@ -128,7 +128,7 @@ fn incomplete_read_u64_lf_error() {
     assert_eq!(scn.cursor(), 0);
 }
 
-#[test]
+#[sky_macros::test]
 fn incomplete_read_u64_lf_zero() {
     let mut scn = s(b"0\n");
     assert_eq!(
@@ -137,7 +137,7 @@ fn incomplete_read_u64_lf_zero() {
     )
 }
 
-#[test]
+#[sky_macros::test]
 fn incomplete_read_u64_lf_overflow() {
     let mut s = s(b"184467440737095516155\n");
     assert_eq!(
@@ -159,7 +159,7 @@ fn concat(a: impl ToString, b: impl ToString) -> Vec<u8> {
     s.into_bytes()
 }
 
-#[test]
+#[sky_macros::test]
 fn read_i64_lf_separated_okay() {
     let buf = concat(i64::MAX, "\n");
     let mut scn = s(&buf);
@@ -177,7 +177,7 @@ fn read_i64_lf_separated_okay() {
     assert_eq!(scn.cursor(), scn.buffer_len());
 }
 
-#[test]
+#[sky_macros::test]
 fn read_i64_lf_separated_missing() {
     let buf = concat(i64::MAX, "");
     let mut scn = s(&buf);
@@ -195,7 +195,7 @@ fn read_i64_lf_separated_missing() {
     assert_eq!(scn.cursor(), scn.buffer_len());
 }
 
-#[test]
+#[sky_macros::test]
 fn read_i64_lf_separated_invalid() {
     let buf = concat(i64::MAX, "A\n");
     let mut scn = s(&buf);
@@ -210,7 +210,7 @@ fn read_i64_lf_separated_invalid() {
     assert_eq!(scn.cursor(), 0);
 }
 
-#[test]
+#[sky_macros::test]
 fn read_i64_lf_overflow() {
     let buf = concat(u64::MAX, "\n");
     let mut scn = s(&buf);
@@ -221,7 +221,7 @@ fn read_i64_lf_overflow() {
     assert_eq!(scn.cursor(), scn.buffer_len() - 1);
 }
 
-#[test]
+#[sky_macros::test]
 fn read_i64_lf_underflow() {
     let buf = concat(i64::MIN, "1\n");
     let mut scn = s(&buf);
@@ -232,7 +232,7 @@ fn read_i64_lf_underflow() {
     assert_eq!(scn.cursor(), scn.buffer_len() - 1);
 }
 
-#[test]
+#[sky_macros::test]
 fn rounding() {
     let mut scanner = s(b"123");
     for i in 1..=u8::MAX {

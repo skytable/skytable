@@ -27,6 +27,8 @@
 pub(super) mod alt;
 pub(in crate::engine) mod delta;
 
+use crate::engine::mem::unsafe_apis::BoxStr;
+
 use {
     super::index::PrimaryIndex,
     crate::engine::{
@@ -220,9 +222,9 @@ impl ModelData {
     }
     pub fn new_restore(
         uuid: Uuid,
-        p_key: Box<str>,
+        p_key: BoxStr,
         p_tag: FullTag,
-        decl_fields: IndexSTSeqCns<Box<str>, Field>,
+        decl_fields: IndexSTSeqCns<BoxStr, Field>,
     ) -> Self {
         let mut private = ModelPrivate::empty();
         let p_key = unsafe {
@@ -354,7 +356,7 @@ impl ModelData {
                     },
                 )?;
                 // update global state
-                let _ = space.models_mut().insert(model_name.into());
+                let _ = space.models_mut().insert(BoxStr::new(model_name));
                 let _ = global.state().namespace().idx_models().write().insert(
                     EntityID::new(&space_name, &model_name),
                     Model::new(model, mdl_driver),
@@ -432,7 +434,7 @@ impl ModelData {
 
 #[derive(Debug, PartialEq)]
 struct ModelPrivate {
-    alloc: HashMap<Box<str>, bool, idx::meta::hash::HasherNativeFx>,
+    alloc: HashMap<BoxStr, bool, idx::meta::hash::HasherNativeFx>,
 }
 
 impl ModelPrivate {
@@ -452,7 +454,7 @@ impl ModelPrivate {
             }
             None => {
                 // need to allocate
-                let alloc = new.to_owned().into_boxed_str();
+                let alloc = BoxStr::new(new);
                 let ret = RawStr::new(alloc.as_ptr(), alloc.len());
                 let _ = self.alloc.insert(alloc, false);
                 return ret;
@@ -468,7 +470,7 @@ impl ModelPrivate {
     pub(self) unsafe fn vacuum_marked(&mut self) {
         self.alloc.retain(|_, dead| !*dead)
     }
-    pub(self) unsafe fn push_allocated(&mut self, alloc: Box<str>) -> RawStr {
+    pub(self) unsafe fn push_allocated(&mut self, alloc: BoxStr) -> RawStr {
         match self.alloc.entry(alloc) {
             Entry::Occupied(mut oe) => {
                 oe.insert(false);
@@ -504,7 +506,7 @@ impl<'a> ModelMutator<'a> {
         self.model.delta.unresolved_append_field_rem(ptr);
         r
     }
-    pub fn add_field(&mut self, name: Box<str>, field: Field) -> bool {
+    pub fn add_field(&mut self, name: BoxStr, field: Field) -> bool {
         unsafe {
             // allocate
             let fkeyptr = self.model.private.push_allocated(name);

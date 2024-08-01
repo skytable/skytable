@@ -31,7 +31,7 @@ use crate::engine::{
     fractal::test_utils::TestGlobal,
 };
 
-#[test]
+#[sky_macros::test]
 fn alter_add_prop_env_var() {
     let global = TestGlobal::new_with_driver_id("alter_add_prop_env_var");
     super::exec_create_alter(
@@ -51,7 +51,7 @@ fn alter_add_prop_env_var() {
     .unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn alter_update_prop_env_var() {
     let global = TestGlobal::new_with_driver_id("alter_update_prop_env_var");
     let uuid = super::exec_create(
@@ -81,7 +81,7 @@ fn alter_update_prop_env_var() {
     .unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn alter_remove_prop_env_var() {
     let global = TestGlobal::new_with_driver_id("alter_remove_prop_env_var");
     let uuid = super::exec_create(
@@ -111,7 +111,7 @@ fn alter_remove_prop_env_var() {
     .unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn alter_nx() {
     let global = TestGlobal::new_with_driver_id("alter_nx");
     assert_eq!(
@@ -125,7 +125,7 @@ fn alter_nx() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn alter_remove_all_env() {
     let global = TestGlobal::new_with_driver_id("alter_remove_all_env");
     let uuid = super::exec_create(

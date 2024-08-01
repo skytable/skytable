@@ -642,7 +642,7 @@ mod scan_param {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn try_this_list() {
     use crate::engine::data::cell::Datacell;
     let params = format!(

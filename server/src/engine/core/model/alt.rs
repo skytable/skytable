@@ -36,6 +36,7 @@ use {
             error::{QueryError, QueryResult},
             fractal::GlobalInstanceLike,
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
+            mem::unsafe_apis::BoxStr,
             ql::{
                 ddl::{
                     alt::{AlterKind, AlterModel},
@@ -60,8 +61,8 @@ pub(in crate::engine::core) struct AlterPlan<'a> {
 #[derive(Debug, PartialEq)]
 pub(in crate::engine::core) enum AlterAction<'a> {
     Ignore,
-    Add(IndexSTSeqCns<Box<str>, Field>),
-    Update(IndexST<Box<str>, Field>),
+    Add(IndexSTSeqCns<BoxStr, Field>),
+    Update(IndexST<BoxStr, Field>),
     Remove(Box<[Ident<'a>]>),
 }
 
@@ -80,7 +81,7 @@ fn no_field(mr: &ModelData, new: &str) -> bool {
     !mr.fields().st_contains(new)
 }
 
-fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> QueryResult<bool> {
+fn check_nullable(props: &mut HashMap<BoxStr, DictEntryGeneric>) -> QueryResult<bool> {
     match props.remove("nullable") {
         Some(DictEntryGeneric::Data(b)) if b.kind() == TagClass::Bool => Ok(b.bool()),
         Some(_) => Err(QueryError::QExecDdlInvalidProperties),
@@ -127,7 +128,7 @@ impl<'a> AlterPlan<'a> {
                     okay &= no_field(mdl, &field_name) & mdl.not_pk(&field_name);
                     let is_nullable = check_nullable(&mut props)?;
                     let layers = Field::parse_layers(layers, is_nullable)?;
-                    okay &= add.st_insert(field_name.as_str().into(), layers);
+                    okay &= add.st_insert(BoxStr::new(field_name.as_str()), layers);
                 }
                 can_ignore!(AlterAction::Add(add))
             }
@@ -155,7 +156,7 @@ impl<'a> AlterPlan<'a> {
                     let (anydelta, new_field) =
                         Self::ldeltas(current_field, layers, is_nullable, &mut no_lock, &mut okay)?;
                     any_delta += anydelta as usize;
-                    okay &= new_fields.st_insert(field_name.as_str().into(), new_field);
+                    okay &= new_fields.st_insert(BoxStr::new(field_name.as_str()), new_field);
                 }
                 if any_delta == 0 {
                     AlterAction::Ignore

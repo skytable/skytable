@@ -27,7 +27,7 @@
 mod md_dict_tests;
 use super::lit::Lit;
 
-#[test]
+#[sky_macros::test]
 fn t_largest_int_lit() {
     let x = Lit::new_uint(u64::MAX);
     let y = Lit::new_uint(u64::MAX);

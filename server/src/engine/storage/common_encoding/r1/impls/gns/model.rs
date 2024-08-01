@@ -37,7 +37,7 @@ use {
             error::{RuntimeResult, StorageError, TransactionError},
             fractal::FractalModelDriver,
             idx::{IndexSTSeqCns, STIndex, STIndexSeq},
-            mem::BufferedScanner,
+            mem::{unsafe_apis::BoxStr, BufferedScanner},
             storage::common_encoding::r1::{self, map, obj, PersistObject},
             txn::{
                 gns::model::{
@@ -57,7 +57,7 @@ pub struct ModelID<'a>(PhantomData<&'a ()>);
 #[derive(Debug, PartialEq)]
 pub struct ModelIDRes {
     space_id: super::SpaceIDRes,
-    model_name: Box<str>,
+    model_name: BoxStr,
     model_uuid: Uuid,
     model_version: u64,
 }
@@ -66,7 +66,7 @@ impl ModelIDRes {
     #[cfg(test)]
     pub fn new(
         space_id: super::SpaceIDRes,
-        model_name: Box<str>,
+        model_name: BoxStr,
         model_uuid: Uuid,
         model_version: u64,
     ) -> Self {
@@ -118,8 +118,11 @@ impl<'a> PersistObject for ModelID<'a> {
     ) -> RuntimeResult<Self::OutputType> {
         Ok(ModelIDRes {
             space_id: <super::SpaceID as PersistObject>::obj_dec(s, md.space_id)?,
-            model_name: r1::dec::utils::decode_string(s, md.model_name_l as usize)?
-                .into_boxed_str(),
+            model_name: r1::dec::utils::decode_string_into(
+                s,
+                md.model_name_l as usize,
+                BoxStr::new,
+            )?,
             model_uuid: md.model_uuid,
             model_version: md.model_version,
         })
@@ -184,7 +187,7 @@ fn with_model_mut<T>(
 #[cfg_attr(test, derive(PartialEq))]
 pub struct CreateModelTxnRestorePL {
     pub(super) space_id: super::SpaceIDRes,
-    pub(super) model_name: Box<str>,
+    pub(super) model_name: BoxStr,
     pub(super) model: ModelData,
 }
 
@@ -242,7 +245,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
     ) -> RuntimeResult<Self::OutputType> {
         let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let model_name =
-            r1::dec::utils::decode_string(s, md.model_name_l as usize)?.into_boxed_str();
+            r1::dec::utils::decode_string_into(s, md.model_name_l as usize, BoxStr::new)?;
         let model = <obj::ModelLayoutRef as PersistObject>::obj_dec(s, md.model_meta)?;
         Ok(CreateModelTxnRestorePL {
             space_id,
@@ -304,7 +307,7 @@ pub struct AlterModelAddTxnMD {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct AlterModelAddTxnRestorePL {
     pub(super) model_id: ModelIDRes,
-    pub(super) new_fields: IndexSTSeqCns<Box<str>, Field>,
+    pub(super) new_fields: IndexSTSeqCns<BoxStr, Field>,
 }
 impl<'a> PersistObject for AlterModelAddTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
@@ -340,7 +343,7 @@ impl<'a> PersistObject for AlterModelAddTxn<'a> {
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_meta)?;
-        let new_fields = <map::PersistMapImpl<map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>> as PersistObject>::obj_dec(
+        let new_fields = <map::PersistMapImpl<map::FieldMapSpec<IndexSTSeqCns<BoxStr, _>>> as PersistObject>::obj_dec(
             s,
             map::MapIndexSizeMD(md.new_field_c as usize),
         )?;
@@ -384,7 +387,7 @@ pub struct AlterModelRemoveTxnMD {
 #[derive(Debug, PartialEq)]
 pub struct AlterModelRemoveTxnRestorePL {
     pub(super) model_id: ModelIDRes,
-    pub(super) removed_fields: Box<[Box<str>]>,
+    pub(super) removed_fields: Box<[BoxStr]>,
 }
 
 impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
@@ -429,7 +432,7 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
             if !s.has_left(len) {
                 break;
             }
-            removed_fields.push(r1::dec::utils::decode_string(s, len)?.into_boxed_str());
+            removed_fields.push(r1::dec::utils::decode_box_str(s, len)?);
         }
         if removed_fields.len() as u64 != md.remove_field_c {
             return Err(StorageError::InternalDecodeStructureCorruptedPayload.into());
@@ -474,7 +477,7 @@ pub struct AlterModelUpdateTxnMD {
 #[derive(Debug, PartialEq)]
 pub struct AlterModelUpdateTxnRestorePL {
     pub(super) model_id: ModelIDRes,
-    pub(super) updated_fields: IndexSTSeqCns<Box<str>, Field>,
+    pub(super) updated_fields: IndexSTSeqCns<BoxStr, Field>,
 }
 
 impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
@@ -511,7 +514,7 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
     ) -> RuntimeResult<Self::OutputType> {
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_md)?;
         let updated_fields =
-            <map::PersistMapImpl<map::FieldMapSpec<IndexSTSeqCns<Box<str>, _>>> as PersistObject>::obj_dec(
+            <map::PersistMapImpl<map::FieldMapSpec<IndexSTSeqCns<BoxStr, _>>> as PersistObject>::obj_dec(
                 s,
                 map::MapIndexSizeMD(md.updated_field_c as usize),
             )?;

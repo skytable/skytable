@@ -34,7 +34,7 @@ use {
         engine::{
             core::GNSData,
             error::{StorageError, TransactionError},
-            mem::BufferedScanner,
+            mem::{unsafe_apis::BoxStr, BufferedScanner},
             txn::gns::sysctl::{AlterUserTxn, CreateUserTxn, DropUserTxn},
             RuntimeResult,
         },
@@ -62,12 +62,12 @@ impl<'a> GNSEvent for CreateUserTxn<'a> {
 }
 
 pub struct FullUserDefinition {
-    username: Box<str>,
+    username: BoxStr,
     password: Box<[u8]>,
 }
 
 impl FullUserDefinition {
-    fn new(username: Box<str>, password: Box<[u8]>) -> Self {
+    fn new(username: BoxStr, password: Box<[u8]>) -> Self {
         Self { username, password }
     }
 }
@@ -116,11 +116,11 @@ impl<'a> PersistObject for CreateUserTxn<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let username = dec::utils::decode_string(s, md.uname_l as _)?;
+        let username = dec::utils::decode_box_str(s, md.uname_l as _)?;
         let password = s.next_chunk_variable(md.pwd_l as _);
         if md.props_l == 0 {
             Ok(FullUserDefinition::new(
-                username.into_boxed_str(),
+                username,
                 password.to_vec().into_boxed_slice(),
             ))
         } else {
@@ -176,11 +176,11 @@ impl<'a> PersistObject for AlterUserTxn<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let username = dec::utils::decode_string(s, md.uname_l as _)?;
+        let username = dec::utils::decode_box_str(s, md.uname_l as _)?;
         let password = s.next_chunk_variable(md.pwd_l as _);
         if md.props_l == 0 {
             Ok(FullUserDefinition::new(
-                username.into_boxed_str(),
+                username,
                 password.to_vec().into_boxed_slice(),
             ))
         } else {
@@ -193,7 +193,7 @@ impl<'a> PersistObject for AlterUserTxn<'a> {
     drop user txn
 */
 
-pub struct DropUserPayload(Box<str>);
+pub struct DropUserPayload(BoxStr);
 
 impl<'a> GNSEvent for DropUserTxn<'a> {
     type CommitType = Self;
@@ -231,7 +231,7 @@ impl<'a> PersistObject for DropUserTxn<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let username = dec::utils::decode_string(s, md as usize)?;
-        Ok(DropUserPayload(username.into_boxed_str()))
+        let username = dec::utils::decode_box_str(s, md as usize)?;
+        Ok(DropUserPayload(username))
     }
 }

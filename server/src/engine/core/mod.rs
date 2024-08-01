@@ -54,6 +54,7 @@ use {
             error::{QueryError, QueryResult},
             fractal::{FractalGNSDriver, GlobalInstanceLike},
             idx::IndexST,
+            mem::unsafe_apis::BoxStr,
         },
         util::compiler,
     },
@@ -90,7 +91,7 @@ impl GlobalNS {
 #[derive(Debug)]
 pub struct GNSData {
     idx_mdl: RWLIdx<EntityID, Model>,
-    idx: RWLIdx<Box<str>, Space>,
+    idx: RWLIdx<BoxStr, Space>,
     sys_db: system_db::SystemDatabase,
 }
 
@@ -104,16 +105,13 @@ impl GNSData {
     }
     pub fn ddl_with_all_mut<T>(
         &self,
-        f: impl FnOnce(&mut HashMap<Box<str>, Space>, &mut HashMap<EntityID, Model>) -> T,
+        f: impl FnOnce(&mut HashMap<BoxStr, Space>, &mut HashMap<EntityID, Model>) -> T,
     ) -> T {
         let mut spaces = self.idx.write();
         let mut models = self.idx_mdl.write();
         f(&mut spaces, &mut models)
     }
-    pub fn ddl_with_spaces_write<T>(
-        &self,
-        f: impl FnOnce(&mut HashMap<Box<str>, Space>) -> T,
-    ) -> T {
+    pub fn ddl_with_spaces_write<T>(&self, f: impl FnOnce(&mut HashMap<BoxStr, Space>) -> T) -> T {
         let mut spaces = self.idx.write();
         f(&mut spaces)
     }
@@ -163,7 +161,7 @@ impl GNSData {
     pub fn idx_models(&self) -> &RWLIdx<EntityID, Model> {
         &self.idx_mdl
     }
-    pub fn idx(&self) -> &RWLIdx<Box<str>, Space> {
+    pub fn idx(&self) -> &RWLIdx<BoxStr, Space> {
         &self.idx
     }
     #[cfg(test)]

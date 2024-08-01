@@ -28,12 +28,13 @@ use {
     crate::engine::{
         data::{cell::Datacell, lit::Lit},
         idx::STIndex,
+        mem::unsafe_apis::BoxStr,
     },
     std::collections::HashMap,
 };
 
 /// A generic dictionary built from scratch from syntactical elements
-pub type DictGeneric = HashMap<Box<str>, DictEntryGeneric>;
+pub type DictGeneric = HashMap<BoxStr, DictEntryGeneric>;
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(test, derive(Clone))]

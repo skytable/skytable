@@ -590,7 +590,7 @@ impl KeywordStmt {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn blocking_capybara() {
     assert!(KeywordStmt::Truncate.is_blocking());
     assert!(!KeywordStmt::Insert.is_blocking());

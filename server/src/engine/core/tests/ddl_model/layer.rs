@@ -45,12 +45,12 @@ mod layer_spec_validation {
         crate::engine::{core::model::Layer, error::QueryError},
     };
 
-    #[test]
+    #[sky_macros::test]
     fn string() {
         assert_eq!(layerview("string").unwrap().layers(), [Layer::str()]);
     }
 
-    #[test]
+    #[sky_macros::test]
     fn nested_list() {
         assert_eq!(
             layerview("list { type: list { type: string } }")
@@ -60,7 +60,7 @@ mod layer_spec_validation {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn invalid_list() {
         assert_eq!(
             layerview("list").unwrap_err(),
@@ -68,7 +68,7 @@ mod layer_spec_validation {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn invalid_flat() {
         assert_eq!(
             layerview("string { type: string }").unwrap_err(),
@@ -82,14 +82,14 @@ mod layer_data_validation {
         super::{layerview, layerview_nullable},
         crate::engine::{core::model, data::cell::Datacell},
     };
-    #[test]
+    #[sky_macros::test]
     fn bool() {
         let mut dc = Datacell::new_bool(true);
         let layer = layerview("bool").unwrap();
         assert!(layer.vt_data_fpath(&mut dc));
         assert_vecstreq_exact!(model::layer_traces(), ["fpath", "bool"]);
     }
-    #[test]
+    #[sky_macros::test]
     fn uint() {
         let targets = [
             ("uint8", u8::MAX as u64),
@@ -117,7 +117,7 @@ mod layer_data_validation {
                 }
             });
     }
-    #[test]
+    #[sky_macros::test]
     fn sint() {
         let targets = [
             ("sint8", (i8::MIN as i64, i8::MAX as i64)),
@@ -155,7 +155,7 @@ mod layer_data_validation {
                 }
             });
     }
-    #[test]
+    #[sky_macros::test]
     fn float() {
         // l
         let f32_l = layerview("float32").unwrap();
@@ -180,19 +180,19 @@ mod layer_data_validation {
         assert!(f64_l.vt_data_fpath(&mut f64_dc_max.clone()));
         assert_vecstreq_exact!(model::layer_traces(), ["fpath", "float", "fpath", "float"]);
     }
-    #[test]
+    #[sky_macros::test]
     fn bin() {
         let layer = layerview("binary").unwrap();
         assert!(layer.vt_data_fpath(&mut Datacell::from("hello".as_bytes())));
         assert_vecstreq_exact!(model::layer_traces(), ["fpath", "binary"]);
     }
-    #[test]
+    #[sky_macros::test]
     fn str() {
         let layer = layerview("string").unwrap();
         assert!(layer.vt_data_fpath(&mut Datacell::from("hello")));
         assert_vecstreq_exact!(model::layer_traces(), ["fpath", "string"]);
     }
-    #[test]
+    #[sky_macros::test]
     fn list_simple() {
         let layer = layerview("list { type: string }").unwrap();
         let mut dc = Datacell::new_list(vec![
@@ -206,7 +206,7 @@ mod layer_data_validation {
             ["list", "string", "string", "string"]
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn list_nested_l1() {
         let layer = layerview("list { type: list { type: string } }").unwrap();
         let mut dc = Datacell::new_list(vec![
@@ -225,13 +225,13 @@ mod layer_data_validation {
             ]
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn nullval_fpath() {
         let layer = layerview_nullable("string", true).unwrap();
         assert!(layer.vt_data_fpath(&mut Datacell::null()));
         assert_vecstreq_exact!(model::layer_traces(), ["fpath", "bool"]);
     }
-    #[test]
+    #[sky_macros::test]
     fn nullval_nested_but_fpath() {
         let layer = layerview_nullable("list { type: string }", true).unwrap();
         assert!(layer.vt_data_fpath(&mut Datacell::null()));

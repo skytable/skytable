@@ -29,7 +29,7 @@ use crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils
 #[derive(sky_macros::Wrapper, Debug)]
 struct Tuple(Vec<(Box<str>, Datacell)>);
 
-#[test]
+#[sky_macros::test]
 fn insert_simple() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_insert_simple");
     super::exec_insert(
@@ -44,7 +44,7 @@ fn insert_simple() {
     .unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn insert_with_null() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_insert_with_null");
     super::exec_insert(
@@ -67,7 +67,7 @@ fn insert_with_null() {
     ).unwrap();
 }
 
-#[test]
+#[sky_macros::test]
 fn insert_duplicate() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_insert_duplicate");
     super::exec_insert(

@@ -84,7 +84,7 @@ mod plan {
     /*
         Simple
     */
-    #[test]
+    #[sky_macros::test]
     fn simple_add() {
         super::plan(
             "create model myspace.mymodel(username: string, password: binary)",
@@ -101,7 +101,7 @@ mod plan {
             },
         )
     }
-    #[test]
+    #[sky_macros::test]
     fn simple_remove() {
         super::plan(
             "create model myspace.mymodel(username: string, password: binary, useless_field: uint8)",
@@ -116,7 +116,7 @@ mod plan {
             },
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn simple_update() {
         // FREEDOM! DAMN THE PASSWORD!
         super::plan(
@@ -134,7 +134,7 @@ mod plan {
             },
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn update_need_lock() {
         // FIGHT THE NULL
         super::plan(
@@ -155,7 +155,7 @@ mod plan {
     /*
         Illegal
     */
-    #[test]
+    #[sky_macros::test]
     fn illegal_remove_nx() {
         assert_eq!(
             super::with_plan(
@@ -167,7 +167,7 @@ mod plan {
             QueryError::QExecUnknownField
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_remove_pk() {
         assert_eq!(
             super::with_plan(
@@ -179,7 +179,7 @@ mod plan {
             QueryError::QExecDdlModelAlterIllegal
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_add_pk() {
         assert_eq!(
             super::with_plan(
@@ -191,7 +191,7 @@ mod plan {
             QueryError::QExecDdlModelAlterIllegal
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_add_ex() {
         assert_eq!(
             super::with_plan(
@@ -203,7 +203,7 @@ mod plan {
             QueryError::QExecDdlModelAlterIllegal
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_update_pk() {
         assert_eq!(
             super::with_plan(
@@ -215,7 +215,7 @@ mod plan {
             QueryError::QExecDdlModelAlterIllegal
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_update_nx() {
         assert_eq!(
             super::with_plan(
@@ -251,7 +251,7 @@ mod plan {
             }
         }
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_bool_direct_cast() {
         enumerated_bad_type_casts(
             ["bool"],
@@ -264,7 +264,7 @@ mod plan {
             ],
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_uint_direct_cast() {
         enumerated_bad_type_casts(
             model::TY_UINT,
@@ -278,7 +278,7 @@ mod plan {
             ],
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_sint_direct_cast() {
         enumerated_bad_type_casts(
             model::TY_SINT,
@@ -292,7 +292,7 @@ mod plan {
             ],
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_float_direct_cast() {
         enumerated_bad_type_casts(
             model::TY_FLOAT,
@@ -306,7 +306,7 @@ mod plan {
             ],
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_binary_direct_cast() {
         enumerated_bad_type_casts(
             [model::TY_BINARY],
@@ -320,7 +320,7 @@ mod plan {
             ],
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_string_direct_cast() {
         enumerated_bad_type_casts(
             [model::TY_STRING],
@@ -334,7 +334,7 @@ mod plan {
             ],
         );
     }
-    #[test]
+    #[sky_macros::test]
     fn illegal_list_direct_cast() {
         enumerated_bad_type_casts(
             ["list { type: string }"],
@@ -357,7 +357,7 @@ mod exec {
         fractal::test_utils::TestGlobal,
         idx::{STIndex, STIndexSeq},
     };
-    #[test]
+    #[sky_macros::test]
     fn simple_add() {
         let global = TestGlobal::new_with_driver_id("simple_add");
         super::exec_plan(
@@ -387,7 +387,7 @@ mod exec {
         )
         .unwrap();
     }
-    #[test]
+    #[sky_macros::test]
     fn simple_remove() {
         let global = TestGlobal::new_with_driver_id("simple_remove");
         super::exec_plan(
@@ -412,7 +412,7 @@ mod exec {
             }
         ).unwrap();
     }
-    #[test]
+    #[sky_macros::test]
     fn simple_update() {
         let global = TestGlobal::new_with_driver_id("simple_update");
         super::exec_plan(
@@ -430,7 +430,7 @@ mod exec {
         )
         .unwrap();
     }
-    #[test]
+    #[sky_macros::test]
     fn failing_alter_nullable_switch_need_lock() {
         let global = TestGlobal::new_with_driver_id("failing_alter_nullable_switch_need_lock");
         assert_eq!(

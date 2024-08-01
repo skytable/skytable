@@ -32,7 +32,7 @@ use {
             data::DictGeneric,
             error::{RuntimeResult, TransactionError},
             idx::STIndex,
-            mem::BufferedScanner,
+            mem::{unsafe_apis::BoxStr, BufferedScanner},
             storage::common_encoding::r1::{dec, map, obj, PersistObject},
             txn::gns::space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
         },
@@ -47,7 +47,7 @@ use {
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct CreateSpaceTxnRestorePL {
-    pub(super) space_name: Box<str>,
+    pub(super) space_name: BoxStr,
     pub(super) space: Space,
 }
 
@@ -91,7 +91,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let space_name = dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
+        let space_name = dec::utils::decode_box_str(s, md.space_name_l as usize)?;
         let space = <obj::SpaceLayoutRef as PersistObject>::obj_dec(s, md.space_meta)?;
         Ok(CreateSpaceTxnRestorePL { space_name, space })
     }

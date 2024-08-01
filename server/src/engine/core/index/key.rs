@@ -267,7 +267,7 @@ impl fmt::Debug for PrimaryIndexKey {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn gh_issue_test_325_same_type_collapse() {
     assert_ne!(
         PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(1)).unwrap(),
@@ -283,7 +283,7 @@ fn gh_issue_test_325_same_type_collapse() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn check_pk_wrong_type() {
     let data = [
         Datacell::from(false),
@@ -305,7 +305,7 @@ fn check_pk_wrong_type() {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn check_pk_eq_hash() {
     let state = test_utils::randomstate();
     let data = [
@@ -326,7 +326,7 @@ fn check_pk_eq_hash() {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn check_pk_lit_eq_hash() {
     let state = test_utils::randomstate();
     let data = [
@@ -345,7 +345,7 @@ fn check_pk_lit_eq_hash() {
     }
 }
 
-#[test]
+#[sky_macros::test]
 fn check_pk_extremes() {
     let state = test_utils::randomstate();
     let d1 = PrimaryIndexKey::try_from_dc(Datacell::new_uint_default(u64::MAX)).unwrap();
@@ -362,7 +362,7 @@ fn check_pk_extremes() {
     assert_eq!(d1.uint().unwrap(), u64::MAX);
 }
 
-#[test]
+#[sky_macros::test]
 fn empty_slice() {
     // bin
     let pk1 = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_bin(b""))).unwrap();
@@ -378,7 +378,7 @@ fn empty_slice() {
     drop((pk2, pk2_));
 }
 
-#[test]
+#[sky_macros::test]
 fn ensure_ptr_offsets() {
     let data = String::from("hello").into_boxed_str();
     let __orig = (data.as_ptr(), data.len());
@@ -393,7 +393,7 @@ fn ensure_ptr_offsets() {
     );
 }
 
-#[test]
+#[sky_macros::test]
 fn queue_ensure_offsets() {
     use crate::engine::sync::queue::Queue;
     let data: Vec<_> = (0..100)

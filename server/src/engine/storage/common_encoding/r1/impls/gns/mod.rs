@@ -30,7 +30,7 @@ use {
             core::GNSData,
             data::uuid::Uuid,
             error::{RuntimeResult, StorageError},
-            mem::BufferedScanner,
+            mem::{unsafe_apis::BoxStr, BufferedScanner},
             storage::common_encoding::r1::{self, PersistObject},
             txn::{gns::GNSTransaction, SpaceIDRef},
         },
@@ -94,12 +94,12 @@ where
 #[derive(Debug, PartialEq)]
 pub struct SpaceIDRes {
     uuid: Uuid,
-    name: Box<str>,
+    name: BoxStr,
 }
 
 impl SpaceIDRes {
     #[cfg(test)]
-    pub fn new(uuid: Uuid, name: Box<str>) -> Self {
+    pub fn new(uuid: Uuid, name: BoxStr) -> Self {
         Self { uuid, name }
     }
 }
@@ -134,10 +134,10 @@ impl<'a> PersistObject for SpaceID<'a> {
         s: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> RuntimeResult<Self::OutputType> {
-        let str = r1::dec::utils::decode_string(s, md.space_name_l as usize)?;
+        let name = r1::dec::utils::decode_string_into(s, md.space_name_l as usize, BoxStr::new)?;
         Ok(SpaceIDRes {
             uuid: md.uuid,
-            name: str.into_boxed_str(),
+            name,
         })
     }
 }

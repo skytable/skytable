@@ -30,6 +30,7 @@ use {
         core::system_db::SystemDatabase,
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
         error::{RuntimeResult, StorageError},
+        mem::unsafe_apis::BoxStr,
         storage::{common_encoding::r1, v1::raw::rw::SDSSFileIO},
     },
     std::collections::HashMap,
@@ -47,7 +48,7 @@ fn rkey<T>(
 }
 
 pub struct RestoredSystemDatabase {
-    pub users: HashMap<Box<str>, Box<[u8]>>,
+    pub users: HashMap<BoxStr, Box<[u8]>>,
     pub _startup_counter: u64,
     pub _settings_version: u64,
 }
@@ -59,7 +60,7 @@ impl RestoredSystemDatabase {
     const SYS_KEY_SYS_STARTUP_COUNTER: &'static str = "sc";
     const SYS_KEY_SYS_SETTINGS_VERSION: &'static str = "sv";
     pub fn new(
-        users: HashMap<Box<str>, Box<[u8]>>,
+        users: HashMap<BoxStr, Box<[u8]>>,
         startup_counter: u64,
         settings_version: u64,
     ) -> Self {

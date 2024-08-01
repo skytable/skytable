@@ -270,11 +270,22 @@ pub mod dec {
     pub mod utils {
         use crate::engine::{
             error::{RuntimeResult, StorageError},
-            mem::BufferedScanner,
+            mem::{unsafe_apis::BoxStr, BufferedScanner},
         };
         pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> RuntimeResult<String> {
-            String::from_utf8(s.next_chunk_variable(len).to_owned())
-                .map_err(|_| StorageError::InternalDecodeStructureCorruptedPayload.into())
+            self::decode_string_into(s, len, |s| String::from(s))
+        }
+        pub unsafe fn decode_box_str(s: &mut BufferedScanner, len: usize) -> RuntimeResult<BoxStr> {
+            self::decode_string_into(s, len, |s| BoxStr::new(s))
+        }
+        pub unsafe fn decode_string_into<T>(
+            s: &mut BufferedScanner,
+            l: usize,
+            f: impl Fn(&str) -> T,
+        ) -> RuntimeResult<T> {
+            let r = core::str::from_utf8(s.next_chunk_variable(l))
+                .map_err(|_| StorageError::InternalDecodeStructureCorruptedPayload)?;
+            Ok(f(r))
         }
     }
 }

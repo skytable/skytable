@@ -50,7 +50,7 @@ fn fold_dict(raw: &[u8]) -> Option<DictGeneric> {
 mod dict {
     use super::*;
 
-    #[test]
+    #[sky_macros::test]
     fn dict_read_mini() {
         let (d1, d2) = fold_dict! {
             br#"{name: "sayan"}"#,
@@ -59,7 +59,7 @@ mod dict {
         let r = null_dict!("name" => Lit::new_string("sayan".into()));
         multi_assert_eq!(d1, d2 => r);
     }
-    #[test]
+    #[sky_macros::test]
     fn dict_read() {
         let (d1, d2) = fold_dict! {
             br#"
@@ -84,7 +84,7 @@ mod dict {
         );
         multi_assert_eq!(d1, d2 => r);
     }
-    #[test]
+    #[sky_macros::test]
     fn dict_read_pro() {
         let (d1, d2, d3) = fold_dict! {
             br#"
@@ -129,7 +129,7 @@ mod dict {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     fn dict_read_pro_max() {
         let (d1, d2, d3) = fold_dict! {
             br#"
@@ -187,7 +187,7 @@ mod dict {
         );
     }
 
-    #[test]
+    #[sky_macros::test]
     #[cfg(not(miri))]
     fn fuzz_dict() {
         let tok = b"
@@ -235,7 +235,7 @@ mod null_dict_tests {
     mod dict {
         use super::*;
 
-        #[test]
+        #[sky_macros::test]
         fn null_mini() {
             let d = fold_dict!(br"{ x: null }");
             assert_eq!(
@@ -245,7 +245,7 @@ mod null_dict_tests {
                 }
             );
         }
-        #[test]
+        #[sky_macros::test]
         fn null() {
             let d = fold_dict! {
                 br#"
@@ -263,7 +263,7 @@ mod null_dict_tests {
                 }
             )
         }
-        #[test]
+        #[sky_macros::test]
         fn null_pro() {
             let d = fold_dict! {
                 br#"
@@ -287,7 +287,7 @@ mod null_dict_tests {
                 }
             )
         }
-        #[test]
+        #[sky_macros::test]
         fn null_pro_max() {
             let d = fold_dict! {
                 br#"
