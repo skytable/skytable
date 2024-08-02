@@ -127,8 +127,7 @@ fn space() {
     assert_eq!(space, dec);
 }
 
-#[sky_macros::test]
-#[cfg(not(miri))] // FIXME(@ohsayan): Yet another miri slowdown. Not sure why
+#[sky_macros::non_miri_test] // FIXME(@ohsayan): Yet another miri slowdown. Not sure why
 fn dc_encode_decode() {
     fn enc_dec(dc: &Datacell) {
         let mut encoded = vec![];

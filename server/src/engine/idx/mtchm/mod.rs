@@ -751,7 +751,9 @@ impl<T, C: Config> Drop for RawTree<T, C> {
             // UNSAFE(@ohsayan): sole live owner
             Self::rdrop(&self.root);
         }
-        gc(&cpin())
+        if !cfg!(miri) {
+            gc(&cpin());
+        }
     }
 }
 

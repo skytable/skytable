@@ -187,8 +187,7 @@ mod dict {
         );
     }
 
-    #[sky_macros::test]
-    #[cfg(not(miri))]
+    #[sky_macros::non_miri_test] // FIXME(@ohsayan): massive slowdown with miri..not sure why
     fn fuzz_dict() {
         let tok = b"
             {

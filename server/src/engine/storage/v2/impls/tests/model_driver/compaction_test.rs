@@ -44,7 +44,9 @@ use {
     std::thread,
 };
 
-#[sky_macros::test]
+const DATASET_SIZE: usize = if cfg!(miri) { 10 } else { 1000 };
+
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn compaction_test() {
     FileSystem::set_context(FSContext::Local);
     let mut fs = FileSystem::instance();
@@ -60,7 +62,7 @@ fn compaction_test() {
             "create model compaction_test_model.compaction_test_model(username: string, password: string)",
         )
         .unwrap();
-        for (key, val) in super::create_test_kv_strings(1000) {
+        for (key, val) in super::create_test_kv_strings(DATASET_SIZE) {
             super::run_insert(
                 &global,
                 &format!(
@@ -74,7 +76,7 @@ fn compaction_test() {
             )
             .unwrap()
         }
-        assert_eq!(global.get_net_commited_events(), 2000);
+        assert_eq!(global.get_net_commited_events(), DATASET_SIZE * 2);
         /*
             get the model driver and compact it
         */
@@ -111,14 +113,16 @@ fn compaction_test() {
         /*
             write two more events (net = 1002) (ref (1) and (2))
         */
-        for (k, v) in (1001..=1002).map(|i| super::create_test_kv(i, 1000)) {
+        for (k, v) in
+            (DATASET_SIZE + 1..=DATASET_SIZE + 2).map(|i| super::create_test_kv(i, DATASET_SIZE))
+        {
             super::run_insert(
                 &global,
                 &format!("insert into compaction_test_model.compaction_test_model('{k}', '{v}')"),
             )
             .unwrap();
         }
-        assert_eq!(global.get_net_commited_events(), 2002);
+        assert_eq!(global.get_net_commited_events(), (DATASET_SIZE * 2) + 2);
         drop(global);
     }
     /*
@@ -134,7 +138,7 @@ fn compaction_test() {
                 last_batch_runs,
                 vec![
                     BatchInfo {
-                        items_count: 1000,
+                        items_count: DATASET_SIZE,
                         redundant_count: 0
                     }, // we consolidated this one
                     BatchInfo {
@@ -159,12 +163,12 @@ fn compaction_test() {
             "compaction_test_model",
         ))
         .unwrap();
-    assert_eq!(mdl.data().primary_index().count(), 1002);
+    assert_eq!(mdl.data().primary_index().count(), DATASET_SIZE + 2);
     let pin = pin();
     /*
         verify the pre compaction rows
     */
-    for (key, _) in super::create_test_kv_strings(1000) {
+    for (key, _) in super::create_test_kv_strings(DATASET_SIZE) {
         let row = mdl
             .data()
             .primary_index()
@@ -187,8 +191,8 @@ fn compaction_test() {
     /*
         verify the post compaction rows
     */
-    let kv_1001 = super::create_test_kv(1001, 1000);
-    let kv_1002 = super::create_test_kv(1002, 1000);
+    let kv_1001 = super::create_test_kv(DATASET_SIZE + 1, DATASET_SIZE);
+    let kv_1002 = super::create_test_kv(DATASET_SIZE + 2, DATASET_SIZE);
     let row_1001 = mdl
         .data()
         .primary_index()

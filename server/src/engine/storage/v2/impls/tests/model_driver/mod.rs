@@ -52,7 +52,7 @@ mod skew;
     utils
 */
 
-const TEST_DATASET_SIZE: usize = 1000;
+const TEST_DATASET_SIZE: usize = if cfg!(miri) { 10 } else { 1000 };
 const TEST_UPDATE_DATASET_SIZE: usize = 8200; // this peculiar size to force the buffer to flush
 
 fn create_test_kv_strings(count: usize) -> Vec<(String, String)> {
@@ -99,7 +99,7 @@ fn run_update(global: &TestGlobal, update: &str) -> QueryResult<()> {
     dml::update(global, insert)
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn truncate() {
     FileSystem::set_context(FSContext::Local);
     const LOG_NAME: &str = "truncate_log.db";
@@ -157,7 +157,7 @@ fn truncate() {
             .unwrap();
         }
     }
-    util::test_utils::multi_run(100, || {
+    util::test_utils::multi_run(if cfg!(miri) { 2 } else { 100 }, || {
         let global = TestGlobal::new_with_driver_id(LOG_NAME);
         assert_eq!(
             global

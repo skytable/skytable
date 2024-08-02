@@ -57,6 +57,10 @@ mod dbtest;
 mod util;
 
 #[proc_macro_attribute]
+/// A `dbtest` is a test harness that provides an easy way to connect to a Skytable instance during a test with appropriate connection and graceful
+/// disconnection.
+///
+/// **This test only runs in _non-miri_ configurations**
 pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
     dbtest::dbtest(attrs, item)
 }
@@ -228,12 +232,20 @@ fn process_enum_tags(
 }
 
 #[proc_macro_attribute]
+/// Run this test when either:
+/// - Non-leaky-permissive miri harness is enabled
+/// - Only test mode is enabled
 pub fn miri_leaky_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attrs as AttributeArgs);
     assert!(attr_args.is_empty(), "no args allowed here");
     let input_fn = parse_macro_input!(item as ItemFn);
     quote! {
-        #[cfg(feature = "miri-leaks")]
+        #[cfg(
+            any(
+                all(feature = "miri-leaks", miri),
+                all(not(miri), not(feature = "miri-leaks")),
+            )
+        )]
         #[::core::prelude::v1::test]
         #input_fn
     }
@@ -241,12 +253,29 @@ pub fn miri_leaky_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+/// Run this test only when either:
+/// - Miri and strict leak policy harness is enabled
+/// - Only test mode is enabled
 pub fn test(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let attr_args = parse_macro_input!(attrs as AttributeArgs);
     assert!(attr_args.is_empty(), "no args allowed here");
     let input_fn = parse_macro_input!(item as ItemFn);
     quote! {
         #[cfg(not(feature = "miri-leaks"))]
+        #[::core::prelude::v1::test]
+        #input_fn
+    }
+    .into()
+}
+
+#[proc_macro_attribute]
+/// Run this test in non-miri configs only
+pub fn non_miri_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(attrs as AttributeArgs);
+    assert!(attr_args.is_empty(), "no args allowed here");
+    let input_fn = parse_macro_input!(item as ItemFn);
+    quote! {
+        #[cfg(not(miri))]
         #[::core::prelude::v1::test]
         #input_fn
     }

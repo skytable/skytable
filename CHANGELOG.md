@@ -16,6 +16,9 @@ All changes in this project will be noted in this file.
 
 - Server:
   - Improved diagnostic messages (and output formatting)
+  - Fixed memory leaks across multiple routines (oarticularly startup routines)
+  - Fixed potential segfaults (note: these are *potential segfaults* as we were not able to actually reproduce it anywhere despite heavy permutation
+  testing, but the fixes were made out of an abundance of caution)
 - CLI:
   - Upgraded client driver to fix loading of large blob/string fetches from the database
 

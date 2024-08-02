@@ -29,11 +29,7 @@ use super::*;
 mod idx_st_seq_dll {
     use super::{IndexBaseSpec, IndexSTSeqLib, STIndex, STIndexSeq};
 
-    #[cfg(not(miri))]
-    const SPAM_CNT: usize = 131_072;
-    #[cfg(miri)]
-    const SPAM_CNT: usize = 128;
-
+    const SPAM_CNT: usize = if cfg!(miri) { 128 } else { 131_072 };
     type Index = IndexSTSeqLib<String, String>;
 
     /// Returns an index with: `i -> "{i+1}"` starting from 0 upto the value of [`SPAM_CNT`]

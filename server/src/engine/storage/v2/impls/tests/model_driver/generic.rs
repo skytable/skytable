@@ -86,7 +86,7 @@ fn run_sample_inserts<K, V>(
                 }
             }
             // reopen and verify 100 times
-            test_utils::multi_run(100, || {
+            test_utils::multi_run(if cfg!(miri) { 2 } else { 100 }, || {
                 let global = TestGlobal::new_with_driver_id(log_name);
                 global
                     .state()
@@ -240,7 +240,7 @@ fn model_data_inserts() {
     )
 }
 
-#[sky_macros::test]
+#[sky_macros::non_miri_test] // FIXME(@ohsayan): takes forever in miri. no need
 #[cfg(not(all(target_os = "windows", target_pointer_width = "32")))]
 fn model_data_updates() {
     FileSystem::set_context(FSContext::Local);

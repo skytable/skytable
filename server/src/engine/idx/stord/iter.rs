@@ -276,30 +276,33 @@ pub(super) struct OrderedOwnedIteratorRaw<K, V> {
 
 impl<K: AsKey, V: AsValue> OrderedOwnedIteratorRaw<K, V> {
     pub(super) fn new<Mc: Config<K, V>>(mut idx: IndexSTSeqDll<K, V, Mc>) -> Self {
+        let (h, t) = if idx.h.is_null() {
+            (ptr::null_mut(), ptr::null_mut())
+        } else {
+            unsafe {
+                // UNSAFE(@ohsayan): just verified that head is non null
+                let r = ((*idx.h).p, (*idx.h).n);
+                // dealloc sentinel
+                IndexSTSeqDllNode::dealloc_headless(idx.h);
+                r
+            }
+        };
         // clean up if needed
         idx.vacuum_full();
         let mut idx = ManuallyDrop::new(idx);
         // chuck the map
         drop(unsafe { ptr::read((&mut idx.m) as *mut _) });
         // we own everything now
-        unsafe {
-            Self {
-                h: if idx.h.is_null() {
-                    ptr::null_mut()
-                } else {
-                    (*idx.h).p
-                },
-                t: idx.h,
-                r: idx.len(),
-            }
-        }
+        Self { h, t, r: idx.len() }
     }
 }
 
 impl<K, V> OrderedOwnedIteratorRaw<K, V> {
     #[inline(always)]
     fn _next(&mut self) -> Option<(K, V)> {
-        if self.h == self.t {
+        // don't use head tail comparison! if there is just one item in the list, and since we don't have the sentinel
+        // it will just point to itself!
+        if self.r == 0 {
             None
         } else {
             self.r -= 1;
@@ -318,7 +321,7 @@ impl<K, V> OrderedOwnedIteratorRaw<K, V> {
     }
     #[inline(always)]
     fn _next_back(&mut self) -> Option<(K, V)> {
-        if self.h == self.t {
+        if self.r == 0 {
             None
         } else {
             self.r -= 1;

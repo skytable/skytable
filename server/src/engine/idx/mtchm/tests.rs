@@ -97,13 +97,13 @@ fn drop_empty() {
     drop(idx);
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn get_empty() {
     let idx = ChmU8::idx_init();
     assert!(idx.mt_get(&10, &cpin()).is_none());
 }
 
-#[sky_macros::miri_leaky_test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn update_empty() {
     let idx = ChmU8::idx_init();
     assert!(!idx.mt_update((10, 20), &cpin()));
@@ -251,7 +251,7 @@ fn _verify_eq<C: Config>(
     });
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn multispam_insert() {
     let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
@@ -260,7 +260,7 @@ fn multispam_insert() {
     modify_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
 }
 
-#[sky_macros::miri_leaky_test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn multispam_update() {
     let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
@@ -302,7 +302,7 @@ fn multispam_update() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn multispam_delete() {
     let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
@@ -332,7 +332,7 @@ fn multispam_delete() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn multispam_lol() {
     let idx = Arc::new(super::RawTree::<StringTup, super::meta::Config2B<LolState>>::new());
     let token = ControlToken::new();

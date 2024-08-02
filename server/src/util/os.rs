@@ -143,7 +143,7 @@ mod unix {
         }
     }
 
-    #[sky_macros::test]
+    #[sky_macros::non_miri_test]
     fn test_ulimit() {
         let _ = ResourceLimit::get().unwrap();
     }
@@ -476,7 +476,7 @@ mod hostname_impl {
             String::from_utf8_lossy(&x).trim().to_string()
         }
 
-        #[sky_macros::test]
+        #[sky_macros::non_miri_test]
         fn t_get_hostname() {
             assert_eq!(
                 test_get_hostname().as_str(),
@@ -513,7 +513,7 @@ fn rmove(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-#[sky_macros::test]
+#[sky_macros::non_miri_test]
 fn rcopy_okay() {
     let dir_paths = [
         "testdata/backups",
@@ -554,7 +554,7 @@ fn rcopy_okay() {
     fs::remove_dir_all("my-backups").unwrap();
 }
 
-#[sky_macros::test]
+#[sky_macros::non_miri_test]
 fn t_uptime() {
     use std::{thread, time::Duration};
     let uptime_1 = get_uptime();

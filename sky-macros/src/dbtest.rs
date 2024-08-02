@@ -288,8 +288,7 @@ pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
         TestStrategy::Standard => {}
     }
     let ret = quote! {
-        #[cfg(not(miri))]
-        #[::core::prelude::v1::test]
+        #[::sky_macros::non_miri_test]
         #retfn {
             #ret_block
         }

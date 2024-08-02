@@ -76,6 +76,7 @@ pub fn upgrade_file_header<S: SimpleFileSpecV1>(
 }
 
 #[cfg(test)]
+#[cfg(all(target_os = "macos", not(miri)))]
 mod test_upgrade {
     use {
         crate::engine::{
@@ -126,7 +127,6 @@ mod test_upgrade {
         }
     }
     #[sky_macros::test]
-    #[cfg(not(miri))]
     fn upgrade_test() {
         const FILE_PATH: &str = "upgrade_test_file.db";
         const FILE_DATA: &[u8] = b"hello freaking world";

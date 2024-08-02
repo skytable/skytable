@@ -167,22 +167,6 @@ impl<K, V> IndexSTSeqDllNode<K, V> {
         }
     }
     #[inline(always)]
-    fn _alloc<const WPTR_N: bool, const WPTR_P: bool>(Self { k, v, p, n }: Self) -> *mut Self {
-        unsafe {
-            // UNSAFE(@ohsayan): grow up, we're writing to a fresh block
-            let ptr = Self::_alloc_with_garbage();
-            (*ptr).k = k;
-            (*ptr).v = v;
-            if WPTR_N {
-                (*ptr).n = n;
-            }
-            if WPTR_P {
-                (*ptr).p = p;
-            }
-            ptr
-        }
-    }
-    #[inline(always)]
     unsafe fn _drop(slf: *mut Self) {
         let _ = Box::from_raw(slf);
     }

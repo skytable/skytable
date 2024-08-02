@@ -179,21 +179,21 @@ fn empty() {
     drop(q);
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn empty_deq() {
     let g = pin();
     let q = StringQueue::new();
     assert_eq!(q.blocking_try_dequeue(&g), None);
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn empty_enq() {
     let g = pin();
     let q = StringQueue::new();
     q.blocking_enqueue("hello".into(), &g);
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn multi_eq_dq() {
     const ITEMS_L: usize = 100;
     use std::{sync::Arc, thread};

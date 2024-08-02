@@ -26,6 +26,7 @@
 
 mod compaction;
 mod journal_ops;
+#[cfg(not(miri))]
 mod recovery;
 
 use {

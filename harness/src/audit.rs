@@ -29,6 +29,23 @@ use {
 };
 
 pub fn audit() -> HarnessResult<()> {
+    const ENVS_LEAK_STRICT: [(&'static str, &'static str); 2] = [
+        ("MIRIFLAGS", "-Zmiri-tree-borrows -Zmiri-disable-isolation"),
+        (
+            "RUSTFLAGS",
+            "-A dead_code -A unused_imports -A unused_macros",
+        ),
+    ];
+    const ENVS_LEAK_PERMISSIVE: [(&'static str, &'static str); 2] = [
+        (
+            "MIRIFLAGS",
+            "-Zmiri-tree-borrows -Zmiri-disable-isolation -Zmiri-ignore-leaks",
+        ),
+        (
+            "RUSTFLAGS",
+            "-A dead_code -A unused_imports -A unused_macros",
+        ),
+    ];
     let mut miri_args = vec!["miri".to_owned(), "test".to_owned()];
     if let Some(t) = util::get_var(util::VAR_TARGET) {
         miri_args.push("--target".to_owned());
@@ -36,14 +53,20 @@ pub fn audit() -> HarnessResult<()> {
     }
     miri_args.push("-p".to_owned());
     miri_args.push("skyd".to_owned());
-    let mut cmd = Command::new("cargo");
-    cmd.args(&miri_args)
-        .env(
-            "RUSTFLAGS",
-            "-A dead_code -A unused_imports -A unused_macros",
-        )
-        .env("MIRIFLAGS", "-Zmiri-tree-borrows");
-    util::handle_child(&format!("audit skyd using miri"), cmd)?;
+    {
+        // non-leaky test
+        let mut cmd = Command::new("cargo");
+        cmd.args(&miri_args).envs(ENVS_LEAK_STRICT);
+        util::handle_child(&format!("audit skyd using miri (leak-strict)"), cmd)?;
+    }
+    {
+        // leaky test
+        let mut cmd = Command::new("cargo");
+        cmd.args(&miri_args)
+            .arg("--features=miri-leaks")
+            .envs(ENVS_LEAK_PERMISSIVE);
+        util::handle_child(&format!("audit skyd using miri (leak-permissive)"), cmd)?;
+    }
     info!("successfully completed audit of skyd (miri)");
     Ok(())
 }

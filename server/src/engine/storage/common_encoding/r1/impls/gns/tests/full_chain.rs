@@ -41,7 +41,7 @@ use crate::engine::{
 };
 
 fn multirun(f: impl FnOnce() + Copy) {
-    for _ in 0..10 {
+    for _ in 0..if cfg!(miri) { 2 } else { 10 } {
         f()
     }
 }
