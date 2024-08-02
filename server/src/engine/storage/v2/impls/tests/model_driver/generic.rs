@@ -216,7 +216,7 @@ fn empty_model_data() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn model_data_inserts() {
     FileSystem::set_context(FSContext::Local);
     let mut fs = FileSystem::instance();

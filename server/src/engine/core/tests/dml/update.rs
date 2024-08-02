@@ -28,7 +28,7 @@ use crate::engine::{
     core::dml, data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal,
 };
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn simple() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_update_simple");
     assert_eq!(
@@ -47,7 +47,7 @@ fn simple() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn with_null() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_update_with_null");
     assert_eq!(
@@ -64,7 +64,7 @@ fn with_null() {
     assert_eq!(dml::update_flow_trace(), ["sametag;orignull"]);
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn with_list() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_update_with_list");
     assert_eq!(
@@ -84,7 +84,7 @@ fn with_list() {
     assert_eq!(dml::update_flow_trace(), ["list;sametag"]);
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn fail_operation_on_null() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_update_fail_operation_on_null");
     assert_eq!(
@@ -104,7 +104,7 @@ fn fail_operation_on_null() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn fail_unknown_fields() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_update_fail_unknown_fields");
     assert_eq!(
@@ -130,7 +130,7 @@ fn fail_unknown_fields() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn fail_typedef_violation() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_update_fail_typedef_violation");
     assert_eq!(

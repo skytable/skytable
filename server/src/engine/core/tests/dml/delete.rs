@@ -26,7 +26,7 @@
 
 use crate::engine::{error::QueryError, fractal::test_utils::TestGlobal};
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn simple_delete() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_delete_simple_delete");
     super::exec_delete(
@@ -39,7 +39,7 @@ fn simple_delete() {
     .unwrap();
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn delete_nonexisting() {
     let global = TestGlobal::new_with_driver_id_instant_update("dml_delete_delete_nonexisting");
     assert_eq!(

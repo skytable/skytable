@@ -393,7 +393,7 @@ fn ensure_ptr_offsets() {
     );
 }
 
-#[sky_macros::test]
+#[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn queue_ensure_offsets() {
     use crate::engine::sync::queue::Queue;
     let data: Vec<_> = (0..100)
