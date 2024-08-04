@@ -585,7 +585,52 @@ mod schemas {
             |r: CreateModel| assert_eq!(r, ret),
         );
     }
+    #[sky_macros::test]
+    fn simple_list_syntax() {
+        let simple_list_decls = [
+            (
+                "[string]",
+                vec![
+                    LayerSpec::new("string".into(), into_dict!()),
+                    LayerSpec::new("list".into(), into_dict!()),
+                ],
+            ),
+            (
+                "[[string]]",
+                vec![
+                    LayerSpec::new("string".into(), into_dict!()),
+                    LayerSpec::new("list".into(), into_dict!()),
+                    LayerSpec::new("list".into(), into_dict!()),
+                ],
+            ),
+        ];
+        for (list_decl, expected) in simple_list_decls {
+            let query =
+                format!("create model myspace.mymodel(username: string, notes: {list_decl})")
+                    .into_bytes();
+            let tokens = lex_insecure(&query).unwrap();
+            let cm: CreateModel = ast::parse_ast_node_full(&tokens[2..]).unwrap();
+            assert_eq!(
+                cm,
+                CreateModel::new(
+                    ("myspace", "mymodel").into(),
+                    vec![
+                        FieldSpec::new(
+                            "username".into(),
+                            vec![LayerSpec::new("string".into(), into_dict!())],
+                            false,
+                            false
+                        ),
+                        FieldSpec::new("notes".into(), expected, false, false)
+                    ],
+                    into_dict!(),
+                    false,
+                )
+            );
+        }
+    }
 }
+
 mod dict_field_syntax {
     use super::*;
     use crate::engine::ql::{

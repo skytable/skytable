@@ -259,7 +259,6 @@ pub struct LayerSpec<'a> {
 
 impl<'a> LayerSpec<'a> {
     //// Create a new layer
-    #[cfg(test)]
     pub const fn new(ty: Ident<'a>, props: DictGeneric) -> Self {
         Self { ty, props }
     }
@@ -354,7 +353,6 @@ pub struct FieldSpec<'a> {
 }
 
 impl<'a> FieldSpec<'a> {
-    #[cfg(test)]
     pub fn new(
         field_name: Ident<'a>,
         layers: Vec<LayerSpec<'a>>,
@@ -385,6 +383,16 @@ impl<'a> FieldSpec<'a> {
             (Token::Ident(id), Token![:]) => id,
             _ => return Err(QueryError::QLInvalidSyntax),
         };
+        // see if this is a simple list
+        if state.cursor_rounded_eq(Token![open []]) {
+            state.cursor_ahead();
+            return Ok(FieldSpec::new(
+                *field_name,
+                parse_list_decl_syntax(state)?,
+                is_null,
+                is_primary,
+            ));
+        }
         // layers
         let mut layers = Vec::new();
         rfold_layers(state, &mut layers);
@@ -518,6 +526,54 @@ impl<'a> ExpandedField<'a> {
             }
             _ => Err(QueryError::QLExpectedStatement),
         }
+    }
+}
+
+pub fn parse_list_decl_syntax<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
+) -> QueryResult<Vec<LayerSpec<'a>>> {
+    /*
+        we are looking at something of the form:
+        [string] or [[string]] and so forth
+
+        the first token has already been validated, so we can be sure that this has atleast one item
+    */
+    let mut layers = vec![
+        LayerSpec::new("unknown".into(), into_dict!()),
+        LayerSpec::new("list".into(), into_dict!()),
+    ];
+    let mut balance = 1;
+    let mut ty = None;
+    while state.not_exhausted() && balance != 0 {
+        match state.fw_read() {
+            Token::Ident(type_id) if ty.is_none() => {
+                // found the inner type
+                ty = Some(LayerSpec::new(*type_id, into_dict!()));
+            }
+            Token![open []] => {
+                // yet anothe nesting. push it in
+                layers.push(LayerSpec::new("list".into(), into_dict!()));
+                balance += 1;
+            }
+            Token![close []] => {
+                balance -= 1;
+            }
+            _ => {
+                // we don't accept anything else here
+                state.poison();
+            }
+        }
+    }
+    state.poison_if_not(balance == 0);
+    state.poison_if_not(ty.is_some());
+    if state.okay() {
+        layers[0] = unsafe {
+            // UNSAFE(@ohsayan): just verified using state
+            ty.unwrap_unchecked()
+        };
+        Ok(layers)
+    } else {
+        Err(QueryError::QLInvalidTypeDefinitionSyntax)
     }
 }
 

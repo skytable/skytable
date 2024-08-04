@@ -7,10 +7,10 @@ All changes in this project will be noted in this file.
 ### Additions
 
 - Server:
-  - Added `TRUNCATE MODEL` query (and no, I still have no idea why this wasn't present in the first place. There are some things in the universe that
-  no one knows the answer to. This is one of those things.)
-
-  Also note: `TRUNCATE MODEL` is root only right now.
+  - Added `TRUNCATE MODEL` query (and no, I still have no idea why this wasn't present in the first place. There are some things in the universe that no one knows the answer to. This is one of those things.)
+    > Also note: `TRUNCATE MODEL` is root only right now.
+  - Simple lists can now be defined using simple list syntax. For example, instead of `create model mymodel(uid: username, notes: list { type: string })`
+    you will now be able to simply use `create model mymodel(uid: username, notes: [string])` instead.
 
 ### Fixes
 
