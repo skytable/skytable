@@ -109,7 +109,13 @@ struct TypeBreakpoint;
 impl<'a> Breakpoint<'a> for TypeBreakpoint {
     const HAS_BREAKPOINT: bool = true;
     fn check_breakpoint(state: DictFoldState, tok: &'a Token<'a>) -> bool {
-        (state == DictFoldState::CB_OR_IDENT) & matches!(tok, Token![type])
+        (state == DictFoldState::CB_OR_IDENT)
+            & (
+                // type decl breakpoint
+                matches!(tok, Token![type]) |
+                // simple list breakpoint
+                matches!(tok, Token![open []])
+            )
     }
 }
 
@@ -439,16 +445,24 @@ impl<'a> ExpandedField<'a> {
         state.cursor_ahead();
         // ignore errors; now attempt a tymeta-like parse
         let mut props = DictGeneric::new();
-        let mut layers = Vec::new();
+        let mut layers = vec![];
         if rfold_tymeta(DictFoldState::CB_OR_IDENT, state, &mut props) {
             // this has layers. fold them; but don't forget the colon
-            if compiler::unlikely(state.exhausted()) {
+            if compiler::unlikely(state.remaining() < 2) {
                 // we need more tokens
                 return Err(QueryError::QLUnexpectedEndOfStatement);
             }
             state.poison_if_not(state.cursor_eq(Token![:]));
             state.cursor_ahead();
-            rfold_layers(state, &mut layers);
+            if state.cursor_eq(Token![open []]) {
+                // simple list syntax
+                state.cursor_ahead();
+                layers = parse_list_decl_syntax(state)?;
+            } else {
+                // not simple list syntax, so continue processing layers
+                layers = vec![];
+                rfold_layers(state, &mut layers);
+            }
             match state.fw_read() {
                 Token![,] => {
                     rfold_dict(DictFoldState::CB_OR_IDENT, state, &mut props);
