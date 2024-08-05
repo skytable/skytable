@@ -77,6 +77,7 @@ mod plan {
     use crate::{
         engine::{
             core::model::{self, alt::AlterAction, Field, Layer},
+            data::tag::{DataTag, FullTag},
             error::QueryError,
         },
         vecfuse,
@@ -98,6 +99,31 @@ mod plan {
                         into_dict! { "myfield" => Field::new([Layer::str()].into(), true) }
                     )
                 )
+            },
+        )
+    }
+    #[sky_macros::test]
+    fn list_add() {
+        super::plan(
+            "create model myspace.mymodel(username: string, password: binary)",
+            "alter model myspace.mymodel add notes { type: [[string]], nullable: true }",
+            |plan| {
+                assert_eq!(plan.model.entity(), "mymodel");
+                assert!(plan.no_lock);
+                assert_eq!(
+                    plan.action,
+                    AlterAction::Add(into_dict! { "notes" =>
+                        Field::new(
+                            [
+                                Layer::new_empty_props(FullTag::LIST),
+                                Layer::new_empty_props(FullTag::LIST),
+                                Layer::new_empty_props(FullTag::STR),
+                            ]
+                            .into(),
+                            true
+                        )
+                    })
+                );
             },
         )
     }
@@ -353,10 +379,12 @@ mod plan {
 mod exec {
     use crate::engine::{
         core::model::{DeltaVersion, Field, Layer},
+        data::tag::{DataTag, FullTag},
         error::QueryError,
         fractal::test_utils::TestGlobal,
         idx::{STIndex, STIndexSeq},
     };
+
     #[sky_macros::test]
     fn simple_add() {
         let global = TestGlobal::new_with_driver_id("simple_add");
@@ -425,6 +453,36 @@ mod exec {
                 assert_eq!(
                     model.delta_state().schema_current_version(),
                     DeltaVersion::genesis()
+                );
+            },
+        )
+        .unwrap();
+    }
+    #[sky_macros::test]
+    fn list_add() {
+        let global = TestGlobal::new_with_driver_id("simple_add_list");
+        super::exec_plan(
+            &global,
+            true,
+            "create model myspace.mymodel(username: string, password: binary)",
+            "alter model myspace.mymodel add notes { type: [[string]] }",
+            |model| {
+                let field = model.fields().st_get("notes").unwrap();
+                assert_eq!(
+                    *field,
+                    Field::new(
+                        [
+                            Layer::new_empty_props(FullTag::LIST),
+                            Layer::new_empty_props(FullTag::LIST),
+                            Layer::new_empty_props(FullTag::STR),
+                        ]
+                        .into(),
+                        false
+                    ),
+                );
+                assert_eq!(
+                    model.delta_state().schema_current_version(),
+                    DeltaVersion::__new(1)
                 );
             },
         )

@@ -59,6 +59,37 @@ mod validation {
     }
 
     #[sky_macros::test]
+    fn list() {
+        let model =
+            create("create model myspace.mymodel(username: string, notes: [[binary]])").unwrap();
+        assert_eq!(model.p_key(), "username");
+        assert_eq!(model.p_tag(), FullTag::STR);
+        assert_eq!(
+            model
+                .fields()
+                .stseq_ord_value()
+                .cloned()
+                .collect::<Vec<Field>>(),
+            [
+                Field::new([Layer::new_empty_props(FullTag::STR)].into(), false),
+                Field::new(
+                    [
+                        Layer::new_empty_props(FullTag::LIST),
+                        Layer::new_empty_props(FullTag::LIST),
+                        Layer::new_empty_props(FullTag::BIN),
+                    ]
+                    .into(),
+                    false
+                )
+            ]
+        );
+        assert_eq!(
+            model.delta_state().schema_current_version(),
+            DeltaVersion::genesis()
+        );
+    }
+
+    #[sky_macros::test]
     fn idiotic_order() {
         let model =
             create("create model myspace.mymodel(password: binary, primary username: string)")
@@ -170,6 +201,49 @@ mod exec {
                     (
                         "password".to_string(),
                         Field::new([Layer::bin()].into(), false)
+                    )
+                ]
+            );
+            assert_eq!(
+                model.delta_state().schema_current_version(),
+                DeltaVersion::genesis()
+            );
+        });
+    }
+    #[sky_macros::test]
+    fn simple_list() {
+        let global = TestGlobal::new_with_driver_id("exec_simple_list_create");
+        exec_create_new_space(
+            &global,
+            "create model myspace.mymodel(username: string, notes: [[binary]])",
+        )
+        .unwrap();
+        with_model(&global, SPACE, "mymodel", |model| {
+            let models: Vec<(String, Field)> = model
+                .fields()
+                .stseq_ord_kv()
+                .map(|(k, v)| (k.to_string(), v.clone()))
+                .collect();
+            assert_eq!(model.p_key(), "username");
+            assert_eq!(model.p_tag(), FullTag::STR);
+            assert_eq!(
+                models,
+                [
+                    (
+                        "username".to_string(),
+                        Field::new([Layer::str()].into(), false)
+                    ),
+                    (
+                        "notes".to_string(),
+                        Field::new(
+                            [
+                                Layer::new_empty_props(FullTag::LIST),
+                                Layer::new_empty_props(FullTag::LIST),
+                                Layer::new_empty_props(FullTag::BIN),
+                            ]
+                            .into(),
+                            false
+                        ),
                     )
                 ]
             );
