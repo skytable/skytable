@@ -558,7 +558,7 @@ pub fn parse_list_decl_syntax<'a, Qd: QueryData<'a>>(
     ];
     let mut balance = 1;
     let mut ty = None;
-    while state.not_exhausted() && balance != 0 {
+    while state.not_exhausted() && balance != 0 && state.okay() {
         match state.fw_read() {
             Token::Ident(type_id) if ty.is_none() => {
                 // found the inner type
