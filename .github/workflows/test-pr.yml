@@ -28,17 +28,14 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
       - name: Setup environment
         run: |
           chmod +x ci/buildvars.sh
           ci/buildvars.sh
-
-      - name: Install Rust
-        run: |
-          rustup update ${{ matrix.rust }} --no-self-update
-          rustup update
-          rustup default ${{ matrix.rust }}
         if: env.BUILD == 'true'
       - name: Run Tests
         run: make test

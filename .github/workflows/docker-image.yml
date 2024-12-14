@@ -22,7 +22,8 @@ jobs:
         run: |
           chmod +x ci/buildvars.sh
           ci/buildvars.sh
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: build
         uses: actions-rs/cargo@v1
         with:

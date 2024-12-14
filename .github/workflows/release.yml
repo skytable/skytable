@@ -104,7 +104,9 @@ jobs:
         if: runner.os == 'Linux'
 
       - name: Install Rust
-        run: rustup target add ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
 
       - name: Make bundle
         run: make bundle

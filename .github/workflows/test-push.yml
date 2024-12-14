@@ -77,7 +77,10 @@ jobs:
             ./target
           key: ${{ matrix.rust }}-cargocache-${{ hashFiles('Cargo.lock') }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
 
       - name: Run Tests
         run: make test
@@ -114,10 +117,9 @@ jobs:
           key: ${{ matrix.rust }}-cargocache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
-        run: |
-          rustup self update
-          rustup default stable
-          rustup target add ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
 
       - name: Run Tests
         run: make test
@@ -140,9 +142,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-
-      - uses: dtolnay/rust-toolchain@stable
-
       - name: Setup environment
         run: |
           chmod +x ci/setvars.sh
@@ -158,10 +157,9 @@ jobs:
           key: ${{ matrix.rust }}-cargocache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
-        run: |
-          rustup self update
-          rustup default stable
-          rustup target add ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
 
       - name: Run Tests
         run: make test
