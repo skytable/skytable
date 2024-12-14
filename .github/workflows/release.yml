@@ -49,10 +49,7 @@ jobs:
             ./target
           key: ${{ matrix.rust }}-cargocache-${{ hashFiles('Cargo.lock') }}
 
-      - name: Install Rust
-        run: |
-          rustup default stable
-          rustup target add ${{ matrix.rust }}
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Install MUSL tools
         run: sudo apt update && sudo apt install musl-tools -y
