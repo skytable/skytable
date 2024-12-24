@@ -45,6 +45,10 @@ pub use {
     free_memory::free_memory_in_bytes,
 };
 
+/*
+    I/O error wrapper
+*/
+
 #[derive(Debug)]
 #[repr(transparent)]
 /// A wrapper around [`std`]'s I/O [Error](std::io::Error) type for simplicity with equality
@@ -512,6 +516,19 @@ fn rmove(src: &Path, dst: &Path) -> std::io::Result<()> {
 
     Ok(())
 }
+
+pub fn time_now_string() -> String {
+    chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
+}
+
+pub fn time_now_with_postfix(post_fix: &str) -> String {
+    // Concatenate the formatted date and time with the postfix
+    format!("{}-{}", time_now_string(), post_fix)
+}
+
+/*
+    testing
+*/
 
 #[sky_macros::non_miri_test]
 fn rcopy_okay() {

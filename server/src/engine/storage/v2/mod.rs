@@ -280,7 +280,7 @@ pub fn repair() -> RuntimeResult<()> {
 
 fn full_backup(name: &str, context: BackupContext) -> RuntimeResult<()> {
     _full_backup(
-        &format!("backups/{}-{name}", util::time_now_string()),
+        &format!("backups/{}-{name}", util::os::time_now_string()),
         true,
         context,
         None,

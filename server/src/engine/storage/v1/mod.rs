@@ -56,7 +56,7 @@ pub fn load_gns_prepare_migration() -> RuntimeResult<GNSData> {
     // now move all our files into a backup directory
     let backup_dir_path = format!(
         "backups/{}",
-        util::time_now_with_postfix("before_upgrade_to_v2")
+        util::os::time_now_with_postfix("before_upgrade_to_v2")
     );
     // move data folder
     FileSystem::create_dir_all(&backup_dir_path)?;

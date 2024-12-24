@@ -26,27 +26,24 @@
 
 use {
     super::{Field, Layer, ModelData},
-    crate::{
-        engine::{
-            control_flow::{errors::QueryError, QueryResult},
-            core::EntityIDRef,
-            data::{
-                tag::{DataTag, TagClass},
-                DictEntryGeneric,
-            },
-            fractal::GlobalInstanceLike,
-            idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
-            mem::unsafe_apis::BoxStr,
-            ql::{
-                ddl::{
-                    alt::{AlterKind, AlterModel},
-                    syn::{ExpandedField, LayerSpec},
-                },
-                lex::Ident,
-            },
-            txn::{gns, ModelIDRef},
+    crate::engine::{
+        control_flow::{errors::QueryError, QueryResult},
+        core::EntityIDRef,
+        data::{
+            tag::{DataTag, TagClass},
+            DictEntryGeneric,
         },
-        util,
+        fractal::GlobalInstanceLike,
+        idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
+        mem::unsafe_apis::BoxStr,
+        ql::{
+            ddl::{
+                alt::{AlterKind, AlterModel},
+                syn::{ExpandedField, LayerSpec},
+            },
+            lex::Ident,
+        },
+        txn::{gns, ModelIDRef},
     },
     std::collections::{HashMap, HashSet},
 };
@@ -117,7 +114,7 @@ impl<'a> AlterPlan<'a> {
                 }
             }
             AlterKind::Add(new_fields) => {
-                let mut fields = util::bx_to_vec(new_fields).into_iter();
+                let mut fields = Vec::from(new_fields).into_iter();
                 let mut add = IndexSTSeqCns::with_capacity(fields.len());
                 while (fields.len() != 0) & okay {
                     let ExpandedField {
@@ -133,7 +130,7 @@ impl<'a> AlterPlan<'a> {
                 can_ignore!(AlterAction::Add(add))
             }
             AlterKind::Update(updated_fields) => {
-                let updated_fields = util::bx_to_vec::<ExpandedField<'a>>(updated_fields);
+                let updated_fields = Vec::from(updated_fields);
                 let mut updated_fields = updated_fields.into_iter();
                 let mut any_delta = 0;
                 let mut new_fields = IndexST::new();
