@@ -30,7 +30,7 @@ use {
         lex::{InsecureLexer, SecureLexer, Symbol, Token},
     },
     crate::{
-        engine::{data::cell::Datacell, error::QueryResult},
+        engine::{control_flow::QueryResult, data::cell::Datacell},
         util::test_utils,
     },
     rand::Rng,

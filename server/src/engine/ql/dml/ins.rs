@@ -27,9 +27,9 @@
 use {
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::EntityIDRef,
             data::cell::Datacell,
-            error::{QueryError, QueryResult},
             ql::{
                 ast::{QueryData, State},
                 lex::{Ident, Token},
@@ -399,7 +399,7 @@ mod impls {
     use {
         super::InsertStatement,
         crate::engine::{
-            error::QueryResult,
+            control_flow::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
@@ -419,7 +419,7 @@ mod impls {
                 parse_data_map_syntax, parse_data_tuple_syntax, parse_list, Datacell, HashMap,
             },
             crate::engine::{
-                error::QueryResult,
+                control_flow::QueryResult,
                 ql::ast::{traits::ASTNode, QueryData, State},
             },
         };

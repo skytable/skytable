@@ -40,7 +40,7 @@ use {
     },
     crate::{
         engine::{
-            error::StorageError,
+            control_flow::errors::StorageError,
             mem::unsafe_apis::memcpy,
             storage::common::interface::fs::{File, FileRead, FileWrite},
             RuntimeResult,

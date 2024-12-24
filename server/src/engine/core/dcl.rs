@@ -25,9 +25,9 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     core::system_db::SystemDatabase,
     data::{tag::TagClass, DictEntryGeneric},
-    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     mem::unsafe_apis::BoxStr,
     net::protocol::ClientLocalState,

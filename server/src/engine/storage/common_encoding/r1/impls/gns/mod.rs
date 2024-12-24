@@ -27,9 +27,9 @@
 use {
     crate::{
         engine::{
+            control_flow::{errors::StorageError, RuntimeResult},
             core::GNSData,
             data::uuid::Uuid,
-            error::{RuntimeResult, StorageError},
             mem::{unsafe_apis::BoxStr, BufferedScanner},
             storage::common_encoding::r1::{self, PersistObject},
             txn::{gns::GNSTransaction, SpaceIDRef},

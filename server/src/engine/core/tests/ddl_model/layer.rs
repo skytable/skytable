@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
+    control_flow::QueryResult,
     core::model::Field,
-    error::QueryResult,
     ql::{ast::parse_ast_node_multiple_full, tests::lex_insecure},
 };
 
@@ -42,7 +42,7 @@ fn layerview(layer_def: &str) -> QueryResult<Field> {
 mod layer_spec_validation {
     use {
         super::layerview,
-        crate::engine::{core::model::Layer, error::QueryError},
+        crate::engine::{control_flow::errors::QueryError, core::model::Layer},
     };
 
     #[sky_macros::test]

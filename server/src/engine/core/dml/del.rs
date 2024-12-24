@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     core::{self, dml::QueryExecMeta, model::delta::DataDeltaKind},
-    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::MTIndex,
     net::protocol::Response,

@@ -1,13 +1,12 @@
 /*
- * Created on Sat Feb 04 2023
- *
  * This file is a part of Skytable
+ *
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
  * NoSQL database written by Sayan Nandan ("the Author") with the
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2024, Sayan Nandan <nandansayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -23,11 +22,6 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-
-use {super::config::ConfigError, crate::util::os::SysIOError, std::fmt};
-
-pub type RuntimeResult<T> = Result<T, super::fractal::error::Error>;
-pub type QueryResult<T> = Result<T, QueryError>;
 
 /// an enumeration of 'flat' errors that the server actually responds to the client with, since we do not want to send specific information
 /// about anything (as that will be a security hole). The variants correspond with their actual response codes
@@ -103,13 +97,15 @@ direct_from! {
     }
 }
 
-impl From<super::fractal::error::Error> for QueryError {
-    fn from(e: super::fractal::error::Error) -> Self {
+impl From<super::Error> for QueryError {
+    fn from(e: super::Error) -> Self {
         match e.kind() {
-            ErrorKind::IoError(_) | ErrorKind::Storage(_) => QueryError::SysServerError,
-            ErrorKind::Txn(_) => QueryError::SysTransactionalError,
-            ErrorKind::Other(_) => QueryError::SysUnknownError,
-            ErrorKind::Config(_) => unreachable!("config error cannot propagate here"),
+            super::ErrorKind::IoError(_) | super::ErrorKind::Storage(_) => {
+                QueryError::SysServerError
+            }
+            super::ErrorKind::Txn(_) => QueryError::SysTransactionalError,
+            super::ErrorKind::Other(_) => QueryError::SysUnknownError,
+            super::ErrorKind::Config(_) => unreachable!("config error cannot propagate here"),
         }
     }
 }
@@ -124,43 +120,6 @@ macro_rules! enumerate_err {
             }
         }
         impl std::error::Error for $errname {}
-    }
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
-/// A "master" error kind enumeration for all kinds of runtime errors
-pub enum ErrorKind {
-    /// An I/O error
-    IoError(SysIOError),
-    /// An SDSS error
-    Storage(StorageError),
-    /// A transactional error
-    Txn(TransactionError),
-    /// other errors
-    Other(String),
-    /// configuration errors
-    Config(ConfigError),
-}
-
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IoError(io) => write!(f, "io error: {io}"),
-            Self::Storage(se) => write!(f, "storage error: {se}"),
-            Self::Txn(txe) => write!(f, "txn error: {txe}"),
-            Self::Other(oe) => write!(f, "error: {oe}"),
-            Self::Config(cfg) => write!(f, "config error: {cfg}"),
-        }
-    }
-}
-
-impl std::error::Error for ErrorKind {}
-
-direct_from! {
-    ErrorKind => {
-        std::io::Error as IoError,
-        SysIOError as IoError,
     }
 }
 

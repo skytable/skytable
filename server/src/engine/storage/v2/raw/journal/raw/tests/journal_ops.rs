@@ -32,7 +32,7 @@ use {
         },
         SimpleDB, SimpleDBJournal,
     },
-    crate::engine::fractal::error::ErrorContext,
+    crate::engine::control_flow::ErrorContext,
 };
 
 #[sky_macros::test]

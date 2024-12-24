@@ -27,7 +27,7 @@
 #[cfg(test)]
 use crate::engine::ql::{ast::InplaceData, lex::Token};
 use crate::engine::{
-    error::{QueryError, QueryResult},
+    control_flow::{errors::QueryError, QueryResult},
     ql::ast::{QueryData, State},
 };
 

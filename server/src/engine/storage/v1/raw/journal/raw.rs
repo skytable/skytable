@@ -45,7 +45,7 @@ use {
     super::super::{rw::SDSSFileIO, spec::Header},
     crate::{
         engine::{
-            error::{RuntimeResult, StorageError},
+            control_flow::{errors::StorageError, RuntimeResult},
             storage::common::{
                 interface::fs::{BufferedReader, File},
                 sdss,

@@ -50,8 +50,8 @@ use {
     },
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::space::Space,
-            error::{QueryError, QueryResult},
             fractal::{FractalGNSDriver, GlobalInstanceLike},
             idx::IndexST,
             mem::unsafe_apis::BoxStr,

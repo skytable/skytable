@@ -46,11 +46,11 @@
 
 use crate::{
     engine::{
+        control_flow::{errors::QueryError, QueryResult},
         data::{
             cell::Datacell,
             dict::{DictEntryGeneric, DictGeneric},
         },
-        error::{QueryError, QueryResult},
         mem::unsafe_apis::BoxStr,
         ql::{
             ast::{QueryData, State},
@@ -601,7 +601,7 @@ mod impls {
             FieldSpec, LayerSpec,
         },
         crate::engine::{
-            error::QueryResult,
+            control_flow::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };

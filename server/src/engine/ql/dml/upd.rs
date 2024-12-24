@@ -28,9 +28,9 @@ use {
     super::{u, WhereClause},
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::{query_meta::AssignmentOperator, EntityIDRef},
             data::lit::Lit,
-            error::{QueryError, QueryResult},
             ql::{
                 ast::{QueryData, State},
                 lex::Ident,
@@ -213,7 +213,7 @@ mod impls {
     use {
         super::UpdateStatement,
         crate::engine::{
-            error::QueryResult,
+            control_flow::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };

@@ -28,6 +28,7 @@ use {
     super::{dec, PersistObject, VecU8},
     crate::{
         engine::{
+            control_flow::{errors::StorageError, RuntimeResult},
             core::{
                 model::{Field, Layer, ModelData},
                 space::Space,
@@ -37,7 +38,6 @@ use {
                 uuid::Uuid,
                 DictGeneric,
             },
-            error::{RuntimeResult, StorageError},
             idx::IndexSTSeqCns,
             mem::{unsafe_apis::BoxStr, BufferedScanner, VInline},
         },

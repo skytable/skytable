@@ -29,8 +29,8 @@ mod crt;
 mod layer;
 
 use crate::engine::{
+    control_flow::QueryResult,
     core::{model::ModelData, EntityIDRef},
-    error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{ast::parse_ast_node_full, ddl::crt::CreateModel, tests::lex_insecure},
 };

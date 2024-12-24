@@ -28,9 +28,9 @@ mod alter;
 mod create;
 
 use crate::engine::{
+    control_flow::QueryResult,
     core::space::Space,
     data::uuid::Uuid,
-    error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{
         ast::{self},

@@ -25,6 +25,7 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     core::{
         index::{
             DcFieldIndex, IndexLatchHandleExclusive, PrimaryIndexKey, Row, RowData, RowDataLck,
@@ -35,7 +36,6 @@ use crate::engine::{
         cell::{Datacell, VirtualDatacell},
         tag::{DataTag, TagClass},
     },
-    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{IndexMTRaw, MTIndexExt, STIndex, STIndexSeq},
     mem::IntegerRepr,

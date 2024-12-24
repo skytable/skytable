@@ -28,7 +28,7 @@ use {
     super::{util, GlobalInstanceLike},
     crate::{
         engine::{
-            error::{QueryError, QueryResult, RuntimeResult},
+            control_flow::{errors::QueryError, QueryResult, RuntimeResult},
             fractal::{CriticalTask, Task},
             storage::{GNSDriver, ModelDriver},
         },

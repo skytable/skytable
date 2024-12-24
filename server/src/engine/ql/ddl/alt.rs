@@ -28,9 +28,9 @@ use {
     super::syn::{self, DictFoldState, ExpandedField},
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::EntityIDRef,
             data::DictGeneric,
-            error::{QueryError, QueryResult},
             ql::{
                 ast::{QueryData, State},
                 lex::{Ident, Token},
@@ -192,7 +192,7 @@ mod impls {
     use {
         super::{AlterModel, AlterSpace},
         crate::engine::{
-            error::QueryResult,
+            control_flow::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };

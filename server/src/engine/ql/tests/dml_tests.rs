@@ -962,7 +962,7 @@ mod select_all {
     use {
         super::lex_insecure,
         crate::engine::{
-            error::QueryError,
+            control_flow::errors::QueryError,
             ql::{ast::parse_ast_node_full_with_space, dml::sel::SelectAllStatement},
         },
     };

@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::{error::QueryError, fractal::test_utils::TestGlobal};
+use crate::engine::{control_flow::errors::QueryError, fractal::test_utils::TestGlobal};
 
 #[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR
 fn simple_delete() {

@@ -27,7 +27,7 @@ use {
     super::{HeaderV1, SimpleFileSpecV1},
     crate::{
         engine::{
-            fractal::context,
+            control_flow::context,
             storage::common::interface::fs::{File, FileExt, FileSystem, FileWrite},
             RuntimeResult,
         },
@@ -80,7 +80,7 @@ pub fn upgrade_file_header<S: SimpleFileSpecV1>(
 mod test_upgrade {
     use {
         crate::engine::{
-            error::StorageError,
+            control_flow::errors::StorageError,
             storage::{
                 common::{
                     interface::fs::{FSContext, File, FileSystem},

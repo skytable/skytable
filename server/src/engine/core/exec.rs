@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     core::{ddl_misc, dml, model::ModelData, space::Space},
-    error::{QueryError, QueryResult},
     fractal::{Global, GlobalInstanceLike},
     net::protocol::{ClientLocalState, Response, ResponseType, SQuery},
     ql::{

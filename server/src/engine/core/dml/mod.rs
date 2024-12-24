@@ -31,9 +31,9 @@ mod upd;
 
 use crate::{
     engine::{
+        control_flow::{errors::QueryError, QueryResult},
         core::model::ModelData,
         data::{lit::Lit, tag::DataTag},
-        error::{QueryError, QueryResult},
         fractal::GlobalInstanceLike,
         idx::MTIndex,
         ql::dml::{trunc::TruncateStmt, WhereClause},

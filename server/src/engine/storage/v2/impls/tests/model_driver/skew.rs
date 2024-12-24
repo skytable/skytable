@@ -31,6 +31,7 @@
 use {
     crate::{
         engine::{
+            control_flow::ErrorKind,
             core::{
                 index::{PrimaryIndexKey, Row},
                 model::{
@@ -44,7 +45,6 @@ use {
                 tag::{DataTag, FullTag},
                 uuid::Uuid,
             },
-            error::ErrorKind,
             fractal::FractalModelDriver,
             idx::{IndexBaseSpec, IndexSTSeqCns, MTIndex, STIndex},
             mem::RawStr,

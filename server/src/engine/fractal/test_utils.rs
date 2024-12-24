@@ -30,9 +30,9 @@ use {
         GlobalInstanceLike, Task,
     },
     crate::engine::{
+        control_flow::ErrorKind,
         core::{EntityIDRef, GNSData, GlobalNS},
         data::uuid::Uuid,
-        error::ErrorKind,
         storage::{
             safe_interfaces::{paths_v1, FileSystem, StdModelBatch},
             BatchStats, GNSDriver, ModelDriver,
@@ -212,7 +212,7 @@ impl GlobalInstanceLike for TestGlobal {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> crate::engine::error::RuntimeResult<FractalModelDriver> {
+    ) -> crate::engine::control_flow::RuntimeResult<FractalModelDriver> {
         // create model dir
         FileSystem::create_dir_all(&paths_v1::model_dir(
             space_name, space_uuid, model_name, model_uuid,

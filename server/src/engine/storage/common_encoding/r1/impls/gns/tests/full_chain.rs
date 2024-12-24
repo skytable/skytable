@@ -25,12 +25,12 @@
 */
 
 use crate::engine::{
+    control_flow::errors::QueryError,
     core::{
         model::{Field, Layer, ModelData},
         space::Space,
     },
     data::{cell::Datacell, tag::TagSelector, uuid::Uuid, DictEntryGeneric},
-    error::QueryError,
     fractal::{test_utils::TestGlobal, GlobalInstanceLike},
     idx::STIndex,
     ql::{

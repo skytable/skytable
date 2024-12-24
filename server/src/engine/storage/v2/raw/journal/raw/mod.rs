@@ -30,8 +30,11 @@ mod tests;
 use {
     crate::{
         engine::{
-            error::{ErrorKind, StorageError, TransactionError},
-            fractal::{context, error::Error},
+            control_flow::{
+                context,
+                errors::{StorageError, TransactionError},
+                Error, ErrorKind,
+            },
             mem::unsafe_apis::memcpy,
             storage::common::{
                 checksum::SCrc64,
@@ -1325,7 +1328,7 @@ impl<J: RawJournalAdapter> RawJournalReader<J> {
         &mut self,
         txn_id: u128,
         meta: u64,
-    ) -> Result<bool, crate::engine::fractal::error::Error> {
+    ) -> Result<bool, crate::engine::control_flow::Error> {
         jtrace_reader!(DriverEventExpectingClose);
         // attempt to parse a driver close event
         let mut block = [0u8; DriverEvent::FULL_EVENT_SIZE];

@@ -28,7 +28,8 @@ pub mod protocol;
 
 use {
     crate::engine::{
-        config::ConfigEndpointTcp, error::RuntimeResult, fractal::error::ErrorContext,
+        config::ConfigEndpointTcp,
+        control_flow::{ErrorContext, RuntimeResult},
         fractal::Global,
     },
     bytes::BytesMut,

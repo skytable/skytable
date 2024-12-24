@@ -35,9 +35,9 @@ use {
     super::lex::{Keyword, KeywordStmt, Token},
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::EntityIDRef,
             data::{cell::Datacell, lit::Lit},
-            error::{QueryError, QueryResult},
         },
         util::{compiler, MaybeInit},
     },

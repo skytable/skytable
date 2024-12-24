@@ -25,7 +25,9 @@
 */
 
 use {
-    crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal},
+    crate::engine::{
+        control_flow::errors::QueryError, data::cell::Datacell, fractal::test_utils::TestGlobal,
+    },
     std::collections::HashMap,
 };
 

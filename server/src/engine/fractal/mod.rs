@@ -33,7 +33,7 @@ use {
             GNSDriver, ModelDriver,
         },
     },
-    crate::{engine::error::RuntimeResult, util::compiler},
+    crate::{engine::control_flow::RuntimeResult, util::compiler},
     std::{
         fmt,
         mem::MaybeUninit,
@@ -42,9 +42,7 @@ use {
     tokio::sync::mpsc::unbounded_channel,
 };
 
-pub mod context;
 mod drivers;
-pub mod error;
 mod mgr;
 #[cfg(test)]
 pub mod test_utils;

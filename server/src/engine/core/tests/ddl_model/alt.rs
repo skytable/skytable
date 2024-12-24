@@ -25,12 +25,12 @@
 */
 
 use crate::engine::{
+    control_flow::QueryResult,
     core::{
         model::{alt::AlterPlan, ModelData},
         tests::ddl_model::{create, exec_create},
         EntityIDRef,
     },
-    error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{ast::parse_ast_node_full, ddl::alt::AlterModel, tests::lex_insecure},
 };
@@ -76,9 +76,9 @@ fn exec_plan(
 mod plan {
     use crate::{
         engine::{
+            control_flow::errors::QueryError,
             core::model::{self, alt::AlterAction, Field, Layer},
             data::tag::{DataTag, FullTag},
-            error::QueryError,
         },
         vecfuse,
     };
@@ -378,9 +378,9 @@ mod plan {
 
 mod exec {
     use crate::engine::{
+        control_flow::errors::QueryError,
         core::model::{DeltaVersion, Field, Layer},
         data::tag::{DataTag, FullTag},
-        error::QueryError,
         fractal::test_utils::TestGlobal,
         idx::{STIndex, STIndexSeq},
     };

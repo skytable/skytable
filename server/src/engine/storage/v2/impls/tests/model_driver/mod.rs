@@ -27,8 +27,8 @@
 use {
     crate::{
         engine::{
+            control_flow::QueryResult,
             core::{dml, model::ModelData, space::Space, EntityID, EntityIDRef},
-            error::QueryResult,
             fractal::{test_utils::TestGlobal, GlobalInstanceLike},
             idx::MTIndex,
             ql::{

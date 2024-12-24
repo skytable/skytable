@@ -29,7 +29,7 @@ use {
         super::lex::{Ident, Token},
         lex_insecure, lex_secure,
     },
-    crate::engine::{data::lit::Lit, error::QueryError},
+    crate::engine::{control_flow::errors::QueryError, data::lit::Lit},
 };
 
 macro_rules! v(

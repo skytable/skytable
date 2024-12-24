@@ -27,6 +27,7 @@
 use {
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::{
                 self, dml::QueryExecMeta, model::delta::DataDeltaKind,
                 query_meta::AssignmentOperator,
@@ -36,7 +37,6 @@ use {
                 lit::Lit,
                 tag::{DataTag, FloatSpec, SIntSpec, TagClass, UIntSpec},
             },
-            error::{QueryError, QueryResult},
             fractal::GlobalInstanceLike,
             idx::STIndex,
             net::protocol::Response,

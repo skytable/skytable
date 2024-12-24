@@ -27,6 +27,7 @@
 use {
     crate::{
         engine::{
+            control_flow::errors::StorageError,
             core::{
                 index::{DcFieldIndex, PrimaryIndexKey, Row, RowData},
                 model::{
@@ -38,7 +39,6 @@ use {
                 cell::Datacell,
                 tag::{DataTag, TagUnique},
             },
-            error::StorageError,
             idx::{MTIndex, STIndex, STIndexSeq},
             storage::{
                 common::{
@@ -397,7 +397,7 @@ impl<'a> FullModel<'a> {
     fn write<const ZERO: bool>(
         self,
         f: &mut TrackedWriter<FSpecModelDataAofV1>,
-    ) -> Result<(), crate::engine::fractal::error::Error> {
+    ) -> Result<(), crate::engine::control_flow::Error> {
         let g = pin();
         let mut row_writer: RowWriter<'_> = RowWriter { f };
         let index = self.0.primary_index().__raw_index();
@@ -816,9 +816,9 @@ mod restore_impls {
         super::{BatchMetadata, FSpecModelDataAofV1},
         crate::{
             engine::{
+                control_flow::errors::StorageError,
                 core::index::PrimaryIndexKey,
                 data::{cell::Datacell, tag::TagUnique},
-                error::StorageError,
                 storage::{
                     common::sdss::sdss_r1::{rw::TrackedReaderContext, FileSpecV1},
                     common_encoding::r1::{
@@ -871,7 +871,7 @@ mod restore_impls {
     pub fn decode_row_data(
         batch_info: &BatchMetadata,
         f: &mut TrackedReaderContext<FSpecModelDataAofV1>,
-    ) -> Result<Vec<Datacell>, crate::engine::fractal::error::Error> {
+    ) -> Result<Vec<Datacell>, crate::engine::control_flow::Error> {
         let mut row = vec![];
         let mut this_col_cnt = batch_info.column_count;
         while this_col_cnt != 0 {
@@ -889,9 +889,9 @@ mod restore_impls {
         this is some silly ridiculous hackery because of some of our legacy code. basically an attempt is made to directly coerce error types.
         we'll make this super generic so that no more of this madness is needed
     */
-    pub struct ErrorHack(crate::engine::fractal::error::Error);
-    impl From<crate::engine::fractal::error::Error> for ErrorHack {
-        fn from(value: crate::engine::fractal::error::Error) -> Self {
+    pub struct ErrorHack(crate::engine::control_flow::Error);
+    impl From<crate::engine::control_flow::Error> for ErrorHack {
+        fn from(value: crate::engine::control_flow::Error) -> Self {
             Self(value)
         }
     }

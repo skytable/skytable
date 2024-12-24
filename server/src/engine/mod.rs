@@ -27,9 +27,9 @@
 #[macro_use]
 mod macros;
 pub mod config;
+mod control_flow;
 mod core;
 mod data;
-mod error;
 mod fractal;
 mod idx;
 mod mem;
@@ -44,7 +44,7 @@ mod tests;
 
 // re-export
 pub use {
-    error::RuntimeResult,
+    control_flow::RuntimeResult,
     fractal::Global,
     storage::{backup, compact, repair, restore},
 };
@@ -52,7 +52,7 @@ pub use {
 use {
     self::{
         config::{ConfigEndpoint, ConfigEndpointTls, ConfigMode, Configuration},
-        fractal::context::{self, Subsystem},
+        control_flow::context::{self, Subsystem},
         storage::SELoaded,
     },
     crate::util::os::TerminationSignal,

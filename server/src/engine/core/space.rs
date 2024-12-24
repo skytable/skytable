@@ -27,8 +27,8 @@
 use {
     super::EntityIDRef,
     crate::engine::{
+        control_flow::{errors::QueryError, QueryResult},
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
-        error::{QueryError, QueryResult},
         fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::STIndex,
         mem::unsafe_apis::BoxStr,

@@ -1,5 +1,5 @@
 /*
- * Created on Mon Oct 02 2023
+ * Created on Sat Feb 04 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,14 +24,56 @@
  *
 */
 
+pub mod context;
+pub mod errors;
+
 use {
-    super::context::{self, Dmsg, Subsystem},
-    crate::engine::{
-        config::ConfigError,
-        error::{ErrorKind, StorageError, TransactionError},
-    },
-    core::fmt,
+    self::context::{Dmsg, Subsystem},
+    super::config::ConfigError,
+    crate::util::os::SysIOError,
+    std::fmt,
 };
+
+// re-export
+pub type RuntimeResult<T> = Result<T, Error>;
+pub type QueryResult<T> = Result<T, errors::QueryError>;
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+/// A "master" error kind enumeration for all kinds of runtime errors
+pub enum ErrorKind {
+    /// An I/O error
+    IoError(SysIOError),
+    /// An SDSS error
+    Storage(errors::StorageError),
+    /// A transactional error
+    Txn(errors::TransactionError),
+    /// other errors
+    Other(String),
+    /// configuration errors
+    Config(ConfigError),
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IoError(io) => write!(f, "io error: {io}"),
+            Self::Storage(se) => write!(f, "storage error: {se}"),
+            Self::Txn(txe) => write!(f, "txn error: {txe}"),
+            Self::Other(oe) => write!(f, "error: {oe}"),
+            Self::Config(cfg) => write!(f, "config error: {cfg}"),
+        }
+    }
+}
+
+impl std::error::Error for ErrorKind {}
+
+direct_from! {
+    ErrorKind => {
+        std::io::Error as IoError,
+        SysIOError as IoError,
+    }
+}
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -308,8 +350,8 @@ impl_other_err_tostring! {
     openssl::error::ErrorStack => Network,
 }
 
-impl From<StorageError> for Error {
-    fn from(value: StorageError) -> Self {
+impl From<errors::StorageError> for Error {
+    fn from(value: errors::StorageError) -> Self {
         Self::_new(
             ErrorKind::Storage(value),
             context::pop_origin(),
@@ -318,8 +360,8 @@ impl From<StorageError> for Error {
     }
 }
 
-impl From<TransactionError> for Error {
-    fn from(value: TransactionError) -> Self {
+impl From<errors::TransactionError> for Error {
+    fn from(value: errors::TransactionError) -> Self {
         Self::_new(
             ErrorKind::Txn(value),
             context::pop_origin(),
@@ -334,7 +376,7 @@ impl From<ConfigError> for Error {
     }
 }
 
-impl IntoError for StorageError {
+impl IntoError for errors::StorageError {
     fn err_noinherit(self) -> Error {
         Error::with_kind(ErrorKind::Storage(self))
     }
@@ -343,7 +385,7 @@ impl IntoError for StorageError {
     }
 }
 
-impl IntoError for TransactionError {
+impl IntoError for errors::TransactionError {
     fn err_noinherit(self) -> Error {
         Error::with_kind(ErrorKind::Txn(self))
     }

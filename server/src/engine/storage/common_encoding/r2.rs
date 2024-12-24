@@ -32,8 +32,8 @@ use {
     super::r1::{dec, impls::gns::GNSEvent, PersistObject},
     crate::{
         engine::{
+            control_flow::errors::{StorageError, TransactionError},
             core::GNSData,
-            error::{StorageError, TransactionError},
             mem::{unsafe_apis::BoxStr, BufferedScanner},
             txn::gns::sysctl::{AlterUserTxn, CreateUserTxn, DropUserTxn},
             RuntimeResult,

@@ -28,13 +28,16 @@ use {
     super::GNSEvent,
     crate::{
         engine::{
+            control_flow::{
+                errors::{StorageError, TransactionError},
+                RuntimeResult,
+            },
             core::{
                 model::{Field, Model, ModelData},
                 space::Space,
                 EntityID, EntityIDRef, GNSData,
             },
             data::uuid::Uuid,
-            error::{RuntimeResult, StorageError, TransactionError},
             fractal::FractalModelDriver,
             idx::{IndexSTSeqCns, STIndex, STIndexSeq},
             mem::{unsafe_apis::BoxStr, BufferedScanner},

@@ -25,9 +25,9 @@
 */
 
 use crate::engine::{
+    control_flow::errors::QueryError,
     core::space::Space,
     data::{cell::Datacell, DictEntryGeneric},
-    error::QueryError,
     fractal::test_utils::TestGlobal,
 };
 

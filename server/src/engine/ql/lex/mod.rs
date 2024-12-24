@@ -34,8 +34,8 @@ pub use {
 
 use {
     crate::engine::{
+        control_flow::{errors::QueryError, QueryResult},
         data::lit::Lit,
-        error::{QueryError, QueryResult},
         mem::BufferedScanner,
     },
     core::slice,
@@ -142,8 +142,8 @@ mod insecure_impl {
         super::Lexer,
         crate::{
             engine::{
+                control_flow::{errors::QueryError, QueryResult},
                 data::lit::Lit,
-                error::{QueryError, QueryResult},
                 ql::lex::Token,
             },
             util::compiler,
@@ -419,8 +419,8 @@ impl<'a> SecureLexer<'a> {
 
 mod scan_param {
     use crate::engine::{
+        control_flow::errors::QueryError,
         data::{cell::Datacell, lit::Lit},
-        error::QueryError,
         ql::lex::{SecureLexer, Token},
     };
     pub const SCAN_PARAM_EXPECT: [u8; 9] = [0, 1, 2, 2, 2, 2, 2, 0, 1];

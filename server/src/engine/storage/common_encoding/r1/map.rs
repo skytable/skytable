@@ -34,9 +34,9 @@ use {
     },
     crate::{
         engine::{
+            control_flow::{errors::StorageError, RuntimeResult},
             core::model::Field,
             data::dict::DictEntryGeneric,
-            error::{RuntimeResult, StorageError},
             idx::{IndexSTSeqCns, STIndexSeq},
             mem::{unsafe_apis::BoxStr, BufferedScanner, StatelessLen},
         },

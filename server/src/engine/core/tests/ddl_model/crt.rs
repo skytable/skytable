@@ -28,9 +28,9 @@ mod validation {
     use {
         super::super::create,
         crate::engine::{
+            control_flow::errors::QueryError,
             core::model::{DeltaVersion, Field, Layer},
             data::tag::{DataTag, FullTag},
-            error::QueryError,
             idx::STIndexSeq,
         },
     };

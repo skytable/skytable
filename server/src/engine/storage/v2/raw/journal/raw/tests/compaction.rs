@@ -27,7 +27,7 @@
 use {
     crate::{
         engine::{
-            error::StorageError,
+            control_flow::errors::StorageError,
             storage::{
                 common::sdss::sdss_r1::rw::TrackedReader,
                 v2::{
@@ -180,7 +180,7 @@ impl RawJournalAdapter for CompactDBAdapter {
 fn read_kv(
     file: &mut TrackedReader<FSpecSystemDatabaseV1>,
     gs: &CompactDB,
-) -> Result<(), crate::engine::fractal::error::Error> {
+) -> Result<(), crate::engine::control_flow::Error> {
     let klen = u64::from_le_bytes(file.read_block()?);
     let vlen = u64::from_le_bytes(file.read_block()?);
     if file.remaining() >= klen + vlen {

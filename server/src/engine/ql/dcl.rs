@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     data::DictGeneric,
-    error::{QueryError, QueryResult},
     ql::{
         ast::{traits, QueryData, State},
         ddl::syn,

@@ -42,7 +42,7 @@ pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};
 
 use {
     super::{rw::SDSSFileIO, spec},
-    crate::engine::{core::model::ModelData, error::RuntimeResult},
+    crate::engine::{control_flow::RuntimeResult, core::model::ModelData},
 };
 
 /// Re-initialize an existing batch journal and read all its data into model

@@ -27,7 +27,7 @@
 use {
     self::raw::JournalAdapter,
     crate::engine::{
-        core::GNSData, error::TransactionError, mem::BufferedScanner,
+        control_flow::errors::TransactionError, core::GNSData, mem::BufferedScanner,
         storage::common_encoding::r1::impls::gns::GNSEvent, txn::gns, RuntimeResult,
     },
 };
@@ -48,7 +48,7 @@ impl JournalAdapter for GNSAdapter {
     const RECOVERY_PLUGIN: bool = true;
     type JournalEvent = GNSSuperEvent;
     type GlobalState = GNSData;
-    type Error = crate::engine::fractal::error::Error;
+    type Error = crate::engine::control_flow::Error;
     fn encode(GNSSuperEvent(b): Self::JournalEvent) -> Box<[u8]> {
         b
     }

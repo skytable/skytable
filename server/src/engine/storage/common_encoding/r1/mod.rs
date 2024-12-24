@@ -37,7 +37,7 @@ pub mod obj;
 mod tests;
 
 use crate::engine::{
-    error::{RuntimeResult, StorageError},
+    control_flow::{errors::StorageError, RuntimeResult},
     idx::{AsKey, AsValue, STIndex},
     mem::{BufferedScanner, StatelessLen},
 };
@@ -245,7 +245,7 @@ pub mod enc {
 pub mod dec {
     use {
         super::{map, MapStorageSpec, PersistObject},
-        crate::engine::{error::RuntimeResult, mem::BufferedScanner},
+        crate::engine::{control_flow::RuntimeResult, mem::BufferedScanner},
     };
     // obj
     pub fn full<Obj: PersistObject>(data: &[u8]) -> RuntimeResult<Obj::OutputType> {
@@ -269,7 +269,7 @@ pub mod dec {
     }
     pub mod utils {
         use crate::engine::{
-            error::{RuntimeResult, StorageError},
+            control_flow::{errors::StorageError, RuntimeResult},
             mem::{unsafe_apis::BoxStr, BufferedScanner},
         };
         pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> RuntimeResult<String> {

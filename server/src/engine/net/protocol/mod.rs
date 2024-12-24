@@ -55,8 +55,8 @@ use {
     super::{IoResult, QueryLoopResult, Socket},
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::{exec, system_db::VerifyUser},
-            error::{QueryError, QueryResult},
             fractal::{Global, GlobalInstanceLike},
             mem::{BufferedScanner, IntegerRepr},
         },

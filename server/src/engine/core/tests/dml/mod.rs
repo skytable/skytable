@@ -30,9 +30,9 @@ mod select;
 mod update;
 
 use crate::engine::{
+    control_flow::QueryResult,
     core::{dml, index::Row, model::ModelData, space::Space, EntityIDRef},
     data::{cell::Datacell, lit::Lit},
-    error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{
         ast::parse_ast_node_full,

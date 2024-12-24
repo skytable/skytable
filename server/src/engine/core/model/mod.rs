@@ -32,12 +32,12 @@ use crate::engine::mem::unsafe_apis::BoxStr;
 use {
     super::index::PrimaryIndex,
     crate::engine::{
+        control_flow::{errors::QueryError, QueryResult},
         data::{
             cell::Datacell,
             tag::{DataTag, FloatSpec, FullTag, SIntSpec, TagClass, TagSelector, UIntSpec},
             uuid::Uuid,
         },
-        error::{QueryError, QueryResult},
         fractal::{FractalModelDriver, GenericTask, GlobalInstanceLike, Task},
         idx::{self, IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::{RawStr, VInline},

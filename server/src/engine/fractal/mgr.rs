@@ -28,12 +28,12 @@ use {
     super::{ModelUniqueID, ModelUniqueIDRef},
     crate::{
         engine::{
+            control_flow::{self, errors::StorageError},
             core::{
                 model::{delta::DataDelta, ModelData},
                 EntityIDRef,
             },
             data::uuid::Uuid,
-            error::StorageError,
             fractal::GlobalInstanceLike,
             storage::{
                 safe_interfaces::{paths_v1, StdModelBatch},
@@ -542,11 +542,11 @@ impl FractalMgr {
         model: &ModelData,
         observed_size: usize,
         mdl_driver_: &super::drivers::FractalModelDriver,
-    ) -> Result<(), (super::error::Error, BatchStats)> {
+    ) -> Result<(), (control_flow::Error, BatchStats)> {
         if mdl_driver_.status().is_iffy() {
             // don't mess this up any further
             return Err((
-                super::error::Error::from(StorageError::RawJournalRuntimeDirty),
+                control_flow::Error::from(StorageError::RawJournalRuntimeDirty),
                 BatchStats::into_inner(BatchStats::new()),
             ));
         }

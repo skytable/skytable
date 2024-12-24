@@ -166,7 +166,7 @@ mod impls {
     use {
         super::{RelationalExpr, WhereClause},
         crate::engine::{
-            error::{QueryError, QueryResult},
+            control_flow::{errors::QueryError, QueryResult},
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };

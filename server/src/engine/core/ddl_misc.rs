@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    error::{QueryError, QueryResult},
+    control_flow::{errors::QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     net::protocol::{ClientLocalState, Response, ResponseType},
     ql::ddl::Inspect,

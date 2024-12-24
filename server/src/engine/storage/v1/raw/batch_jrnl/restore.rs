@@ -31,12 +31,12 @@ use {
     },
     crate::{
         engine::{
+            control_flow::{errors::StorageError, RuntimeResult},
             core::{
                 index::{DcFieldIndex, PrimaryIndexKey, Row},
                 model::{delta::DeltaVersion, ModelData},
             },
             data::{cell::Datacell, tag::TagUnique},
-            error::{RuntimeResult, StorageError},
             idx::{MTIndex, STIndex, STIndexSeq},
             storage::{
                 common::interface::fs::File,
@@ -503,9 +503,9 @@ impl DataBatchRestoreDriver {
     }
 }
 
-pub struct ErrorHack(crate::engine::fractal::error::Error);
-impl From<crate::engine::fractal::error::Error> for ErrorHack {
-    fn from(value: crate::engine::fractal::error::Error) -> Self {
+pub struct ErrorHack(crate::engine::control_flow::Error);
+impl From<crate::engine::control_flow::Error> for ErrorHack {
+    fn from(value: crate::engine::control_flow::Error) -> Self {
         Self(value)
     }
 }

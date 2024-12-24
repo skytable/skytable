@@ -25,7 +25,8 @@
 */
 
 use crate::engine::{
-    core::dml, data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal,
+    control_flow::errors::QueryError, core::dml, data::cell::Datacell,
+    fractal::test_utils::TestGlobal,
 };
 
 #[sky_macros::miri_leaky_test] // FIXME(@ohsayan): leak due to EBR

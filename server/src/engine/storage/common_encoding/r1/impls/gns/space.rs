@@ -28,9 +28,9 @@ use {
     super::GNSEvent,
     crate::{
         engine::{
+            control_flow::{errors::TransactionError, RuntimeResult},
             core::{space::Space, EntityIDRef, GNSData},
             data::DictGeneric,
-            error::{RuntimeResult, TransactionError},
             idx::STIndex,
             mem::{unsafe_apis::BoxStr, BufferedScanner},
             storage::common_encoding::r1::{dec, map, obj, PersistObject},

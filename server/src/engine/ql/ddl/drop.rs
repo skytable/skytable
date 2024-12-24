@@ -25,8 +25,8 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     core::EntityIDRef,
-    error::{QueryError, QueryResult},
     ql::{
         ast::{QueryData, State},
         lex::Ident,
@@ -142,7 +142,7 @@ mod impls {
     use {
         super::{DropModel, DropSpace},
         crate::engine::{
-            error::QueryResult,
+            control_flow::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };

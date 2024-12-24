@@ -27,7 +27,7 @@
 use {
     super::{MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN},
     crate::engine::{
-        error::{RuntimeResult, StorageError},
+        control_flow::{errors::StorageError, RuntimeResult},
         storage::{
             common::interface::fs::File,
             v1::raw::rw::{SDSSFileIO, TrackedWriter},

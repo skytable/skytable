@@ -28,12 +28,12 @@ use {
     super::{Field, Layer, ModelData},
     crate::{
         engine::{
+            control_flow::{errors::QueryError, QueryResult},
             core::EntityIDRef,
             data::{
                 tag::{DataTag, TagClass},
                 DictEntryGeneric,
             },
-            error::{QueryError, QueryResult},
             fractal::GlobalInstanceLike,
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
             mem::unsafe_apis::BoxStr,

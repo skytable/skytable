@@ -29,7 +29,7 @@ mod ddl_sec;
 mod dml_sec;
 
 use {
-    crate::engine::error::QueryError,
+    crate::engine::control_flow::errors::QueryError,
     sky_macros::dbtest,
     skytable::{
         error::{ConnectionSetupError, Error},

@@ -26,7 +26,7 @@
 use {
     crate::{
         engine::{
-            error::{RuntimeResult, StorageError},
+            control_flow::{errors::StorageError, RuntimeResult},
             mem::BufferedScanner,
             storage::{
                 common::{

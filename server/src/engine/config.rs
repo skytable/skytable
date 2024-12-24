@@ -25,48 +25,105 @@
 */
 
 use {
-    crate::engine::{error::RuntimeResult, fractal},
+    crate::{
+        engine::{control_flow::RuntimeResult, fractal},
+        util::ModifyGuard,
+    },
     core::fmt,
     libsky::cli_utils::{ArgItem, CliMultiCommand, CommandLineArgs, MultipleOptions, SingleOption},
     serde::Deserialize,
     std::{collections::HashMap, fs},
 };
 
-/*
-    misc
-*/
-
 pub type ParsedRawArgs = std::collections::HashMap<String, Vec<String>>;
 pub const ROOT_PASSWORD_MIN_LEN: usize = 16;
 
-#[derive(Debug, PartialEq)]
-pub struct ModifyGuard<T> {
-    val: T,
-    modified: bool,
+/*
+    errors and misc
+*/
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+/// A configuration error (with an optional error origin source)
+pub struct ConfigError {
+    source: Option<ConfigSource>,
+    kind: ConfigErrorKind,
 }
 
-impl<T> ModifyGuard<T> {
-    pub const fn new(val: T) -> Self {
-        Self {
-            val,
-            modified: false,
+impl From<libsky::cli_utils::CliArgsError> for ConfigError {
+    fn from(err: libsky::cli_utils::CliArgsError) -> Self {
+        Self::with_src(
+            ConfigSource::Cli,
+            ConfigErrorKind::ErrorString(err.to_string()),
+        )
+    }
+}
+
+impl ConfigError {
+    /// Init config error
+    fn _new(source: Option<ConfigSource>, kind: ConfigErrorKind) -> Self {
+        Self { kind, source }
+    }
+    /// New config error with no source
+    fn new(kind: ConfigErrorKind) -> Self {
+        Self::_new(None, kind)
+    }
+    /// New config error with the given source
+    fn with_src(source: ConfigSource, kind: ConfigErrorKind) -> Self {
+        Self::_new(Some(source), kind)
+    }
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.source {
+            Some(src) => write!(f, "config error in {}: ", src.as_str())?,
+            None => {}
+        }
+        match &self.kind {
+            ConfigErrorKind::Conflict => write!(
+                f,
+                "conflicting settings. please choose either CLI or ENV or configuration file"
+            ),
+            ConfigErrorKind::ErrorString(e) => write!(f, "{e}"),
         }
     }
 }
 
-impl<T> core::ops::Deref for ModifyGuard<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.val
+#[derive(Debug, PartialEq)]
+/// The configuration source
+pub enum ConfigSource {
+    /// Command-line
+    Cli,
+    /// Environment variabels
+    Env,
+    /// Configuration file
+    File,
+}
+
+impl ConfigSource {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ConfigSource::Cli => "command-line arguments",
+            ConfigSource::Env => "ENV",
+            ConfigSource::File => "config file",
+        }
     }
 }
 
-impl<T> core::ops::DerefMut for ModifyGuard<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.modified = true;
-        &mut self.val
-    }
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+/// Type of configuration error
+pub enum ConfigErrorKind {
+    /// Conflict between different setting modes (more than one of CLI/ENV/FILE was provided)
+    Conflict,
+    /// A custom error output
+    ErrorString(String),
 }
+
+/*
+    misc
+*/
 
 /*
     configuration
@@ -368,89 +425,6 @@ impl DecodedEPInsecureConfig {
     }
 }
 
-/*
-    errors and misc
-*/
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
-/// A configuration error (with an optional error origin source)
-pub struct ConfigError {
-    source: Option<ConfigSource>,
-    kind: ConfigErrorKind,
-}
-
-impl From<libsky::cli_utils::CliArgsError> for ConfigError {
-    fn from(err: libsky::cli_utils::CliArgsError) -> Self {
-        Self::with_src(
-            ConfigSource::Cli,
-            ConfigErrorKind::ErrorString(err.to_string()),
-        )
-    }
-}
-
-impl ConfigError {
-    /// Init config error
-    fn _new(source: Option<ConfigSource>, kind: ConfigErrorKind) -> Self {
-        Self { kind, source }
-    }
-    /// New config error with no source
-    fn new(kind: ConfigErrorKind) -> Self {
-        Self::_new(None, kind)
-    }
-    /// New config error with the given source
-    fn with_src(source: ConfigSource, kind: ConfigErrorKind) -> Self {
-        Self::_new(Some(source), kind)
-    }
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.source {
-            Some(src) => write!(f, "config error in {}: ", src.as_str())?,
-            None => {}
-        }
-        match &self.kind {
-            ConfigErrorKind::Conflict => write!(
-                f,
-                "conflicting settings. please choose either CLI or ENV or configuration file"
-            ),
-            ConfigErrorKind::ErrorString(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-/// The configuration source
-pub enum ConfigSource {
-    /// Command-line
-    Cli,
-    /// Environment variabels
-    Env,
-    /// Configuration file
-    File,
-}
-
-impl ConfigSource {
-    fn as_str(&self) -> &'static str {
-        match self {
-            ConfigSource::Cli => "command-line arguments",
-            ConfigSource::Env => "ENV",
-            ConfigSource::File => "config file",
-        }
-    }
-}
-
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
-/// Type of configuration error
-pub enum ConfigErrorKind {
-    /// Conflict between different setting modes (more than one of CLI/ENV/FILE was provided)
-    Conflict,
-    /// A custom error output
-    ErrorString(String),
-}
-
 /// A configuration source implementation
 pub(super) trait ConfigurationSource {
     const KEY_AUTH_DRIVER: &'static str;
@@ -549,7 +523,7 @@ fn decode_tls_ep(
     host: &str,
     port: u16,
 ) -> RuntimeResult<DecodedEPSecureConfig> {
-    super::fractal::context::set_dmsg("loading TLS configuration from disk");
+    super::control_flow::context::set_dmsg("loading TLS configuration from disk");
     let tls_key = fs::read_to_string(key_path)?;
     let tls_cert = fs::read_to_string(cert_path)?;
     let tls_priv_key_passphrase = fs::read_to_string(pkey_pass)?;
@@ -1141,7 +1115,7 @@ pub(super) fn apply_and_validate<CS: ConfigurationSource>(
     mut args: ParsedRawArgs,
 ) -> RuntimeResult<ConfigReturn> {
     let cfg = apply_config_changes::<CS>(&mut args)?;
-    validate_configuration::<CS>(cfg.val).map(ConfigReturn::Config)
+    validate_configuration::<CS>(cfg.into_val()).map(ConfigReturn::Config)
 }
 
 /*
@@ -1191,7 +1165,7 @@ fn get_file_from_store(filename: &str) -> RuntimeResult<String> {
     }
     #[cfg(not(test))]
     {
-        super::fractal::context::set_dmsg("loading configuration file from disk");
+        super::control_flow::context::set_dmsg("loading configuration file from disk");
         f = Ok(fs::read_to_string(filename)?);
     }
     f
@@ -1318,7 +1292,7 @@ fn check_config_file(
         match config_from_file.endpoints.as_mut() {
             Some(ep) => match ep.secure.as_mut() {
                 Some(secure_ep) => {
-                    super::fractal::context::set_dmsg("loading TLS configuration from disk");
+                    super::control_flow::context::set_dmsg("loading TLS configuration from disk");
                     let cert = fs::read_to_string(&secure_ep.cert)?;
                     let private_key = fs::read_to_string(&secure_ep.private_key)?;
                     let private_key_passphrase = fs::read_to_string(&secure_ep.pkey_passphrase)?;

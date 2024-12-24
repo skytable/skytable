@@ -28,7 +28,7 @@ use {
     self::raw::{CommitPreference, RawJournalAdapterEvent, RawJournalWriter},
     crate::{
         engine::{
-            error::StorageError,
+            control_flow::errors::StorageError,
             storage::common::{
                 checksum::SCrc64,
                 sdss::sdss_r1::{

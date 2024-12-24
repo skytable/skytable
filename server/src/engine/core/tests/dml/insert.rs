@@ -24,7 +24,9 @@
  *
 */
 
-use crate::engine::{data::cell::Datacell, error::QueryError, fractal::test_utils::TestGlobal};
+use crate::engine::{
+    control_flow::errors::QueryError, data::cell::Datacell, fractal::test_utils::TestGlobal,
+};
 
 #[derive(sky_macros::Wrapper, Debug)]
 struct Tuple(Vec<(Box<str>, Datacell)>);

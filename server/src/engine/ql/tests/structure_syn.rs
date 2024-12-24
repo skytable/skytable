@@ -27,8 +27,8 @@
 use {
     super::*,
     crate::engine::{
+        control_flow::errors::QueryError,
         data::{lit::Lit, DictGeneric},
-        error::QueryError,
         ql::{
             ast::parse_ast_node_full,
             ddl::syn::{self, DictBasic, LayerSpec},

@@ -27,7 +27,7 @@
 use {
     super::RWLIdx,
     crate::engine::{
-        error::{QueryError, QueryResult},
+        control_flow::{errors::QueryError, QueryResult},
         fractal::GlobalInstanceLike,
         mem::unsafe_apis::BoxStr,
         txn::gns::sysctl::{AlterUserTxn, CreateUserTxn, DropUserTxn},

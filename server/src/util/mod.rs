@@ -433,3 +433,35 @@ pub fn time_now_with_postfix(post_fix: &str) -> String {
     // Concatenate the formatted date and time with the postfix
     format!("{}-{}", time_now_string(), post_fix)
 }
+
+#[derive(Debug, PartialEq)]
+pub struct ModifyGuard<T> {
+    val: T,
+    modified: bool,
+}
+
+impl<T> ModifyGuard<T> {
+    pub const fn new(val: T) -> Self {
+        Self {
+            val,
+            modified: false,
+        }
+    }
+    pub fn into_val(self) -> T {
+        self.val
+    }
+}
+
+impl<T> core::ops::Deref for ModifyGuard<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.val
+    }
+}
+
+impl<T> core::ops::DerefMut for ModifyGuard<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.modified = true;
+        &mut self.val
+    }
+}

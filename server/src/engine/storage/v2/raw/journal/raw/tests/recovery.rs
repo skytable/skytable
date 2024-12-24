@@ -28,8 +28,7 @@ use {
     super::{SimpleDB, SimpleDBJournal},
     crate::{
         engine::{
-            error::ErrorKind,
-            fractal,
+            control_flow::{self, ErrorKind},
             storage::{
                 common::{
                     interface::{
@@ -1474,7 +1473,7 @@ fn midway_corruption_at_runtime() {
 fn emulate_failure_for_rollback(
     journal_id: &str,
     action: impl Fn(&mut SimpleDB, &mut RawJournalWriter<SimpleDBJournal>) -> RuntimeResult<()>,
-    verify_error: impl Fn(fractal::error::Error),
+    verify_error: impl Fn(control_flow::Error),
     post_rollback: impl Fn(&SimpleDB),
 ) {
     {

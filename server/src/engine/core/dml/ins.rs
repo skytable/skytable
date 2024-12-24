@@ -25,13 +25,13 @@
 */
 
 use crate::engine::{
+    control_flow::{errors::QueryError, QueryResult},
     core::{
         self,
         dml::QueryExecMeta,
         index::{DcFieldIndex, PrimaryIndexKey, Row},
         model::{delta::DataDeltaKind, ModelData},
     },
-    error::{QueryError, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{IndexBaseSpec, MTIndex, STIndex, STIndexExt, STIndexSeq},
     net::protocol::Response,
