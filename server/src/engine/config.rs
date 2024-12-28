@@ -26,7 +26,7 @@
 
 use {
     crate::{
-        engine::{control_flow::RuntimeResult, fractal},
+        engine::{control_flow::RuntimeResult, fractal, mem::Str},
         util::ModifyGuard,
     },
     core::fmt,
@@ -52,10 +52,7 @@ pub struct ConfigError {
 
 impl From<libsky::cli_utils::CliArgsError> for ConfigError {
     fn from(err: libsky::cli_utils::CliArgsError) -> Self {
-        Self::with_src(
-            ConfigSource::Cli,
-            ConfigErrorKind::ErrorString(err.to_string()),
-        )
+        Self::with_src(ConfigSource::Cli, ConfigErrorKind::estr(err.to_string()))
     }
 }
 
@@ -118,7 +115,13 @@ pub enum ConfigErrorKind {
     /// Conflict between different setting modes (more than one of CLI/ENV/FILE was provided)
     Conflict,
     /// A custom error output
-    ErrorString(String),
+    ErrorString(Str),
+}
+
+impl ConfigErrorKind {
+    fn estr(s: impl Into<Str>) -> Self {
+        Self::ErrorString(s.into())
+    }
 }
 
 /*
@@ -444,7 +447,7 @@ pub(super) trait ConfigurationSource {
         } else {
             msg = format!("invalid value for {key}");
         }
-        ConfigError::with_src(Self::SOURCE, ConfigErrorKind::ErrorString(msg))
+        ConfigError::with_src(Self::SOURCE, ConfigErrorKind::estr(msg))
     }
     /// Formats an error `Too many values for {key}`
     fn err_too_many_values_for(key: &str) -> ConfigError {
@@ -454,11 +457,11 @@ pub(super) trait ConfigurationSource {
         } else {
             msg = format!("too many values for {key}");
         }
-        ConfigError::with_src(Self::SOURCE, ConfigErrorKind::ErrorString(msg))
+        ConfigError::with_src(Self::SOURCE, ConfigErrorKind::estr(msg))
     }
     /// Formats the custom error directly
     fn custom_err(error: String) -> ConfigError {
-        ConfigError::with_src(Self::SOURCE, ConfigErrorKind::ErrorString(error))
+        ConfigError::with_src(Self::SOURCE, ConfigErrorKind::estr(error))
     }
 }
 
@@ -488,7 +491,7 @@ fn parse_endpoint(source: ConfigSource, s: &str) -> RuntimeResult<(ConnectionPro
     let err = || {
         Err(ConfigError::with_src(
             source,
-            ConfigErrorKind::ErrorString(format!(
+            ConfigErrorKind::estr(format!(
                 "invalid endpoint syntax. should be `protocol@hostname:port`"
             )),
         )
@@ -550,7 +553,7 @@ fn arg_decode_tls_endpoint<CS: ConfigurationSource>(
         _ => {
             return Err(ConfigError::with_src(
                 ConfigSource::Cli,
-                ConfigErrorKind::ErrorString(format!(
+                ConfigErrorKind::estr(format!(
                     "must supply values for `{}`, `{}` and `{}` when using TLS",
                     CS::KEY_TLS_CERT,
                     CS::KEY_TLS_KEY,
@@ -584,7 +587,7 @@ fn arg_decode_auth<CS: ConfigurationSource>(
     let Some(mut root_key) = src_args.remove(CS::KEY_AUTH_ROOT_PASSWORD) else {
         return Err(ConfigError::with_src(
             CS::SOURCE,
-            ConfigErrorKind::ErrorString(format!(
+            ConfigErrorKind::estr(format!(
                 "to enable password auth, you must provide a value for '{}'",
                 CS::KEY_AUTH_ROOT_PASSWORD,
             )),
@@ -753,10 +756,7 @@ pub fn parse_cli_args<'a, T: ArgItem>(
                 _ => {
                     return Err(ConfigError::with_src(
                         ConfigSource::Cli,
-                        ConfigErrorKind::ErrorString(format!(
-                            "unknown subcommand {}",
-                            subcommand.name()
-                        )),
+                        ConfigErrorKind::estr(format!("unknown subcommand {}", subcommand.name())),
                     )
                     .into())
                 }
@@ -784,7 +784,7 @@ pub fn parse_cli_args<'a, T: ArgItem>(
                             backup_scheme => {
                                 return Err(ConfigError::with_src(
                                     ConfigSource::Cli,
-                                    ConfigErrorKind::ErrorString(format!(
+                                    ConfigErrorKind::estr(format!(
                                         "unknown backup scheme `{backup_scheme}`"
                                     )),
                                 )
@@ -834,7 +834,7 @@ pub fn parse_cli_args<'a, T: ArgItem>(
                     _ => {
                         return Err(ConfigError::with_src(
                             ConfigSource::Cli,
-                            ConfigErrorKind::ErrorString(format!(
+                            ConfigErrorKind::estr(format!(
                                 "unknown subcommand {}",
                                 subcommand.name()
                             )),
@@ -872,7 +872,7 @@ pub fn parse_env_args() -> RuntimeResult<Option<ParsedRawArgs>> {
                 std::env::VarError::NotUnicode(_) => {
                     return Err(ConfigError::with_src(
                         ConfigSource::Env,
-                        ConfigErrorKind::ErrorString(format!("invalid value for `{key}`")),
+                        ConfigErrorKind::estr(format!("invalid value for `{key}`")),
                     )
                     .into())
                 }
@@ -939,11 +939,10 @@ fn apply_config_changes<CS: ConfigurationSource>(
         }
     }
     if !args.is_empty() {
-        Err(ConfigError::with_src(
-            CS::SOURCE,
-            ConfigErrorKind::ErrorString("found unknown arguments".to_string()),
+        Err(
+            ConfigError::with_src(CS::SOURCE, ConfigErrorKind::estr("found unknown arguments"))
+                .into(),
         )
-        .into())
     } else {
         Ok(config)
     }
@@ -1024,7 +1023,7 @@ fn validate_configuration<CS: ConfigurationSource>(
     let Some(auth) = auth else {
         return Err(ConfigError::with_src(
             CS::SOURCE,
-            ConfigErrorKind::ErrorString(format!(
+            ConfigErrorKind::estr(format!(
                 "root account must be configured with {}",
                 CS::KEY_AUTH_ROOT_PASSWORD
             )),
@@ -1073,11 +1072,11 @@ fn validate_configuration<CS: ConfigurationSource>(
     err_if!(
         if config.system.reliability_system_window == 0 => ConfigError::with_src(
             CS::SOURCE,
-            ConfigErrorKind::ErrorString("invalid value for service window. must be nonzero".to_string()),
+            ConfigErrorKind::estr("invalid value for service window. must be nonzero"),
         ).into(),
         if config.auth.root_key.len() < ROOT_PASSWORD_MIN_LEN => ConfigError::with_src(
             CS::SOURCE,
-            ConfigErrorKind::ErrorString("the root password must have at least 16 characters".to_string()),
+            ConfigErrorKind::estr("the root password must have at least 16 characters"),
         ).into(),
     );
     Ok(config)
@@ -1258,7 +1257,7 @@ pub fn check_configuration() -> RuntimeResult<ConfigReturn> {
                 }
                 None => {
                     // no env args or cli args; we're running on default
-                    return Err(ConfigError::new(ConfigErrorKind::ErrorString(
+                    return Err(ConfigError::new(ConfigErrorKind::estr(
                         "no configuration provided".to_string(),
                     ))
                     .into());
@@ -1283,7 +1282,7 @@ fn check_config_file(
             serde_yaml::from_str(&file).map_err(|e| {
                 ConfigError::with_src(
                     ConfigSource::File,
-                    ConfigErrorKind::ErrorString(format!(
+                    ConfigErrorKind::estr(format!(
                         "failed to parse YAML config file with error: `{e}`"
                     )),
                 )

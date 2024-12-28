@@ -28,9 +28,9 @@ pub mod context;
 pub mod errors;
 
 use {
-    self::context::{Dmsg, Subsystem},
+    self::context::Subsystem,
     super::config::ConfigError,
-    crate::util::os::SysIOError,
+    crate::{engine::mem::Str, util::os::SysIOError},
     std::fmt,
 };
 
@@ -49,7 +49,7 @@ pub enum ErrorKind {
     /// A transactional error
     Txn(errors::TransactionError),
     /// other errors
-    Other(String),
+    Other(Str),
     /// configuration errors
     Config(ConfigError),
 }
@@ -89,7 +89,7 @@ direct_from! {
 pub struct Error {
     kind: ErrorKind,
     origin: Option<Subsystem>,
-    dmsg: Option<Dmsg>,
+    dmsg: Option<Str>,
 }
 
 impl Error {
@@ -102,18 +102,18 @@ impl Error {
         Self::_new(self.kind, Some(origin), self.dmsg)
     }
     /// Replace the dmsg in self
-    pub fn add_dmsg(self, dmsg: impl Into<Dmsg>) -> Self {
+    pub fn add_dmsg(self, dmsg: impl Into<Str>) -> Self {
         Self::_new(self.kind, self.origin, Some(dmsg.into()))
     }
 }
 
 impl Error {
     /// ctor
-    fn _new(kind: ErrorKind, origin: Option<Subsystem>, dmsg: Option<Dmsg>) -> Self {
+    fn _new(kind: ErrorKind, origin: Option<Subsystem>, dmsg: Option<Str>) -> Self {
         Self { kind, origin, dmsg }
     }
     /// new full error
-    pub fn new(kind: ErrorKind, origin: Subsystem, dmsg: impl Into<Dmsg>) -> Self {
+    pub fn new(kind: ErrorKind, origin: Subsystem, dmsg: impl Into<Str>) -> Self {
         Self::_new(kind, Some(origin), Some(dmsg.into()))
     }
     /// new error with kind and no ctx
@@ -200,30 +200,30 @@ pub trait ErrorContext<T> {
     /// set the origin (do not inherit parent or local)
     fn set_origin(self, origin: Subsystem) -> Result<T, Error>;
     /// set the dmsg (do not inherit parent or local)
-    fn set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
+    fn set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error>;
     #[allow(dead_code)]
     fn set_dmsg_fn<F, M>(self, d: F) -> Result<T, Error>
     where
         F: Fn() -> M,
-        M: Into<Dmsg>,
+        M: Into<Str>,
         Self: Sized;
     #[allow(dead_code)]
     /// set the origin and dmsg (do not inherit)
-    fn set_ctx(self, origin: Subsystem, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
+    fn set_ctx(self, origin: Subsystem, dmsg: impl Into<Str>) -> Result<T, Error>;
     // inherit parent
     #[allow(dead_code)]
     /// set the origin (inherit rest from parent)
     fn ip_set_origin(self, origin: Subsystem) -> Result<T, Error>;
     #[allow(dead_code)]
     /// set the dmsg (inherit rest from origin)
-    fn ip_set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
+    fn ip_set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error>;
     // inherit local
     #[allow(dead_code)]
     /// set the origin (inherit rest from local)
     fn il_set_origin(self, origin: Subsystem) -> Result<T, Error>;
     #[allow(dead_code)]
     /// set the dmsg (inherit rest from local)
-    fn il_set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
+    fn il_set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error>;
     #[allow(dead_code)]
     /// inherit everything from local (assuming this has no context)
     fn inherit_local(self) -> Result<T, Error>;
@@ -232,7 +232,7 @@ pub trait ErrorContext<T> {
     /// set the origin (inherit rest from either parent, then local)
     fn inherit_set_origin(self, origin: Subsystem) -> Result<T, Error>;
     /// set the dmsg (inherit rest from either parent, then local)
-    fn inherit_set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error>;
+    fn inherit_set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error>;
     // orphan
     #[allow(dead_code)]
     /// orphan the entire context (if any)
@@ -253,25 +253,25 @@ where
     fn set_origin(self, origin: Subsystem) -> Result<T, Error> {
         self.map_err(|e| e.err_noinherit().add_origin(origin))
     }
-    fn set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
+    fn set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error> {
         self.map_err(|e| e.err_noinherit().add_dmsg(dmsg))
     }
     fn set_dmsg_fn<F, M>(self, d: F) -> Result<T, Error>
     where
         F: Fn() -> M,
-        M: Into<Dmsg>,
+        M: Into<Str>,
         Self: Sized,
     {
         self.map_err(|e| e.err_noinherit().add_dmsg(d().into()))
     }
-    fn set_ctx(self, origin: Subsystem, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
+    fn set_ctx(self, origin: Subsystem, dmsg: impl Into<Str>) -> Result<T, Error> {
         self.map_err(|e| Error::new(e.err_noinherit().kind, origin, dmsg))
     }
     // inherit local
     fn il_set_origin(self, origin: Subsystem) -> Result<T, Error> {
         self.map_err(|e| Error::_new(e.err_noinherit().kind, Some(origin), context::pop_dmsg()))
     }
-    fn il_set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
+    fn il_set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error> {
         self.map_err(|e| {
             Error::_new(
                 e.err_noinherit().kind,
@@ -293,11 +293,11 @@ where
     fn ip_set_origin(self, origin: Subsystem) -> Result<T, Error> {
         self.map_err(|e| e.err_inherit_parent().add_origin(origin))
     }
-    fn ip_set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
+    fn ip_set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error> {
         self.map_err(|e| e.err_inherit_parent().add_dmsg(dmsg))
     }
     // inherit any
-    fn inherit_set_dmsg(self, dmsg: impl Into<Dmsg>) -> Result<T, Error> {
+    fn inherit_set_dmsg(self, dmsg: impl Into<Str>) -> Result<T, Error> {
         self.map_err(|e| {
             // inherit from parent
             let mut e = e.err_inherit_parent();
@@ -334,10 +334,10 @@ macro_rules! impl_other_err_tostring {
     ($($ty:ty => $origin:ident),* $(,)?) => {
         $(
             impl From<$ty> for Error {
-                fn from(e: $ty) -> Self { Self::_new(ErrorKind::Other(e.to_string()), Some(Subsystem::$origin), context::pop_dmsg()) }
+                fn from(e: $ty) -> Self { Self::_new(ErrorKind::Other(e.to_string().into()), Some(Subsystem::$origin), context::pop_dmsg()) }
             }
             impl IntoError for $ty {
-                fn err_noinherit(self) -> Error { Error::with_kind(ErrorKind::Other(self.to_string())) }
+                fn err_noinherit(self) -> Error { Error::with_kind(ErrorKind::Other(self.to_string().into())) }
                 fn err_inherit_parent(self) -> Error { Self::err_noinherit(self) }
             }
         )*

@@ -49,6 +49,50 @@ pub use {
     vinline::VInline,
     word::{DwordNN, DwordQN, WordIO, ZERO_BLOCK},
 };
+// imports
+use core::fmt;
+
+#[derive(Clone)]
+/// A dmsg
+pub enum Str {
+    A(Box<str>),
+    B(&'static str),
+}
+
+impl PartialEq for Str {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+impl AsRef<str> for Str {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::A(a) => a,
+            Self::B(b) => b,
+        }
+    }
+}
+
+direct_from! {
+    Str => {
+        String as A,
+        Box<str> as A,
+        &'static str as B,
+    }
+}
+
+impl fmt::Display for Str {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <str as fmt::Display>::fmt(self.as_ref(), f)
+    }
+}
+
+impl fmt::Debug for Str {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <str as fmt::Debug>::fmt(self.as_ref(), f)
+    }
+}
 
 /// Native double pointer width (note, native != arch native, but host native)
 pub struct NativeDword([usize; 2]);

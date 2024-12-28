@@ -26,7 +26,7 @@
 
 #![allow(dead_code)]
 
-use core::fmt;
+use crate::engine::mem::Str;
 
 /// The current engine context
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -49,52 +49,6 @@ impl Subsystem {
 }
 
 /*
-    diagnostics
-*/
-
-#[derive(Clone)]
-/// A dmsg
-pub enum Dmsg {
-    A(Box<str>),
-    B(&'static str),
-}
-
-impl PartialEq for Dmsg {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_ref() == other.as_ref()
-    }
-}
-
-impl AsRef<str> for Dmsg {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::A(a) => a,
-            Self::B(b) => b,
-        }
-    }
-}
-
-direct_from! {
-    Dmsg => {
-        String as A,
-        Box<str> as A,
-        &'static str as B,
-    }
-}
-
-impl fmt::Display for Dmsg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        <str as fmt::Display>::fmt(self.as_ref(), f)
-    }
-}
-
-impl fmt::Debug for Dmsg {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        <str as fmt::Debug>::fmt(self.as_ref(), f)
-    }
-}
-
-/*
     context
 */
 
@@ -107,7 +61,7 @@ macro_rules! exported {
 
 struct LocalContext {
     origin: Option<Subsystem>,
-    dmsg: Option<Dmsg>,
+    dmsg: Option<Str>,
 }
 
 fn if_test(f: impl FnOnce()) {
@@ -120,17 +74,17 @@ fn if_test(f: impl FnOnce()) {
 #[derive(Debug, PartialEq, Clone)]
 pub struct LocalCtxInstance {
     origin: Option<Subsystem>,
-    dmsg: Option<Dmsg>,
+    dmsg: Option<Str>,
 }
 
 impl LocalCtxInstance {
-    fn new(origin: Option<Subsystem>, dmsg: Option<Dmsg>) -> Self {
+    fn new(origin: Option<Subsystem>, dmsg: Option<Str>) -> Self {
         Self { origin, dmsg }
     }
     pub fn origin(&self) -> Option<Subsystem> {
         self.origin
     }
-    pub fn dmsg(&self) -> Option<&Dmsg> {
+    pub fn dmsg(&self) -> Option<&Str> {
         self.dmsg.as_ref()
     }
 }
@@ -144,17 +98,17 @@ impl From<LocalContext> for LocalCtxInstance {
 exported! {
     pub impl LocalContext {
         // all
-        fn set(origin: Subsystem, dmsg: impl Into<Dmsg>) { Self::_ctx(|ctx| { ctx.origin = Some(origin); ctx.dmsg = Some(dmsg.into()) }) }
-        fn test_set(origin: Subsystem, dmsg: impl Into<Dmsg>) { if_test(|| Self::set(origin, dmsg)) }
+        fn set(origin: Subsystem, dmsg: impl Into<Str>) { Self::_ctx(|ctx| { ctx.origin = Some(origin); ctx.dmsg = Some(dmsg.into()) }) }
+        fn test_set(origin: Subsystem, dmsg: impl Into<Str>) { if_test(|| Self::set(origin, dmsg)) }
         // dmsg
         /// set a local dmsg
-        fn set_dmsg(dmsg: impl Into<Dmsg>) { Self::_ctx(|ctx| ctx.dmsg = Some(dmsg.into())) }
+        fn set_dmsg(dmsg: impl Into<Str>) { Self::_ctx(|ctx| ctx.dmsg = Some(dmsg.into())) }
         /// (only in test) set a local dmsg
-        fn test_set_dmsg(dmsg: impl Into<Dmsg>) { if_test(|| Self::set_dmsg(dmsg)) }
+        fn test_set_dmsg(dmsg: impl Into<Str>) { if_test(|| Self::set_dmsg(dmsg)) }
         /// Set a local dmsg iff not already set
-        fn set_dmsg_if_unset(dmsg: impl Into<Dmsg>) { Self::_ctx(|ctx| { ctx.dmsg.get_or_insert(dmsg.into()); }) }
+        fn set_dmsg_if_unset(dmsg: impl Into<Str>) { Self::_ctx(|ctx| { ctx.dmsg.get_or_insert(dmsg.into()); }) }
         /// (only in test) set a local dmsg iff not already set
-        fn test_set_dmsg_if_unset(dmsg: impl Into<Dmsg>) { if_test(|| Self::set_dmsg_if_unset(dmsg)) }
+        fn test_set_dmsg_if_unset(dmsg: impl Into<Str>) { if_test(|| Self::set_dmsg_if_unset(dmsg)) }
         // origin
         /// set a local origin
         fn set_origin(origin: Subsystem) { Self::_ctx(|ctx| ctx.origin = Some(origin)) }
@@ -170,20 +124,20 @@ exported! {
         /// pop the origin from the local context
         fn pop_origin() -> Option<Subsystem> { Self::_ctx(|ctx| ctx.origin.take()) }
         /// pop the dmsg from the local context
-        fn pop_dmsg() -> Option<Dmsg> { Self::_ctx(|ctx| ctx.dmsg.take()) }
+        fn pop_dmsg() -> Option<Str> { Self::_ctx(|ctx| ctx.dmsg.take()) }
         /// pop the entire context
         fn pop() -> LocalCtxInstance { Self::_ctx(|ctx| core::mem::replace(ctx, LocalContext::null()).into()) }
         /// get the origin
         fn get_origin() -> Option<Subsystem> { Self::_ctx(|ctx| ctx.origin.clone()) }
         /// get the dmsg
-        fn get_dmsg() -> Option<Dmsg> { Self::_ctx(|ctx| ctx.dmsg.clone()) }
+        fn get_dmsg() -> Option<Str> { Self::_ctx(|ctx| ctx.dmsg.clone()) }
         /// get a clone of the local context
         fn cloned() -> LocalCtxInstance { Self::_ctx(|ctx| LocalCtxInstance::new(ctx.origin.clone(), ctx.dmsg.clone())) }
     }
 }
 
 impl LocalContext {
-    fn _new(origin: Option<Subsystem>, dmsg: Option<Dmsg>) -> Self {
+    fn _new(origin: Option<Subsystem>, dmsg: Option<Str>) -> Self {
         Self { origin, dmsg }
     }
     fn null() -> Self {
