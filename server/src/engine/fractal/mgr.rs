@@ -232,23 +232,10 @@ impl FractalMgr {
         rs_window: u64,
     ) -> FractalHandle {
         let fractal_mgr = global.get_state().fractal_mgr();
-        let global_1 = global.clone();
-        let global_2 = global.clone();
-        let sigterm_rx = sigterm.subscribe();
-        let hp_handle = tokio::spawn(async move {
-            FractalMgr::hp_executor_svc(fractal_mgr, global_1, hp_receiver, sigterm_rx).await
-        });
-        let sigterm_rx = sigterm.subscribe();
-        let lp_handle = tokio::spawn(async move {
-            FractalMgr::general_executor_svc(
-                fractal_mgr,
-                global_2,
-                lp_receiver,
-                sigterm_rx,
-                rs_window,
-            )
-            .await
-        });
+        let hp_handle = async_start!(fractal_mgr, global.clone(), hp_receiver, sigterm.subscribe() => FractalMgr::hp_executor_svc);
+        let lp_handle = async_start!(
+            fractal_mgr, global.clone(), lp_receiver, sigterm.subscribe(), rs_window => FractalMgr::general_executor_svc
+        );
         FractalHandle {
             hp_handle,
             lp_handle,

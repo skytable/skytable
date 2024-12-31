@@ -470,3 +470,14 @@ macro_rules! iff {
         }
     };
 }
+
+macro_rules! async_start {
+    ($move_var:ident as $move:expr => $run:expr) => {{
+        let $move_var = $move;
+        ::tokio::spawn(async move { let mut $move_var = $move_var; $run })
+    }};
+	($($move_var:expr),* => $run:expr) => {{
+		let call = $run($($move_var),*);
+		::tokio::spawn(async move { call.await })
+	}};
+}

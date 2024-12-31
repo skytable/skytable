@@ -225,16 +225,13 @@ impl Listener {
                     continue;
                 }
             };
-            let mut handler = ConnectionHandler::new(
+            async_start!(handler as ConnectionHandler::new(
                 stream,
                 self.global.clone(),
                 self.sig_shutdown.subscribe(),
                 self.sig_inflight.clone(),
-            );
-            tokio::spawn(async move {
-                if let Err(e) = handler.run().await {
-                    warn!("tcp: error handling client connection: {e}");
-                }
+            ) => if let Err(e) = handler.run().await {
+                warn!("tcp: error handling client connection: {e}");
             });
             // return the permit
             drop(permit);
@@ -279,16 +276,13 @@ impl Listener {
                     continue;
                 }
             };
-            let mut handler = ConnectionHandler::new(
+            async_start!(handler as ConnectionHandler::new(
                 stream,
                 self.global.clone(),
                 self.sig_shutdown.subscribe(),
                 self.sig_inflight.clone(),
-            );
-            tokio::spawn(async move {
-                if let Err(e) = handler.run().await {
-                    warn!("tls: error handling client connection: {e}");
-                }
+            ) => if let Err(e) = handler.run().await {
+                warn!("tls: error handling client connection: {e}");
             });
         }
     }
