@@ -31,7 +31,7 @@ use {
         terminal,
     },
     libsky::{
-        cli_utils::{CliCommand, CliCommandData, CommandLineArgs, SingleOption},
+        cli_utils::{CliCommandData, CliExecSimple, CommandLineArgs, SingleOption},
         variables::env_vars,
     },
     std::{
@@ -79,11 +79,11 @@ enum TaskInner {
 }
 
 fn load_env() -> CliResult<TaskInner> {
-    let action = CliCommand::<SingleOption>::from_cli()?;
+    let action = CliExecSimple::<SingleOption>::from_cli()?;
     match action {
-        CliCommand::Help(_) => Ok(TaskInner::HelpMsg(TXT_HELP.to_string())),
-        CliCommand::Version(_) => Ok(TaskInner::HelpMsg(libsky::version_msg("skysh"))),
-        CliCommand::Run(a) => Ok(TaskInner::OpenShell(a)),
+        CliExecSimple::Help(_) => Ok(TaskInner::HelpMsg(TXT_HELP.to_string())),
+        CliExecSimple::Version(_) => Ok(TaskInner::HelpMsg(libsky::version_msg("skysh"))),
+        CliExecSimple::Run(a) => Ok(TaskInner::OpenShell(a)),
     }
 }
 

@@ -33,17 +33,27 @@ use std::{
     cli args traits & types
 */
 
+/// typedef for errors from CLI arg parse
 pub type CliResult<T> = Result<T, CliArgsError>;
+/// allow single option for this type
 pub type SingleOption = HashMap<String, String>;
+/// allow multiple options for this type
 pub type MultipleOptions = HashMap<String, Vec<String>>;
 
 #[derive(Debug)]
+/// errors from cli arg parse
 pub enum CliArgsError {
+    /// incorrectly formatted argument
     ArgFmtError(String),
+    /// duplicate flag (when it is not allowed)
     DuplicateFlag(String),
+    /// duplicate option (when it is not allowed)
     DuplicateOption(String),
+    /// subcommand when it is not allowed
     SubcommandDisallowed,
+    /// parse error (such as resolving to a type)
     ArgParseError(String),
+    /// other custom error
     Other(String),
 }
 
@@ -66,46 +76,67 @@ impl fmt::Display for CliArgsError {
 
 impl Error for CliArgsError {}
 
-pub trait CliArgsDecode: Sized {
-    type Data;
-    fn initialize<const SWITCH: bool>(iter: &mut impl Iterator<Item = impl ArgItem>) -> Self::Data;
-    fn push_flag(data: &mut Self::Data, flag: String) -> CliResult<()>;
+/// a type of cli store
+pub trait CliStore: Sized {
+    /// the object containing the cli args data (flags, args, etc.)
+    type CliArgsStoreBase;
+    /// initialize an empty instance of this cli store
+    fn initialize(iter: &mut impl Iterator<Item = impl AsArgItem>) -> Self::CliArgsStoreBase;
+    /// add a flag to this store
+    fn push_flag(data: &mut Self::CliArgsStoreBase, flag: String) -> CliResult<()>;
+    /// add an option to this store
     fn push_option(
-        data: &mut Self::Data,
+        data: &mut Self::CliArgsStoreBase,
         option_name: String,
         option_value: String,
     ) -> CliResult<()>;
+    /// using the given base args store and subcommand name, return a subcommand instance for this cli store type
     fn yield_subcommand(
-        data: Self::Data,
+        data: Self::CliArgsStoreBase,
         subcommand: String,
-        args: impl IntoIterator<Item = impl ArgItem>,
+        args: impl IntoIterator<Item = impl AsArgItem>,
     ) -> CliResult<Self>;
-    fn yield_command(data: Self::Data) -> CliResult<Self>;
-    fn yield_help(data: Self::Data) -> CliResult<Self>;
-    fn yield_version(data: Self::Data) -> CliResult<Self>;
+    /// using the given base args store, return a command instance for this cli store type
+    fn yield_command(data: Self::CliArgsStoreBase) -> CliResult<Self>;
+    /// using the given base args store, return a help instance for this cli store type
+    fn yield_help(data: Self::CliArgsStoreBase) -> CliResult<Self>;
+    /// using the given base args store, return a version instance for this cli store type
+    fn yield_version(data: Self::CliArgsStoreBase) -> CliResult<Self>;
 }
 
-pub trait CommandLineArgs: Sized + CliArgsDecode {
-    fn parse(src: impl IntoIterator<Item = impl ArgItem>) -> CliResult<Self> {
-        decode_args::<Self, true>(src)
+/// the top-level trait of [`CliStore`] which can load arguments from a given source
+pub trait CommandLineArgs: Sized + CliStore {
+    /// parse with the first argument skipped (if using direct-command line, for example)
+    fn parse_skip(src: impl IntoIterator<Item = impl AsArgItem>) -> CliResult<Self> {
+        let mut src = src.into_iter();
+        let _ = src.next();
+        Self::parse(src)
     }
+    /// parse
+    fn parse(src: impl IntoIterator<Item = impl AsArgItem>) -> CliResult<Self> {
+        decode_args(src)
+    }
+    /// load and parse from env
     fn from_cli() -> CliResult<Self> {
         Self::parse(std::env::args())
     }
 }
 
-impl<T: Sized + CliArgsDecode> CommandLineArgs for T {}
+impl<T: Sized + CliStore> CommandLineArgs for T {}
 
 /*
     helper traits
 */
 
-pub trait ArgItem {
+/// any type representing an argument item (primarily used for testing)
+pub trait AsArgItem {
+    /// get this argument item as a borrowed string
     fn as_str(&self) -> &str;
+    /// get this argument as an owned string
     fn boxed_str(self) -> String;
 }
 
-impl<'a> ArgItem for &'a str {
+impl<'a> AsArgItem for &'a str {
     fn as_str(&self) -> &str {
         self
     }
@@ -114,7 +145,7 @@ impl<'a> ArgItem for &'a str {
     }
 }
 
-impl ArgItem for String {
+impl AsArgItem for String {
     fn as_str(&self) -> &str {
         self
     }
@@ -123,15 +154,21 @@ impl ArgItem for String {
     }
 }
 
-pub trait CliArgsOptions: Default {
+/// the type of allowed CLI args (single, double, multiple, etc)
+pub trait CliArgMap: Default {
+    /// the value type (either a single type, or multiple, etc.)
     type Value;
+    /// returns true if no options has been in this cli config map
     fn is_unset(&self) -> bool;
+    /// add an option to this cli config map
     fn push_option(&mut self, option: String, value: String) -> CliResult<()>;
+    /// remove an option from this
     fn take_option(&mut self, option: &str) -> Option<Self::Value>;
+    /// check if a config item is present
     fn contains(&self, option: &str) -> bool;
 }
 
-impl CliArgsOptions for SingleOption {
+impl CliArgMap for SingleOption {
     type Value = String;
     fn is_unset(&self) -> bool {
         self.is_empty()
@@ -153,7 +190,7 @@ impl CliArgsOptions for SingleOption {
     }
 }
 
-impl CliArgsOptions for MultipleOptions {
+impl CliArgMap for MultipleOptions {
     type Value = Vec<String>;
     fn is_unset(&self) -> bool {
         self.is_empty()
@@ -179,19 +216,10 @@ impl CliArgsOptions for MultipleOptions {
     args decoder
 */
 
-fn decode_args<C: CliArgsDecode, const HAS_BINARY_NAME: bool>(
-    src: impl IntoIterator<Item = impl ArgItem>,
-) -> CliResult<C> {
+/// decode args from an iterator
+fn decode_args<C: CliStore>(src: impl IntoIterator<Item = impl AsArgItem>) -> CliResult<C> {
     let mut args = src.into_iter().peekable();
-    if HAS_BINARY_NAME {
-        // must not be empty
-        if args.peek().is_none() {
-            return Err(CliArgsError::Other(
-                "expected arguments but found none".to_owned(),
-            ));
-        }
-    }
-    let mut cli_data = C::initialize::<HAS_BINARY_NAME>(&mut args);
+    let mut cli_data = C::initialize(&mut args);
     while let Some(arg) = args.next() {
         let arg = arg.as_str();
         let arg = if arg == "-h" || arg == "--help" {
@@ -263,19 +291,23 @@ fn decode_args<C: CliArgsDecode, const HAS_BINARY_NAME: bool>(
 */
 
 #[derive(Debug, PartialEq)]
-pub enum CliCommand<Opt: CliArgsOptions> {
+/// A simple cli command
+pub enum CliExecSimple<Opt: CliArgMap> {
+    /// help (`--help` or `-h`)
     Help(CliCommandData<Opt>),
-    Run(CliCommandData<Opt>),
+    /// version (`--version` or `-v``)
     Version(CliCommandData<Opt>),
+    /// run (any case excluding help/version)
+    Run(CliCommandData<Opt>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CliCommandData<Opt: CliArgsOptions> {
+pub struct CliCommandData<Opt: CliArgMap> {
     options: Opt,
     flags: HashSet<String>,
 }
 
-impl<Opt: CliArgsOptions> CliCommandData<Opt> {
+impl<Opt: CliArgMap> CliCommandData<Opt> {
     pub fn take_flag(&mut self, flag: &str) -> CliResult<bool> {
         if self.flags.remove(flag) {
             Ok(true)
@@ -346,47 +378,42 @@ impl CliCommandData<SingleOption> {
     }
 }
 
-impl<Opt: CliArgsOptions> CliArgsDecode for CliCommand<Opt> {
-    type Data = CliCommandData<Opt>;
-    fn initialize<const SWITCH: bool>(
-        iter: &mut impl Iterator<Item = impl ArgItem>,
-    ) -> CliCommandData<Opt> {
-        if SWITCH {
-            let _binary_name = iter.next();
-        }
+impl<Opt: CliArgMap> CliStore for CliExecSimple<Opt> {
+    type CliArgsStoreBase = CliCommandData<Opt>;
+    fn initialize(_: &mut impl Iterator<Item = impl AsArgItem>) -> CliCommandData<Opt> {
         CliCommandData {
             options: Default::default(),
             flags: Default::default(),
         }
     }
-    fn push_flag(data: &mut Self::Data, flag: String) -> CliResult<()> {
+    fn push_flag(data: &mut Self::CliArgsStoreBase, flag: String) -> CliResult<()> {
         if !data.flags.insert(flag.to_owned()) {
             return Err(CliArgsError::DuplicateFlag(flag.to_string()));
         }
         Ok(())
     }
     fn push_option(
-        data: &mut Self::Data,
+        data: &mut Self::CliArgsStoreBase,
         option_name: String,
         option_value: String,
     ) -> CliResult<()> {
         data.options.push_option(option_name, option_value)
     }
     fn yield_subcommand(
-        _: Self::Data,
+        _: Self::CliArgsStoreBase,
         _: String,
-        _: impl IntoIterator<Item = impl ArgItem>,
+        _: impl IntoIterator<Item = impl AsArgItem>,
     ) -> CliResult<Self> {
         return Err(CliArgsError::SubcommandDisallowed);
     }
-    fn yield_command(data: Self::Data) -> CliResult<Self> {
-        Ok(CliCommand::Run(data))
+    fn yield_command(data: Self::CliArgsStoreBase) -> CliResult<Self> {
+        Ok(CliExecSimple::Run(data))
     }
-    fn yield_help(data: Self::Data) -> CliResult<Self> {
-        Ok(CliCommand::Help(data))
+    fn yield_help(data: Self::CliArgsStoreBase) -> CliResult<Self> {
+        Ok(CliExecSimple::Help(data))
     }
-    fn yield_version(data: Self::Data) -> CliResult<Self> {
-        Ok(CliCommand::Version(data))
+    fn yield_version(data: Self::CliArgsStoreBase) -> CliResult<Self> {
+        Ok(CliExecSimple::Version(data))
     }
 }
 
@@ -395,7 +422,7 @@ impl<Opt: CliArgsOptions> CliArgsDecode for CliCommand<Opt> {
 */
 
 #[derive(Debug, PartialEq)]
-pub enum CliMultiCommand<OptR: CliArgsOptions, OptS: CliArgsOptions> {
+pub enum CliExecMulti<OptR: CliArgMap, OptS: CliArgMap> {
     Run(CliCommandData<OptR>),
     Help(CliCommandData<OptR>),
     Version(CliCommandData<OptR>),
@@ -405,12 +432,15 @@ pub enum CliMultiCommand<OptR: CliArgsOptions, OptS: CliArgsOptions> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Subcommand<Opt: CliArgsOptions> {
+/// a subcommands
+pub struct Subcommand<Opt: CliArgMap> {
+    /// name of the subcommand
     name: String,
+    /// subcommand data
     settings: CliCommandData<Opt>,
 }
 
-impl<Opt: CliArgsOptions> Subcommand<Opt> {
+impl<Opt: CliArgMap> Subcommand<Opt> {
     fn new(name: String, settings: CliCommandData<Opt>) -> Self {
         Self { name, settings }
     }
@@ -425,49 +455,49 @@ impl<Opt: CliArgsOptions> Subcommand<Opt> {
     }
 }
 
-impl<OptR: CliArgsOptions, OptS: CliArgsOptions> CliArgsDecode for CliMultiCommand<OptR, OptS> {
-    type Data = CliCommandData<OptR>;
-    fn initialize<const SWITCH: bool>(iter: &mut impl Iterator<Item = impl ArgItem>) -> Self::Data {
-        <CliCommand<OptR>>::initialize::<SWITCH>(iter)
+impl<OptR: CliArgMap, OptS: CliArgMap> CliStore for CliExecMulti<OptR, OptS> {
+    type CliArgsStoreBase = CliCommandData<OptR>;
+    fn initialize(iter: &mut impl Iterator<Item = impl AsArgItem>) -> Self::CliArgsStoreBase {
+        <CliExecSimple<OptR>>::initialize(iter)
     }
-    fn push_flag(data: &mut Self::Data, flag: String) -> CliResult<()> {
-        <CliCommand<OptR>>::push_flag(data, flag)
+    fn push_flag(data: &mut Self::CliArgsStoreBase, flag: String) -> CliResult<()> {
+        <CliExecSimple<OptR>>::push_flag(data, flag)
     }
     fn push_option(
-        data: &mut Self::Data,
+        data: &mut Self::CliArgsStoreBase,
         option_name: String,
         option_value: String,
     ) -> CliResult<()> {
-        <CliCommand<OptR>>::push_option(data, option_name, option_value)
+        <CliExecSimple<OptR>>::push_option(data, option_name, option_value)
     }
-    fn yield_command(data: Self::Data) -> CliResult<Self> {
+    fn yield_command(data: Self::CliArgsStoreBase) -> CliResult<Self> {
         Ok(Self::Run(data))
     }
-    fn yield_help(data: Self::Data) -> CliResult<Self> {
+    fn yield_help(data: Self::CliArgsStoreBase) -> CliResult<Self> {
         Ok(Self::Help(data))
     }
     fn yield_subcommand(
-        data: Self::Data,
+        data: Self::CliArgsStoreBase,
         subcommand: String,
-        args: impl IntoIterator<Item = impl ArgItem>,
+        args: impl IntoIterator<Item = impl AsArgItem>,
     ) -> CliResult<Self> {
-        let subcommand_args = decode_args::<CliCommand<OptS>, false>(args)?;
+        let subcommand_args = decode_args::<CliExecSimple<OptS>>(args)?;
         match subcommand_args {
-            CliCommand::Run(subcommand_data) => Ok(CliMultiCommand::Subcommand(
+            CliExecSimple::Run(subcommand_data) => Ok(CliExecMulti::Subcommand(
                 data,
                 Subcommand::new(subcommand, subcommand_data),
             )),
-            CliCommand::Help(subcommand_data) => Ok(CliMultiCommand::SubcommandHelp(
+            CliExecSimple::Help(subcommand_data) => Ok(CliExecMulti::SubcommandHelp(
                 data,
                 Subcommand::new(subcommand, subcommand_data),
             )),
-            CliCommand::Version(subcommand_data) => Ok(CliMultiCommand::SubcommandVersion(
+            CliExecSimple::Version(subcommand_data) => Ok(CliExecMulti::SubcommandVersion(
                 data,
                 Subcommand::new(subcommand, subcommand_data),
             )),
         }
     }
-    fn yield_version(data: Self::Data) -> CliResult<Self> {
+    fn yield_version(data: Self::CliArgsStoreBase) -> CliResult<Self> {
         Ok(Self::Version(data))
     }
 }
@@ -478,7 +508,7 @@ impl<OptR: CliArgsOptions, OptS: CliArgsOptions> CliArgsDecode for CliMultiComma
 
 #[test]
 fn command() {
-    let cli = CliCommand::<SingleOption>::parse([
+    let cli = CliExecSimple::<SingleOption>::parse_skip([
         "skyd",
         "--verify-cluster-seed-membership",
         "--auth-root-password",
@@ -489,7 +519,7 @@ fn command() {
     .unwrap();
     assert_eq!(
         cli,
-        CliCommand::Run(CliCommandData {
+        CliExecSimple::Run(CliCommandData {
             options: [
                 ("auth-root-password", "mypassword12345678"),
                 ("auth-plugin", "pwd")
@@ -507,7 +537,7 @@ fn command() {
 
 #[test]
 fn command_multi() {
-    let cli = CliCommand::<MultipleOptions>::parse([
+    let cli = CliExecSimple::<MultipleOptions>::parse_skip([
         "skyd",
         "--verify-cluster-seed-membership",
         "--auth-root-password",
@@ -520,7 +550,7 @@ fn command_multi() {
     .unwrap();
     assert_eq!(
         cli,
-        CliCommand::Run(CliCommandData {
+        CliExecSimple::Run(CliCommandData {
             options: [
                 ("auth-root-password", &["mypassword12345678"][..]),
                 ("auth-plugin", &["pwd"]),
@@ -573,8 +603,8 @@ fn subcommand() {
         },
     );
     assert_eq!(
-        CliMultiCommand::<SingleOption, SingleOption>::parse(cli_input).unwrap(),
-        CliMultiCommand::Subcommand(base_settings.clone(), expected_subcommand.clone())
+        CliExecMulti::<SingleOption, SingleOption>::parse_skip(cli_input).unwrap(),
+        CliExecMulti::Subcommand(base_settings.clone(), expected_subcommand.clone())
     );
     let cli_input = {
         let mut v = Vec::from(cli_input);
@@ -582,7 +612,7 @@ fn subcommand() {
         v
     };
     assert_eq!(
-        CliMultiCommand::<SingleOption, SingleOption>::parse(cli_input).unwrap(),
-        CliMultiCommand::SubcommandHelp(base_settings, expected_subcommand)
+        CliExecMulti::<SingleOption, SingleOption>::parse_skip(cli_input).unwrap(),
+        CliExecMulti::SubcommandHelp(base_settings, expected_subcommand)
     )
 }

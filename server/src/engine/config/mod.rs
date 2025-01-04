@@ -24,13 +24,15 @@
  *
 */
 
+pub mod v2;
+
 use {
     crate::{
         engine::{control_flow::RuntimeResult, fractal, mem::Str},
         util::ModifyGuard,
     },
     core::fmt,
-    libsky::cli_utils::{ArgItem, CliMultiCommand, CommandLineArgs, MultipleOptions, SingleOption},
+    libsky::cli_utils::{AsArgItem, CliExecMulti, CommandLineArgs, MultipleOptions, SingleOption},
     serde::Deserialize,
     std::{collections::HashMap, fs},
 };
@@ -734,12 +736,12 @@ impl<T> CLIConfigParseReturn<T> {
     }
 }
 
-pub fn parse_cli_args<'a, T: ArgItem>(
+pub fn parse_cli_args<'a, T: AsArgItem>(
     src: impl Iterator<Item = T>,
 ) -> RuntimeResult<CLIConfigParseReturn<ParsedRawArgs>> {
     Ok(
-        match libsky::cli_utils::CliMultiCommand::<MultipleOptions, SingleOption>::parse(src)? {
-            CliMultiCommand::Run(data) => {
+        match libsky::cli_utils::CliExecMulti::<MultipleOptions, SingleOption>::parse_skip(src)? {
+            CliExecMulti::Run(data) => {
                 let opts = data.into_options_only()?;
                 if opts.is_empty() {
                     CLIConfigParseReturn::Default
@@ -747,8 +749,8 @@ pub fn parse_cli_args<'a, T: ArgItem>(
                     CLIConfigParseReturn::YieldedConfig(opts)
                 }
             }
-            CliMultiCommand::Help(_) => CLIConfigParseReturn::Help(TXT_HELP.to_string()),
-            CliMultiCommand::SubcommandHelp(_, subcommand) => match subcommand.name() {
+            CliExecMulti::Help(_) => CLIConfigParseReturn::Help(TXT_HELP.to_string()),
+            CliExecMulti::SubcommandHelp(_, subcommand) => match subcommand.name() {
                 "repair" => CLIConfigParseReturn::Help(TXT_HELP_REPAIR.to_owned()),
                 "compact" => CLIConfigParseReturn::Help(TXT_HELP_COMPACT.to_owned()),
                 "backup" => CLIConfigParseReturn::Help(TXT_HELP_BACKUP.to_owned()),
@@ -761,10 +763,10 @@ pub fn parse_cli_args<'a, T: ArgItem>(
                     .into())
                 }
             },
-            CliMultiCommand::Version(_) | CliMultiCommand::SubcommandVersion(_, _) => {
+            CliExecMulti::Version(_) | CliExecMulti::SubcommandVersion(_, _) => {
                 CLIConfigParseReturn::Version
             }
-            CliMultiCommand::Subcommand(command, subcommand) => {
+            CliExecMulti::Subcommand(command, subcommand) => {
                 command.ensure_empty()?;
                 match subcommand.name() {
                     "repair" => {
