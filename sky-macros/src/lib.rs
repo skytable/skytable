@@ -53,6 +53,7 @@ use {
     },
 };
 
+mod config_struct;
 mod dbtest;
 mod util;
 
@@ -63,6 +64,13 @@ mod util;
 /// **This test only runs in _non-miri_ configurations**
 pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
     dbtest::dbtest(attrs, item)
+}
+
+#[proc_macro]
+pub fn config_group(ts: TokenStream) -> TokenStream {
+    parse_macro_input!(ts as config_struct::NestedStructDefinition)
+        .0
+        .into()
 }
 
 #[proc_macro_derive(Wrapper)]
