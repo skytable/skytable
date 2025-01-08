@@ -33,6 +33,7 @@ use {
         fmt, fs, io,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
         ops,
+        str::FromStr,
     },
 };
 
@@ -45,13 +46,15 @@ const DEFAULT_EP: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(12
 */
 
 sky_macros::config_group! {
-    #[derive(Debug, PartialEq, serde::Deserialize)]
+    #[derive(Debug, PartialEq)]
+    /// full configuration
     pub struct Configuration {
+        /// client-server settings
         server:
-            #[derive(Debug, PartialEq, serde::Deserialize)]
+            #[derive(Debug, PartialEq)]
             struct ServerConfig {
-                host: String,
-                port: String,
+                /// client-server comm endpoint
+                override impl endpoint: ServerEndpoint,
             }
     }
 }
@@ -70,13 +73,17 @@ pub struct ServerEndpointTcp {
 /// tls server endpoint
 pub struct ServerEndpointTls {
     pub sock: SocketAddr,
-    pub cert: String,
-    pub key: String,
-    pub pass: String,
+    pub cert: Box<str>,
+    pub key: Box<str>,
+    pub pass: Box<str>,
 }
 
 #[derive(Debug, PartialEq)]
 /// client-server communication endpoint configuration
+///
+/// defined in:
+/// - `SKYD_SERVER_ENDPOINT` and/or `SKYD_SERVER_ENDPOINT_TLS` OR
+/// - `--server-endpoint` and/or `--server-endpoint-tls`
 pub enum ServerEndpoint {
     /// insecure only (TCP)
     Insecure(ServerEndpointTcp),
@@ -140,9 +147,9 @@ impl ServerEndpoint {
                     sock: tls_sockaddr.parse().map_err(|e| {
                         ConfigError::ParseError(format!("invalid address for TLS socket - {e}"))
                     })?,
-                    cert,
-                    key,
-                    pass,
+                    cert: cert.into_boxed_str(),
+                    key: key.into_boxed_str(),
+                    pass: pass.into_boxed_str(),
                 });
             }
             None => {
@@ -164,35 +171,90 @@ impl ServerEndpoint {
     }
 }
 
+impl ConfigGroupOverride for ServerEndpoint {
+    fn from_cli(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
+        let ep_tcp_key = format!("{cpath}-endpoint");
+        let ep_tls_key = format!("{cpath}-endpoint-tls");
+        let ep_tcp = args.take_opt(&ep_tcp_key)?;
+        let ep_tls = args.take_opt(&ep_tls_key)?;
+        Self::decode(ep_tcp, ep_tls)
+    }
+    fn from_env(cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
+        let ep_tcp_key = format!("{cpath}_ENDPOINT");
+        let ep_tls_key = format!("{cpath}_ENDPOINT_TLS");
+        let ep_tcp = get_var(&ep_tcp_key)?;
+        let ep_tls = get_var(&ep_tls_key)?;
+        Self::decode(ep_tcp, ep_tls)
+    }
+    fn from_env_test(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
+        let ep_tcp_key = format!("{cpath}_ENDPOINT");
+        let ep_tls_key = format!("{cpath}_ENDPOINT_TLS");
+        let ep_tcp = args.take_opt(&ep_tcp_key)?;
+        let ep_tls = args.take_opt(&ep_tls_key)?;
+        Self::decode(ep_tcp, ep_tls)
+    }
+}
+
 /*
-    config traits
+    config core traits and objects
 */
 
 /// a configuration group
 trait ConfigGroup: Sized {
     /// parse this configuration group using the provided CLI args
-    fn from_cli(args: &mut HashMap<String, String>) -> ConfigResult<ConfigReturn<Self>>;
+    fn from_cli(args: &mut ConfigMap) -> ConfigResult<ConfigReturn<Self>>;
     /// parse this configuration group using env vars
     fn from_env() -> ConfigResult<ConfigReturn<Self>>;
     /// parse this configuration group using the provided vars
-    fn from_env_test(args: &mut HashMap<String, String>) -> ConfigResult<ConfigReturn<Self>>;
+    fn from_env_test(args: &mut ConfigMap) -> ConfigResult<ConfigReturn<Self>>;
 }
 
 /// similar to [`ConfigGroup`], this trait is to be used when a config group is more complex to decode
 /// and needs to access, for example, multiple variables
 trait ConfigGroupOverride: Sized {
     /// parse from cli args
-    fn from_cli(
-        args: &mut HashMap<String, String>,
-        cpath: &str,
-    ) -> ConfigResult<ConfigReturn<Self>>;
+    fn from_cli(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>>;
     /// parse from env vars
     fn from_env(cpath: &str) -> ConfigResult<ConfigReturn<Self>>;
     /// parse from provided vars
-    fn from_env_test(
-        args: &mut HashMap<String, String>,
-        cpath: &str,
-    ) -> ConfigResult<ConfigReturn<Self>>;
+    fn from_env_test(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>>;
+}
+
+/// a map of key value pairs of configuration options
+struct ConfigMap(HashMap<String, String>);
+impl ConfigMap {
+    /// take this config option (required key)
+    fn take<T: FromStr>(&mut self, key: &str) -> ConfigResult<T>
+    where
+        T::Err: fmt::Display,
+    {
+        match self.0.remove(key) {
+            Some(val) => match val.parse() {
+                Ok(val) => Ok(val),
+                Err(e) => Err(ConfigError::parse_error(key, e)),
+            },
+            None => Err(ConfigError::Required(key.to_owned())),
+        }
+    }
+    /// take this config option (optional key)
+    fn take_opt<T: FromStr>(&mut self, key: &str) -> ConfigResult<Option<T>>
+    where
+        T::Err: fmt::Display,
+    {
+        match self.0.remove(key) {
+            Some(val) => match val.parse() {
+                Ok(val) => Ok(Some(val)),
+                Err(e) => Err(ConfigError::parse_error(key, e)),
+            },
+            None => Ok(None),
+        }
+    }
+}
+
+impl Drop for ConfigMap {
+    fn drop(&mut self) {
+        assert!(self.0.is_empty(), "all args not checked")
+    }
 }
 
 /*
@@ -311,9 +373,9 @@ mod tests {
                 .unwrap(),
                 ConfigReturn::Modified(ServerEndpoint::Secure(ServerEndpointTls {
                     sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
-                    cert: "".to_owned(),
-                    key: "".to_owned(),
-                    pass: "".to_owned(),
+                    cert: "".into(),
+                    key: "".into(),
+                    pass: "".into(),
                 }))
             )
         })
@@ -333,9 +395,9 @@ mod tests {
                     },
                     ServerEndpointTls {
                         sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
-                        cert: "".to_owned(),
-                        key: "".to_owned(),
-                        pass: "".to_owned(),
+                        cert: "".into(),
+                        key: "".into(),
+                        pass: "".into(),
                     }
                 ))
             )

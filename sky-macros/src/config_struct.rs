@@ -82,12 +82,9 @@ impl NestedStructDefinition {
             } else {
                 // check if modified (i.e some(..))
                 quote! {
-                    #cli_impl_tree let #field_name: #field_type = match args.remove(#__cli).map(|v| v.parse()) {
-                        Some(Ok(v)) => {modified = true; v},
-                        Some(Err(e)) => return Err(crate::engine::config::v2::ConfigError::parse_error(#__cli, e)),
-                        None => {
-                            #default_decl
-                        },
+                    #cli_impl_tree let #field_name: #field_type = match args.take_opt(#__cli)? {
+                        Some(v) => {modified = true; v},
+                        None => { #default_decl },
                     };
                 }
             }
@@ -101,7 +98,7 @@ impl NestedStructDefinition {
             } else {
                 // definitely modified as reqd. key
                 quote! {
-                    #cli_impl_tree let #field_name: #field_type = args.remove(#__cli).ok_or_else(|| ConfigError::Required(::std::string::String::from(#__cli)))?.parse().map_err(|e| crate::engine::config::v2::ConfigError::parse_error(#__cli, e))?;
+                    #cli_impl_tree let #field_name: #field_type = args.take(#__cli)?;
                     modified = true;
                 }
             }
@@ -138,12 +135,9 @@ impl NestedStructDefinition {
                     };
                 };
                 env_test_tt = quote! {
-                    #env_impl_tree let #field_name: #field_type = match args.remove(#__var).map(|v| v.parse()) {
-                        Some(Ok(v)) => {modified = true; v},
-                        Some(Err(e)) => return Err(crate::engine::config::v2::ConfigError::parse_error(#__var, e)),
-                        None => {
-                            #default_decl
-                        },
+                    #env_impl_tree let #field_name: #field_type = match args.take_opt(#__var)? {
+                        Some(v) => {modified = true; v},
+                        None => { #default_decl },
                     };
                 };
             }
@@ -161,8 +155,13 @@ impl NestedStructDefinition {
             } else {
                 // TODO(@ohsayan): nullable or reqd.
                 // definitely modified
-                env_tt = quote! { #env_impl_tree let #field_name: #field_type = {if let Some(v) = crate::engine::config::v2::get_var(#__var)? { v } else { return Err(crate::engine::config::v2::ConfigError::Required(::std::string::String::from(#__var))) }}.parse().map_err(|e| crate::engine::config::v2::ConfigError::parse_error(#__var, e))?; modified = true; };
-                env_test_tt = quote! { #env_test_impl_tree let #field_name: #field_type = args.remove(#__var).ok_or_else(|| crate::engine::config::v2::ConfigError::Required(::std::string::String::from(#__var)))?.parse().map_err(|e| crate::engine::config::v2::ConfigError::parse_error(#__var, e))?; modified = true; };
+                env_tt = quote! {
+                    #env_impl_tree let #field_name: #field_type = { if let Some(v) = crate::engine::config::v2::get_var(#__var)? { v } else {
+                        return Err(crate::engine::config::v2::ConfigError::Required(::std::string::String::from(#__var)))
+                    }}.parse().map_err(|e| crate::engine::config::v2::ConfigError::parse_error(#__var, e))?;
+                    modified = true;
+                };
+                env_test_tt = quote! { #env_test_impl_tree let #field_name: #field_type = args.take(#__var)?; modified = true; };
             }
         }
         (env_tt, env_test_tt)
@@ -352,7 +351,7 @@ impl NestedStructDefinition {
             let impl_code = quote! {
                 #[automatically_derived]
                 impl crate::engine::config::v2::ConfigGroup for #struct_name {
-                    fn from_cli(args: &mut std::collections::HashMap<std::string::String, std::string::String>) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
+                    fn from_cli(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
                         let mut modified = false;
                         #cli_impl_tree
                         Ok(if modified {
@@ -370,7 +369,7 @@ impl NestedStructDefinition {
                             ConfigReturn::Unmodified(Self { #(#fields),* })
                         })
                     }
-                    fn from_env_test(args: &mut std::collections::HashMap<std::string::String, std::string::String>) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
+                    fn from_env_test(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
                         let mut modified = false;
                         #env_test_impl_tree
                         Ok(if modified {
