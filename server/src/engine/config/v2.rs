@@ -364,43 +364,67 @@ mod tests {
     }
     #[test]
     fn server_ep_decode_secure() {
-        test_utils::with_files(["cert.pem", "key.pem", "pass.txt"], |_| {
-            assert_eq!(
-                ServerEndpoint::decode(
-                    None,
-                    Some("tls:[cert.pem,key.pem,pass.txt]@127.0.0.1:2002".to_owned())
-                )
-                .unwrap(),
-                ConfigReturn::Modified(ServerEndpoint::Secure(ServerEndpointTls {
-                    sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
-                    cert: "".into(),
-                    key: "".into(),
-                    pass: "".into(),
-                }))
-            )
-        })
-    }
-    #[test]
-    fn serve_ep_decode_multi() {
-        test_utils::with_files(["cert.pem", "key.pem", "pass.txt"], |_| {
-            assert_eq!(
-                ServerEndpoint::decode(
-                    Some("tcp@0.0.0.0:1600".to_owned()),
-                    Some("tls:[cert.pem,key.pem,pass.txt]@127.0.0.1:2002".to_owned())
-                )
-                .unwrap(),
-                ConfigReturn::Modified(ServerEndpoint::Multi(
-                    ServerEndpointTcp {
-                        sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 1600))
-                    },
-                    ServerEndpointTls {
+        test_utils::with_files(
+            [
+                "server_ep_decode_secure_cert",
+                "server_ep_decode_secure_key",
+                "server_ep_decode_secure_pass",
+            ],
+            |[cert_file, key_file, pass_file]| {
+                assert_eq!(
+                    ServerEndpoint::decode(
+                        None,
+                        Some(format!(
+                            "tls:[{cert_file},{key_file},{pass_file}]@127.0.0.1:2002"
+                        ))
+                    )
+                    .unwrap(),
+                    ConfigReturn::Modified(ServerEndpoint::Secure(ServerEndpointTls {
                         sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
                         cert: "".into(),
                         key: "".into(),
                         pass: "".into(),
-                    }
-                ))
-            )
-        })
+                    }))
+                )
+            },
+        )
+    }
+    #[test]
+    fn serve_ep_decode_multi() {
+        test_utils::with_files(
+            [
+                "server_ep_decode_multi_cert",
+                "server_ep_decode_multi_key",
+                "server_ep_decode_multi_pass",
+            ],
+            |[cert_file, key_file, pass_file]| {
+                assert_eq!(
+                    ServerEndpoint::decode(
+                        Some("tcp@0.0.0.0:1600".to_owned()),
+                        Some(format!(
+                            "tls:[{cert_file},{key_file},{pass_file}]@127.0.0.1:2002"
+                        ))
+                    )
+                    .unwrap(),
+                    ConfigReturn::Modified(ServerEndpoint::Multi(
+                        ServerEndpointTcp {
+                            sock: SocketAddr::V4(SocketAddrV4::new(
+                                Ipv4Addr::new(0, 0, 0, 0),
+                                1600
+                            ))
+                        },
+                        ServerEndpointTls {
+                            sock: SocketAddr::V4(SocketAddrV4::new(
+                                Ipv4Addr::new(127, 0, 0, 1),
+                                2002
+                            )),
+                            cert: "".into(),
+                            key: "".into(),
+                            pass: "".into(),
+                        }
+                    ))
+                )
+            },
+        )
     }
 }
