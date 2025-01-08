@@ -25,20 +25,151 @@
 
 #![allow(dead_code)]
 
-use std::{
-    collections::HashMap,
-    env::{self, VarError},
-    ops,
+use {
+    crate::util::os::SysIOError,
+    std::{
+        collections::HashMap,
+        env::{self, VarError},
+        fmt, fs, io,
+        net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+        ops,
+    },
 };
 
 type ConfigResult<T> = Result<T, ConfigError>;
 
+const DEFAULT_EP: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2003));
+
 /*
-    config item
+    configuration group
+*/
+
+sky_macros::config_group! {
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    pub struct Configuration {
+        server:
+            #[derive(Debug, PartialEq, serde::Deserialize)]
+            struct ServerConfig {
+                host: String,
+                port: String,
+            }
+    }
+}
+
+/*
+    config items
+*/
+
+#[derive(Debug, PartialEq)]
+/// tcp server endpoint
+pub struct ServerEndpointTcp {
+    pub sock: SocketAddr,
+}
+
+#[derive(Debug, PartialEq)]
+/// tls server endpoint
+pub struct ServerEndpointTls {
+    pub sock: SocketAddr,
+    pub cert: String,
+    pub key: String,
+    pub pass: String,
+}
+
+#[derive(Debug, PartialEq)]
+/// client-server communication endpoint configuration
+pub enum ServerEndpoint {
+    /// insecure only (TCP)
+    Insecure(ServerEndpointTcp),
+    /// secure only (TLS)
+    Secure(ServerEndpointTls),
+    /// multi (TCP+TLS)
+    Multi(ServerEndpointTcp, ServerEndpointTls),
+}
+
+impl ServerEndpoint {
+    fn decode(ep_tcp: Option<String>, ep_tls: Option<String>) -> ConfigResult<ConfigReturn<Self>> {
+        let tls_dec_err = || {
+            Err(ConfigError::ParseError(format!(
+                "invalid protocol definition for TLS socket"
+            )))
+        };
+        let tcp;
+        match ep_tcp {
+            Some(ep) => {
+                // tcp@sockaddr
+                if !ep.starts_with("tcp@") {
+                    return Err(ConfigError::ParseError(format!(
+                        "invalid protocol definition for TCP socket"
+                    )));
+                }
+                tcp = Some(ServerEndpointTcp {
+                    sock: (&ep[4..]).parse().map_err(|e| {
+                        ConfigError::ParseError(format!("invalid address for TCP socket - {e}"))
+                    })?,
+                });
+            }
+            None => tcp = None,
+        }
+        let tls;
+        match ep_tls {
+            Some(ep) => {
+                if !ep.starts_with("tls:[") {
+                    return tls_dec_err();
+                }
+                let ep = &ep[5..];
+                let Some((tls_settings, tls_sockaddr)) = ep.split_once('@') else {
+                    return tls_dec_err();
+                };
+                if !tls_settings.ends_with("]") {
+                    return tls_dec_err();
+                }
+                let tls_settings = &tls_settings[..tls_settings.len() - 1];
+                // now tls_settings should look like cert,key,pass and tls_sockaddr should just have the socket address
+                let tls_settings: Vec<_> = tls_settings.split(',').collect();
+                if tls_settings.len() != 3 {
+                    return tls_dec_err();
+                }
+                let (cert, key, pass) = (tls_settings[0], tls_settings[1], tls_settings[2]);
+                let cert = fs::read_to_string(cert)
+                    .map_err(|e| ConfigError::io_error(e, "TLS certificate"))?;
+                let key =
+                    fs::read_to_string(key).map_err(|e| ConfigError::io_error(e, "TLS key"))?;
+                let pass = fs::read_to_string(pass)
+                    .map_err(|e| ConfigError::io_error(e, "TLS key passphrase"))?;
+                tls = Some(ServerEndpointTls {
+                    sock: tls_sockaddr.parse().map_err(|e| {
+                        ConfigError::ParseError(format!("invalid address for TLS socket - {e}"))
+                    })?,
+                    cert,
+                    key,
+                    pass,
+                });
+            }
+            None => {
+                tls = None;
+            }
+        }
+        Ok(match tcp {
+            Some(tcp) => match tls {
+                Some(tls) => ConfigReturn::Modified(Self::Multi(tcp, tls)),
+                None => ConfigReturn::Modified(Self::Insecure(tcp)),
+            },
+            None => match tls {
+                Some(tls) => ConfigReturn::Modified(Self::Secure(tls)),
+                None => {
+                    ConfigReturn::Unmodified(Self::Insecure(ServerEndpointTcp { sock: DEFAULT_EP }))
+                }
+            },
+        })
+    }
+}
+
+/*
+    config traits
 */
 
 /// a configuration group
-pub trait ConfigGroup: Sized {
+trait ConfigGroup: Sized {
     /// parse this configuration group using the provided CLI args
     fn from_cli(args: &mut HashMap<String, String>) -> ConfigResult<ConfigReturn<Self>>;
     /// parse this configuration group using env vars
@@ -49,7 +180,7 @@ pub trait ConfigGroup: Sized {
 
 /// similar to [`ConfigGroup`], this trait is to be used when a config group is more complex to decode
 /// and needs to access, for example, multiple variables
-pub trait ConfigGroupOverride: Sized {
+trait ConfigGroupOverride: Sized {
     /// parse from cli args
     fn from_cli(
         args: &mut HashMap<String, String>,
@@ -68,13 +199,42 @@ pub trait ConfigGroupOverride: Sized {
     errors
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 /// errors resulting from parsing and evaluating configuration options
 pub enum ConfigError {
     /// the configuration item was required but is missing
     Required(String),
     /// failed to parse the configuration item
     ParseError(String),
+    /// I/O error while fetching configuration resource,
+    IoError(SysIOError, String),
+}
+
+impl ConfigError {
+    fn parse_error(item: impl AsRef<str>, err: impl fmt::Display) -> Self {
+        Self::ParseError(format!(
+            "failed to parse value for `{}` - {}",
+            item.as_ref(),
+            err
+        ))
+    }
+    fn io_error(err: io::Error, description: impl AsRef<str>) -> Self {
+        Self::IoError(err.into(), description.as_ref().to_owned())
+    }
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Required(reqd_val) => {
+                write!(f, "the value `{reqd_val}` is required but was not provided")
+            }
+            Self::ParseError(pe) => write!(f, "{pe}"),
+            Self::IoError(ioe, dscr) => {
+                write!(f, "i/o error while fetching resource {dscr} - {ioe}")
+            }
+        }
+    }
 }
 
 /*
@@ -96,7 +256,7 @@ fn get_var(v: &str) -> ConfigResult<Option<String>> {
 
 #[derive(Debug, PartialEq)]
 /// Modified or unmodified [`ConfigItem`]
-pub enum ConfigReturn<T> {
+enum ConfigReturn<T> {
     Modified(T),
     Unmodified(T),
 }
@@ -107,5 +267,78 @@ impl<T> ops::Deref for ConfigReturn<T> {
         match self {
             Self::Modified(m) | Self::Unmodified(m) => m,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::{
+            engine::config::v2::{
+                ConfigReturn, ServerEndpoint, ServerEndpointTcp, ServerEndpointTls, DEFAULT_EP,
+            },
+            util::test_utils,
+        },
+        std::net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    };
+
+    #[test]
+    fn server_ep_decode_default() {
+        assert_eq!(
+            ServerEndpoint::decode(None, None).unwrap(),
+            ConfigReturn::Unmodified(ServerEndpoint::Insecure(ServerEndpointTcp {
+                sock: DEFAULT_EP
+            }))
+        )
+    }
+    #[test]
+    fn server_ep_decode_insecure() {
+        assert_eq!(
+            ServerEndpoint::decode(Some("tcp@0.0.0.0:1600".to_owned()), None).unwrap(),
+            ConfigReturn::Modified(ServerEndpoint::Insecure(ServerEndpointTcp {
+                sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 1600))
+            }))
+        )
+    }
+    #[test]
+    fn server_ep_decode_secure() {
+        test_utils::with_files(["cert.pem", "key.pem", "pass.txt"], |_| {
+            assert_eq!(
+                ServerEndpoint::decode(
+                    None,
+                    Some("tls:[cert.pem,key.pem,pass.txt]@127.0.0.1:2002".to_owned())
+                )
+                .unwrap(),
+                ConfigReturn::Modified(ServerEndpoint::Secure(ServerEndpointTls {
+                    sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
+                    cert: "".to_owned(),
+                    key: "".to_owned(),
+                    pass: "".to_owned(),
+                }))
+            )
+        })
+    }
+    #[test]
+    fn serve_ep_decode_multi() {
+        test_utils::with_files(["cert.pem", "key.pem", "pass.txt"], |_| {
+            assert_eq!(
+                ServerEndpoint::decode(
+                    Some("tcp@0.0.0.0:1600".to_owned()),
+                    Some("tls:[cert.pem,key.pem,pass.txt]@127.0.0.1:2002".to_owned())
+                )
+                .unwrap(),
+                ConfigReturn::Modified(ServerEndpoint::Multi(
+                    ServerEndpointTcp {
+                        sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 1600))
+                    },
+                    ServerEndpointTls {
+                        sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
+                        cert: "".to_owned(),
+                        key: "".to_owned(),
+                        pass: "".to_owned(),
+                    }
+                ))
+            )
+        })
     }
 }

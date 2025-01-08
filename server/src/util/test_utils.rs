@@ -55,17 +55,30 @@ pub fn shuffle_slice<T>(slice: &mut [T], rng: &mut impl Rng) {
 pub fn with_variable<T, U>(variable: T, mut f: impl FnMut(T) -> U) -> U {
     f(variable)
 }
+struct WithFiles<'a, const N: usize> {
+    files: [&'a str; N],
+}
+
+impl<'a, const N: usize> WithFiles<'a, N> {
+    fn init(files: [&'a str; N]) -> Self {
+        for file in files {
+            let _ = std::fs::File::create(file);
+        }
+        Self { files }
+    }
+}
+
+impl<'a, const N: usize> Drop for WithFiles<'a, N> {
+    fn drop(&mut self) {
+        for file in self.files {
+            let _ = std::fs::remove_file(file);
+        }
+    }
+}
 
 pub fn with_files<const N: usize, T>(files: [&str; N], f: impl Fn([&str; N]) -> T) -> T {
-    use std::fs;
-    for file in files {
-        let _ = fs::File::create(file);
-    }
-    let r = f(files);
-    for file in files {
-        let _ = fs::remove_file(file);
-    }
-    r
+    let _wf = WithFiles::init(files);
+    f(files)
 }
 
 pub fn wait_for_key(msg: &str) {
