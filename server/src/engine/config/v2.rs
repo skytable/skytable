@@ -49,12 +49,19 @@ sky_macros::config_group! {
     #[derive(Debug, PartialEq)]
     /// full configuration
     pub struct Configuration {
+        /// system configuration
+        pub system:
+            #[derive(Debug, PartialEq)]
+            struct System {
+                /// maximum transaction commit delay
+                pub storage_max_commit_delay_ms: u64 = 300,
+            }
         /// client-server settings
-        server:
+        pub server:
             #[derive(Debug, PartialEq)]
             struct ServerConfig {
                 /// client-server comm endpoint
-                override impl endpoint: ServerEndpoint,
+                override impl pub endpoint: ServerEndpoint,
             }
     }
 }
@@ -64,19 +71,7 @@ sky_macros::config_group! {
 */
 
 #[derive(Debug, PartialEq)]
-/// tcp server endpoint
-pub struct ServerEndpointTcp {
-    pub sock: SocketAddr,
-}
-
-#[derive(Debug, PartialEq)]
-/// tls server endpoint
-pub struct ServerEndpointTls {
-    pub sock: SocketAddr,
-    pub cert: Box<str>,
-    pub key: Box<str>,
-    pub pass: Box<str>,
-}
+pub struct PeerGroup(Vec<SocketAddr>);
 
 #[derive(Debug, PartialEq)]
 /// client-server communication endpoint configuration
@@ -91,6 +86,21 @@ pub enum ServerEndpoint {
     Secure(ServerEndpointTls),
     /// multi (TCP+TLS)
     Multi(ServerEndpointTcp, ServerEndpointTls),
+}
+
+#[derive(Debug, PartialEq)]
+/// tcp server endpoint
+pub struct ServerEndpointTcp {
+    pub sock: SocketAddr,
+}
+
+#[derive(Debug, PartialEq)]
+/// tls server endpoint
+pub struct ServerEndpointTls {
+    pub sock: SocketAddr,
+    pub cert: Box<str>,
+    pub key: Box<str>,
+    pub pass: Box<str>,
 }
 
 impl ServerEndpoint {

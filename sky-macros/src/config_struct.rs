@@ -127,7 +127,7 @@ impl NestedStructDefinition {
                     #env_impl_tree let #field_name: #field_type = match crate::engine::config::v2::get_var(#__var)? {
                         Some(v) => match v.parse() {
                             Ok(v) => {modified = true; v},
-                            Err(e) => return Err(Err(crate::engine::config::v2::ConfigError::parse_error(#__var, e))),
+                            Err(e) => return Err(crate::engine::config::v2::ConfigError::parse_error(#__var, e)),
                         },
                         None => {
                             #default_decl
@@ -263,6 +263,15 @@ impl NestedStructDefinition {
             } else {
                 false
             };
+            // see if field is pub
+            let field_vis = if stream.peek(Token![pub]) {
+                let _: Token![pub] = stream.parse()?;
+                Visibility::Public(VisPublic {
+                    pub_token: token::Pub(stream.span()),
+                })
+            } else {
+                Visibility::Inherited
+            };
             // field name
             let field_name: Ident = stream.parse()?;
             fields.push(field_name.clone());
@@ -327,7 +336,7 @@ impl NestedStructDefinition {
                     // this is the field type
                     let field_type: syn::TypePath = stream.parse()?;
                     // add field definition to local struct tree
-                    decl_tree = quote! { #decl_tree #field_name: #field_type, };
+                    decl_tree = quote! { #decl_tree #field_vis #field_name: #field_type, };
                     // add impls to tree
                     (cli_impl_tree, env_impl_tree, env_test_impl_tree) = Self::add_impls_for_field(
                         field_name,
