@@ -28,7 +28,7 @@ use {
     syn::{
         braced,
         parse::{Parse, ParseBuffer, ParseStream},
-        token, Attribute, Error, Ident, ItemEnum, Token, VisPublic, Visibility,
+        token, Attribute, Error, Ident, ItemEnum, Token, Visibility,
     },
 };
 
@@ -231,10 +231,7 @@ impl NestedStructDefinition {
         };
         // visibility
         let struct_vis = if stream.peek(Token![pub]) {
-            let _: Token![pub] = stream.parse()?;
-            Visibility::Public(VisPublic {
-                pub_token: token::Pub(stream.span()),
-            })
+            stream.parse()?
         } else {
             Visibility::Inherited
         };
@@ -265,10 +262,7 @@ impl NestedStructDefinition {
             };
             // see if field is pub
             let field_vis = if stream.peek(Token![pub]) {
-                let _: Token![pub] = stream.parse()?;
-                Visibility::Public(VisPublic {
-                    pub_token: token::Pub(stream.span()),
-                })
+                stream.parse()?
             } else {
                 Visibility::Inherited
             };
@@ -280,7 +274,8 @@ impl NestedStructDefinition {
             // parse item attributes
             let field_item_attrs: Vec<Attribute> = stream.call(Attribute::parse_outer)?;
             // enum / struct / actual ty
-            if stream.peek(Token![enum]) {
+            if stream.peek(Token![enum]) || (stream.peek(Token![pub]) && stream.peek2(Token![enum]))
+            {
                 let enumeration: ItemEnum = stream.parse()?;
                 let enumeration_id = enumeration.ident.clone();
                 // add enum definition to main tree
@@ -299,10 +294,15 @@ impl NestedStructDefinition {
                     env_impl_tree,
                     env_test_impl_tree,
                 );
-            } else if stream.peek(Token![struct]) {
+            } else if stream.peek(Token![struct])
+                || (stream.peek(Token![pub]) && stream.peek2(Token![struct]))
+            {
                 // an actual struct; fork the stream and get the struct name
                 let struct_name: Ident = {
                     let tmp_stream = stream.fork();
+                    if stream.peek(Token![pub]) {
+                        let _: Visibility = tmp_stream.parse()?;
+                    }
                     let _: Token![struct] = tmp_stream.parse()?;
                     tmp_stream.parse()?
                 };
