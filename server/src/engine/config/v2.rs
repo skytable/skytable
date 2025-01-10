@@ -26,7 +26,7 @@
 #![allow(dead_code)]
 
 use {
-    crate::util::os::SysIOError,
+    crate::{engine::mem::AStr, util::os::SysIOError},
     std::{
         collections::HashMap,
         env::{self, VarError},
@@ -37,7 +37,7 @@ use {
     },
 };
 
-type ConfigResult<T> = Result<T, ConfigError>;
+pub type ConfigResult<T> = Result<T, ConfigError>;
 
 const DEFAULT_EP: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2003));
 
@@ -52,16 +52,31 @@ sky_macros::config_group! {
         /// system configuration
         pub system:
             #[derive(Debug, PartialEq)]
-            struct System {
-                /// maximum transaction commit delay
+            pub struct SystemConfig {
+                /// default root password (unless modified) (--system-auth-default-root-password)
+                pub auth_default_root_password: String,
+                /// auth plugin (--system-auth-plugin)
+                pub auth_plugin: AuthPlugin,
+                /// deploy mode (--system-deploy-mode)
+                pub deploy_mode: #[derive(Debug, PartialEq)] pub enum SystemDeployMode { Dev, Prod }
+                /// maximum transaction commit delay (--system-storage-max-commit-delay-ms)
                 pub storage_max_commit_delay_ms: u64 = 300,
             }
         /// client-server settings
         pub server:
             #[derive(Debug, PartialEq)]
-            struct ServerConfig {
-                /// client-server comm endpoint
+            pub struct ServerConfig {
+                /// client-server comm endpoint (--server-endpoint)
                 override impl pub endpoint: ServerEndpoint,
+            }
+        /// cluster settings
+        pub cluster:
+            #[derive(Debug, PartialEq)]
+            pub struct ClusterConfig {
+                /// the shared cluster secret (--cluster-shared-secret)
+                pub shared_secret: ClusterSecret,
+                /// cluster seed peers (only used during initial bootstrap) (--cluster-seed-peers)
+                pub seed_peers: ClusterSeedPeers,
             }
     }
 }
@@ -71,7 +86,56 @@ sky_macros::config_group! {
 */
 
 #[derive(Debug, PartialEq)]
-pub struct PeerGroup(Vec<SocketAddr>);
+pub enum AuthPlugin {
+    Pwd,
+}
+
+impl FromStr for AuthPlugin {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pwd" => Ok(Self::Pwd),
+            plugin => Err(format!("unknown auth plugin {plugin}")),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ClusterSeedPeers(Vec<SocketAddr>);
+impl FromStr for ClusterSeedPeers {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let peers: Vec<&str> = s.split(',').collect();
+        let mut seed_peer_list = Vec::with_capacity(peers.len());
+        for peer in peers {
+            match peer.parse() {
+                Ok(peer) => seed_peer_list.push(peer),
+                Err(e) => return Err(format!("failed to parse peer socket address - {e}")),
+            }
+        }
+        Ok(Self(seed_peer_list))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ClusterSecret(AStr<128>);
+impl FromStr for ClusterSecret {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() == sizeof!(Self) {
+            let astr = unsafe {
+                // UNSAFE(@ohsayan): verified length above
+                AStr::from_len_unchecked(s)
+            };
+            Ok(Self(astr))
+        } else {
+            Err(format!(
+                "expected cluster secret length 128 but found length {}",
+                s.len()
+            ))
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 /// client-server communication endpoint configuration
@@ -202,6 +266,17 @@ impl ConfigGroupOverride for ServerEndpoint {
         let ep_tcp = args.take_opt(&ep_tcp_key)?;
         let ep_tls = args.take_opt(&ep_tls_key)?;
         Self::decode(ep_tcp, ep_tls)
+    }
+}
+
+impl FromStr for SystemDeployMode {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "dev" => Self::Dev,
+            "prod" => Self::Prod,
+            unknown_mode => return Err(format!("unknown deploy mode {unknown_mode}")),
+        })
     }
 }
 
