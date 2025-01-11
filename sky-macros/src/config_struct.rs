@@ -32,9 +32,9 @@ use {
     },
 };
 
-pub struct NestedStructDefinition(pub proc_macro2::TokenStream);
+pub struct NestedStructDefinition<const DERIVE: bool>(pub proc_macro2::TokenStream);
 
-impl NestedStructDefinition {
+impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
     /// for values that return from structs / custom impls, use this to gather information on whether the value was modified or not
     fn apply_return_validation(
         lhs: proc_macro2::TokenStream,
@@ -282,18 +282,20 @@ impl NestedStructDefinition {
                 main_tree = quote! { #main_tree #(#field_item_attrs)* #enumeration };
                 // add field definition to local struct tree
                 decl_tree = quote! { #decl_tree #field_name: #enumeration_id, };
-                // add impls to tree
-                (cli_impl_tree, env_impl_tree, env_test_impl_tree) = Self::add_impls_for_field(
-                    field_name,
-                    enumeration_id,
-                    &c_cli_path,
-                    &c_env_path,
-                    is_override,
-                    Self::get_default_decl(&stream)?,
-                    cli_impl_tree,
-                    env_impl_tree,
-                    env_test_impl_tree,
-                );
+                if DERIVE {
+                    // add impls to tree
+                    (cli_impl_tree, env_impl_tree, env_test_impl_tree) = Self::add_impls_for_field(
+                        field_name,
+                        enumeration_id,
+                        &c_cli_path,
+                        &c_env_path,
+                        is_override,
+                        Self::get_default_decl(&stream)?,
+                        cli_impl_tree,
+                        env_impl_tree,
+                        env_test_impl_tree,
+                    );
+                }
             } else if stream.peek(Token![struct])
                 || (stream.peek(Token![pub]) && stream.peek2(Token![struct]))
             {
@@ -315,19 +317,21 @@ impl NestedStructDefinition {
                 )?;
                 // add field to local struct tree
                 decl_tree = quote! { #decl_tree #field_name: #struct_name, };
-                // add impls to tree
-                cli_impl_tree = Self::apply_return_validation(
-                    quote! { #cli_impl_tree let #field_name },
-                    quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_cli(args)? },
-                );
-                env_impl_tree = Self::apply_return_validation(
-                    quote! { #env_impl_tree let #field_name },
-                    quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env()? },
-                );
-                env_test_impl_tree = Self::apply_return_validation(
-                    quote! { #env_test_impl_tree let #field_name },
-                    quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env_test(args)? },
-                );
+                if DERIVE {
+                    // add impls to tree
+                    cli_impl_tree = Self::apply_return_validation(
+                        quote! { #cli_impl_tree let #field_name },
+                        quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_cli(args)? },
+                    );
+                    env_impl_tree = Self::apply_return_validation(
+                        quote! { #env_impl_tree let #field_name },
+                        quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env()? },
+                    );
+                    env_test_impl_tree = Self::apply_return_validation(
+                        quote! { #env_test_impl_tree let #field_name },
+                        quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env_test(args)? },
+                    );
+                }
             } else {
                 if stream.peek(Ident) {
                     if !field_item_attrs.is_empty() {
@@ -337,18 +341,21 @@ impl NestedStructDefinition {
                     let field_type: syn::TypePath = stream.parse()?;
                     // add field definition to local struct tree
                     decl_tree = quote! { #decl_tree #field_vis #field_name: #field_type, };
-                    // add impls to tree
-                    (cli_impl_tree, env_impl_tree, env_test_impl_tree) = Self::add_impls_for_field(
-                        field_name,
-                        field_type,
-                        &c_cli_path,
-                        &c_env_path,
-                        is_override,
-                        Self::get_default_decl(&stream)?,
-                        cli_impl_tree,
-                        env_impl_tree,
-                        env_test_impl_tree,
-                    );
+                    if DERIVE {
+                        // add impls to tree
+                        (cli_impl_tree, env_impl_tree, env_test_impl_tree) =
+                            Self::add_impls_for_field(
+                                field_name,
+                                field_type,
+                                &c_cli_path,
+                                &c_env_path,
+                                is_override,
+                                Self::get_default_decl(&stream)?,
+                                cli_impl_tree,
+                                env_impl_tree,
+                                env_test_impl_tree,
+                            );
+                    }
                 }
             }
             Self::skip_comma(&stream)?;
@@ -357,37 +364,41 @@ impl NestedStructDefinition {
         // prepare final output token trees
         if stream.is_empty() {
             // prep impl code
-            let impl_code = quote! {
-                #[automatically_derived]
-                impl crate::engine::config::v2::ConfigGroup for #struct_name {
-                    fn from_cli(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
-                        let mut modified = false;
-                        #cli_impl_tree
-                        Ok(if modified {
-                            ConfigReturn::Modified(Self { #(#fields),* })
-                        } else {
-                            ConfigReturn::Unmodified(Self { #(#fields),* })
-                        })
-                    }
-                    fn from_env() -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
-                        let mut modified = false;
-                        #env_impl_tree
-                        Ok(if modified {
-                            ConfigReturn::Modified(Self { #(#fields),* })
-                        } else {
-                            ConfigReturn::Unmodified(Self { #(#fields),* })
-                        })
-                    }
-                    fn from_env_test(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
-                        let mut modified = false;
-                        #env_test_impl_tree
-                        Ok(if modified {
-                            ConfigReturn::Modified(Self { #(#fields),* })
-                        } else {
-                            ConfigReturn::Unmodified(Self { #(#fields),* })
-                        })
+            let impl_code = if DERIVE {
+                quote! {
+                    #[automatically_derived]
+                    impl crate::engine::config::v2::ConfigGroup for #struct_name {
+                        fn from_cli(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
+                            let mut modified = false;
+                            #cli_impl_tree
+                            Ok(if modified {
+                                ConfigReturn::Modified(Self { #(#fields),* })
+                            } else {
+                                ConfigReturn::Unmodified(Self { #(#fields),* })
+                            })
+                        }
+                        fn from_env() -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
+                            let mut modified = false;
+                            #env_impl_tree
+                            Ok(if modified {
+                                ConfigReturn::Modified(Self { #(#fields),* })
+                            } else {
+                                ConfigReturn::Unmodified(Self { #(#fields),* })
+                            })
+                        }
+                        fn from_env_test(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
+                            let mut modified = false;
+                            #env_test_impl_tree
+                            Ok(if modified {
+                                ConfigReturn::Modified(Self { #(#fields),* })
+                            } else {
+                                ConfigReturn::Unmodified(Self { #(#fields),* })
+                            })
+                        }
                     }
                 }
+            } else {
+                quote!()
             };
             // add struct code and impl code
             let this_struct = quote! {
@@ -404,7 +415,7 @@ impl NestedStructDefinition {
     }
 }
 
-impl Parse for NestedStructDefinition {
+impl<const DERIVE: bool> Parse for NestedStructDefinition<DERIVE> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let tt = Self::expand_structs(quote! {}, input, None, "-".to_owned(), "SKYD".to_owned())?;
         Ok(Self(tt))

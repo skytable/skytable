@@ -52,38 +52,32 @@ sky_macros::config_group! {
     /// full configuration
     pub struct Configuration {
         /// system configuration
-        pub system:
-            #[derive(Debug, PartialEq)]
-            pub struct SystemConfig {
-                /// (reqd) default root password (unless modified) (--system-auth-default-root-password)
-                pub auth_default_root_password: String,
-                /// auth plugin (--system-auth-plugin)
-                pub auth_plugin: #[derive(Debug, PartialEq)] pub enum AuthPlugin { Pwd } = AuthPlugin::Pwd,
-                /// deploy mode (--system-deploy-mode)
-                pub deploy_mode: #[derive(Debug, PartialEq)] pub enum SystemDeployMode { Dev, Prod } = SystemDeployMode::Dev,
-                /// maximum transaction commit delay (--system-storage-max-commit-delay-ms)
-                pub storage_max_commit_delay_ms: u64 = 300,
-            }
+        pub system: #[derive(Debug, PartialEq)] pub struct SystemConfig {
+            /// (reqd) default root password (unless modified) (--system-auth-default-root-password)
+            pub auth_default_root_password: String,
+            /// auth plugin (--system-auth-plugin)
+            pub auth_plugin: #[derive(Debug, PartialEq)] pub enum AuthPlugin { Pwd } = AuthPlugin::Pwd,
+            /// deploy mode (--system-deploy-mode)
+            pub deploy_mode: #[derive(Debug, PartialEq)] pub enum SystemDeployMode { Dev, Prod } = SystemDeployMode::Dev,
+            /// maximum transaction commit delay (--system-storage-max-commit-delay-ms)
+            pub storage_max_commit_delay_ms: u64 = 300,
+        }
         /// client-server settings
-        pub server:
-            #[derive(Debug, PartialEq)]
-            pub struct ServerConfig {
-                /// (reqd) client-server comm endpoint (--server-endpoint and/or --server-endpoint-tls)
-                override impl pub endpoint: ServerEndpoint,
-                /// maximum number of live connections until queuing begins
-                pub max_connections: usize = 10_000,
-            }
+        pub server: #[derive(Debug, PartialEq)] pub struct ServerConfig {
+            /// (reqd) client-server comm endpoint (--server-endpoint and/or --server-endpoint-tls)
+            override impl pub endpoint: ServerEndpoint,
+            /// maximum number of live connections until queuing begins
+            pub max_connections: usize = 10000,
+        }
         /// cluster settings
-        pub cluster:
-            #[derive(Debug, PartialEq)]
-            pub struct ClusterConfig {
-                /// (reqd) the cluster communication port (--cluster-endpoint)
-                pub endpoint: Endpoint,
-                /// (reqd) the shared cluster secret (--cluster-shared-secret)
-                pub shared_secret: ClusterSecret,
-                /// (reqd) cluster seed peers (only used during initial bootstrap) (--cluster-seed-peers)
-                pub seed_peers: ClusterSeedPeers,
-            }
+        pub cluster: #[derive(Debug, PartialEq, serde::Deserialize)] pub struct ClusterConfig {
+            /// (reqd) the cluster communication port (--cluster-endpoint)
+            pub endpoint: Endpoint,
+            /// (reqd) the shared cluster secret (--cluster-shared-secret)
+            pub shared_secret: ClusterSecret,
+            /// (reqd) cluster seed peers (only used during initial bootstrap) (--cluster-seed-peers)
+            pub seed_peers: ClusterSeedPeers,
+        }
     }
 }
 
@@ -100,6 +94,27 @@ impl FromStr for AuthPlugin {
         }
     }
 }
+impl<'de> de::Deserialize<'de> for AuthPlugin {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct AuthPluginVisitor;
+        impl<'de> de::Visitor<'de> for AuthPluginVisitor {
+            type Value = AuthPlugin;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "auth plugin name")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                v.parse().map_err(E::custom)
+            }
+        }
+        deserializer.deserialize_str(AuthPluginVisitor)
+    }
+}
 
 impl FromStr for SystemDeployMode {
     type Err = String;
@@ -109,6 +124,27 @@ impl FromStr for SystemDeployMode {
             "prod" => Self::Prod,
             unknown_mode => return Err(format!("unknown deploy mode {unknown_mode}")),
         })
+    }
+}
+impl<'de> de::Deserialize<'de> for SystemDeployMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct DeployModeVisitor;
+        impl<'de> de::Visitor<'de> for DeployModeVisitor {
+            type Value = SystemDeployMode;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "auth plugin name")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                v.parse().map_err(E::custom)
+            }
+        }
+        deserializer.deserialize_str(DeployModeVisitor)
     }
 }
 
@@ -186,8 +222,8 @@ impl<'de> de::Deserialize<'de> for ClusterSeedPeers {
         struct ClusterSeedPeerVisitor;
         impl<'de> de::Visitor<'de> for ClusterSeedPeerVisitor {
             type Value = ClusterSeedPeers;
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "a list of socket addresses")
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "a list of socket addresses")
             }
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
@@ -231,8 +267,8 @@ impl<'de> de::Deserialize<'de> for ClusterSecret {
         struct ClusterSecretVisitor;
         impl<'de> de::Visitor<'de> for ClusterSecretVisitor {
             type Value = ClusterSecret;
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("cluster secret of length 128 bytes")
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("cluster secret of length 128 bytes")
             }
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where

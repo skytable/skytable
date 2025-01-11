@@ -68,7 +68,7 @@ pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn config_group(ts: TokenStream) -> TokenStream {
-    parse_macro_input!(ts as config_struct::NestedStructDefinition)
+    parse_macro_input!(ts as config_struct::NestedStructDefinition::<true>)
         .0
         .into()
 }
