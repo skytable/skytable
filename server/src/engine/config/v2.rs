@@ -40,7 +40,8 @@ use {
 
 pub type ConfigResult<T> = Result<T, ConfigError>;
 
-const DEFAULT_EP: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2003));
+const DEFAULT_SERVER_EP_INSECURE: SocketAddr =
+    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2003));
 
 /*
     configuration group
@@ -54,12 +55,12 @@ sky_macros::config_group! {
         pub system:
             #[derive(Debug, PartialEq)]
             pub struct SystemConfig {
-                /// default root password (unless modified) (--system-auth-default-root-password)
+                /// (reqd) default root password (unless modified) (--system-auth-default-root-password)
                 pub auth_default_root_password: String,
                 /// auth plugin (--system-auth-plugin)
-                pub auth_plugin: AuthPlugin,
+                pub auth_plugin: #[derive(Debug, PartialEq)] pub enum AuthPlugin { Pwd } = AuthPlugin::Pwd,
                 /// deploy mode (--system-deploy-mode)
-                pub deploy_mode: #[derive(Debug, PartialEq)] pub enum SystemDeployMode { Dev, Prod }
+                pub deploy_mode: #[derive(Debug, PartialEq)] pub enum SystemDeployMode { Dev, Prod } = SystemDeployMode::Dev,
                 /// maximum transaction commit delay (--system-storage-max-commit-delay-ms)
                 pub storage_max_commit_delay_ms: u64 = 300,
             }
@@ -67,18 +68,47 @@ sky_macros::config_group! {
         pub server:
             #[derive(Debug, PartialEq)]
             pub struct ServerConfig {
-                /// client-server comm endpoint (--server-endpoint)
+                /// (reqd) client-server comm endpoint (--server-endpoint and/or --server-endpoint-tls)
                 override impl pub endpoint: ServerEndpoint,
+                /// maximum number of live connections until queuing begins
+                pub max_connections: usize = 10_000,
             }
         /// cluster settings
         pub cluster:
             #[derive(Debug, PartialEq)]
             pub struct ClusterConfig {
-                /// the shared cluster secret (--cluster-shared-secret)
+                /// (reqd) the cluster communication port (--cluster-endpoint)
+                pub endpoint: Endpoint,
+                /// (reqd) the shared cluster secret (--cluster-shared-secret)
                 pub shared_secret: ClusterSecret,
-                /// cluster seed peers (only used during initial bootstrap) (--cluster-seed-peers)
+                /// (reqd) cluster seed peers (only used during initial bootstrap) (--cluster-seed-peers)
                 pub seed_peers: ClusterSeedPeers,
             }
+    }
+}
+
+/*
+    impls for anonymous definitions
+*/
+
+impl FromStr for AuthPlugin {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pwd" => Ok(Self::Pwd),
+            plugin => Err(format!("unknown auth plugin {plugin}")),
+        }
+    }
+}
+
+impl FromStr for SystemDeployMode {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "dev" => Self::Dev,
+            "prod" => Self::Prod,
+            unknown_mode => return Err(format!("unknown deploy mode {unknown_mode}")),
+        })
     }
 }
 
@@ -87,16 +117,47 @@ sky_macros::config_group! {
 */
 
 #[derive(Debug, PartialEq)]
-pub enum AuthPlugin {
-    Pwd,
+/// an endpoint type
+pub enum Endpoint {
+    /// insecure (tcp) endpoint
+    Insecure(EndpointTcp),
+    /// secure (tls) endpoint
+    Secure(EndpointTls),
 }
-
-impl FromStr for AuthPlugin {
+impl<'de> de::Deserialize<'de> for Endpoint {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct EpVisitor;
+        impl<'de> de::Visitor<'de> for EpVisitor {
+            type Value = Endpoint;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "a tcp or tls endpoint definition")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Endpoint::from_str(v).map_err(E::custom)
+            }
+        }
+        deserializer.deserialize_str(EpVisitor)
+    }
+}
+impl FromStr for Endpoint {
     type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "pwd" => Ok(Self::Pwd),
-            plugin => Err(format!("unknown auth plugin {plugin}")),
+    fn from_str(v: &str) -> Result<Self, Self::Err> {
+        if v.starts_with("tcp@") {
+            EndpointTcp::parse(v)
+                .map(Endpoint::Insecure)
+                .map_err(|e| e.to_string())
+        } else if v.starts_with("tls") {
+            EndpointTls::parse(v)
+                .map(Endpoint::Secure)
+                .map_err(|e| e.to_string())
+        } else {
+            Err(format!("unknown endpoint definition '{v:?}'"))
         }
     }
 }
@@ -183,7 +244,7 @@ impl<'de> de::Deserialize<'de> for ClusterSecret {
                         AStr::from_len_unchecked(v)
                     }))
                 } else {
-                    Err(serde::de::Error::invalid_length(
+                    Err(E::invalid_length(
                         v.len(),
                         &"expected a string of length 128",
                     ))
@@ -203,11 +264,11 @@ impl<'de> de::Deserialize<'de> for ClusterSecret {
 /// - `--server-endpoint` and/or `--server-endpoint-tls`
 pub enum ServerEndpoint {
     /// insecure only (TCP)
-    Insecure(ServerEndpointTcp),
+    Insecure(EndpointTcp),
     /// secure only (TLS)
-    Secure(ServerEndpointTls),
+    Secure(EndpointTls),
     /// multi (TCP+TLS)
-    Multi(ServerEndpointTcp, ServerEndpointTls),
+    Multi(EndpointTcp, EndpointTls),
 }
 impl ServerEndpoint {
     fn decode<T, U>(ep_tcp: Option<T>, ep_tls: Option<U>) -> ConfigResult<ConfigReturn<Self>>
@@ -216,11 +277,11 @@ impl ServerEndpoint {
         U: AsRef<str>,
     {
         let tcp = match ep_tcp {
-            Some(ep) => ServerEndpointTcp::parse(ep.as_ref()).map(Some)?,
+            Some(ep) => EndpointTcp::parse(ep.as_ref()).map(Some)?,
             None => None,
         };
         let tls = match ep_tls {
-            Some(ep) => ServerEndpointTls::parse(ep.as_ref()).map(Some)?,
+            Some(ep) => EndpointTls::parse(ep.as_ref()).map(Some)?,
             None => None,
         };
         Ok(match tcp {
@@ -230,9 +291,9 @@ impl ServerEndpoint {
             },
             None => match tls {
                 Some(tls) => ConfigReturn::Modified(Self::Secure(tls)),
-                None => {
-                    ConfigReturn::Unmodified(Self::Insecure(ServerEndpointTcp { sock: DEFAULT_EP }))
-                }
+                None => ConfigReturn::Unmodified(Self::Insecure(EndpointTcp {
+                    sock: DEFAULT_SERVER_EP_INSECURE,
+                })),
             },
         })
     }
@@ -263,10 +324,10 @@ impl ConfigGroupOverride for ServerEndpoint {
 
 #[derive(Debug, PartialEq)]
 /// tcp server endpoint
-pub struct ServerEndpointTcp {
+pub struct EndpointTcp {
     pub sock: SocketAddr,
 }
-impl ServerEndpointTcp {
+impl EndpointTcp {
     fn parse(ep: &str) -> ConfigResult<Self> {
         // tcp@sockaddr
         if !ep.starts_with("tcp@") {
@@ -274,21 +335,21 @@ impl ServerEndpointTcp {
                 "invalid protocol definition for TCP socket"
             )));
         }
-        Ok(ServerEndpointTcp {
+        Ok(EndpointTcp {
             sock: (&ep[4..]).parse().map_err(|e| {
                 ConfigError::ParseError(format!("invalid address for TCP socket - {e}"))
             })?,
         })
     }
 }
-impl<'de> de::Deserialize<'de> for ServerEndpointTcp {
+impl<'de> de::Deserialize<'de> for EndpointTcp {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
         struct ServerEndpointTcpVisitor;
         impl<'de> de::Visitor<'de> for ServerEndpointTcpVisitor {
-            type Value = ServerEndpointTcp;
+            type Value = EndpointTcp;
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "socket address")
             }
@@ -296,7 +357,7 @@ impl<'de> de::Deserialize<'de> for ServerEndpointTcp {
             where
                 E: de::Error,
             {
-                ServerEndpointTcp::parse(v).map_err(de::Error::custom)
+                EndpointTcp::parse(v).map_err(E::custom)
             }
         }
         deserializer.deserialize_str(ServerEndpointTcpVisitor)
@@ -305,13 +366,13 @@ impl<'de> de::Deserialize<'de> for ServerEndpointTcp {
 
 #[derive(Debug, PartialEq)]
 /// tls server endpoint
-pub struct ServerEndpointTls {
+pub struct EndpointTls {
     pub sock: SocketAddr,
     pub cert: Box<str>,
     pub key: Box<str>,
     pub pass: Box<str>,
 }
-impl ServerEndpointTls {
+impl EndpointTls {
     fn tls_dec_err<T>() -> ConfigResult<T> {
         Err(ConfigError::ParseError(format!(
             "invalid protocol definition for TLS socket"
@@ -340,7 +401,7 @@ impl ServerEndpointTls {
         let key = fs::read_to_string(key).map_err(|e| ConfigError::io_error(e, "TLS key"))?;
         let pass =
             fs::read_to_string(pass).map_err(|e| ConfigError::io_error(e, "TLS key passphrase"))?;
-        Ok(ServerEndpointTls {
+        Ok(EndpointTls {
             sock: tls_sockaddr.parse().map_err(|e| {
                 ConfigError::ParseError(format!("invalid address for TLS socket - {e}"))
             })?,
@@ -350,14 +411,14 @@ impl ServerEndpointTls {
         })
     }
 }
-impl<'de> de::Deserialize<'de> for ServerEndpointTls {
+impl<'de> de::Deserialize<'de> for EndpointTls {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
         struct ServerEndpointTlsVisitor;
         impl<'de> de::Visitor<'de> for ServerEndpointTlsVisitor {
-            type Value = ServerEndpointTls;
+            type Value = EndpointTls;
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "socket address")
             }
@@ -365,21 +426,10 @@ impl<'de> de::Deserialize<'de> for ServerEndpointTls {
             where
                 E: de::Error,
             {
-                ServerEndpointTls::parse(v).map_err(de::Error::custom)
+                EndpointTls::parse(v).map_err(E::custom)
             }
         }
         deserializer.deserialize_str(ServerEndpointTlsVisitor)
-    }
-}
-
-impl FromStr for SystemDeployMode {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "dev" => Self::Dev,
-            "prod" => Self::Prod,
-            unknown_mode => return Err(format!("unknown deploy mode {unknown_mode}")),
-        })
     }
 }
 
@@ -529,9 +579,10 @@ impl<T> ops::Deref for ConfigReturn<T> {
 #[cfg(test)]
 mod tests {
     use {
+        super::Endpoint,
         crate::{
             engine::config::v2::{
-                ConfigReturn, ServerEndpoint, ServerEndpointTcp, ServerEndpointTls, DEFAULT_EP,
+                ConfigReturn, EndpointTcp, EndpointTls, ServerEndpoint, DEFAULT_SERVER_EP_INSECURE,
             },
             util::test_utils,
         },
@@ -542,8 +593,8 @@ mod tests {
     fn server_ep_decode_default() {
         assert_eq!(
             ServerEndpoint::decode(None::<&str>, None::<&str>).unwrap(),
-            ConfigReturn::Unmodified(ServerEndpoint::Insecure(ServerEndpointTcp {
-                sock: DEFAULT_EP
+            ConfigReturn::Unmodified(ServerEndpoint::Insecure(EndpointTcp {
+                sock: DEFAULT_SERVER_EP_INSECURE
             }))
         )
     }
@@ -551,7 +602,7 @@ mod tests {
     fn server_ep_decode_insecure() {
         assert_eq!(
             ServerEndpoint::decode(Some("tcp@0.0.0.0:1600"), None::<&str>).unwrap(),
-            ConfigReturn::Modified(ServerEndpoint::Insecure(ServerEndpointTcp {
+            ConfigReturn::Modified(ServerEndpoint::Insecure(EndpointTcp {
                 sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 1600))
             }))
         )
@@ -573,7 +624,7 @@ mod tests {
                         ))
                     )
                     .unwrap(),
-                    ConfigReturn::Modified(ServerEndpoint::Secure(ServerEndpointTls {
+                    ConfigReturn::Modified(ServerEndpoint::Secure(EndpointTls {
                         sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2002)),
                         cert: "".into(),
                         key: "".into(),
@@ -601,13 +652,13 @@ mod tests {
                     )
                     .unwrap(),
                     ConfigReturn::Modified(ServerEndpoint::Multi(
-                        ServerEndpointTcp {
+                        EndpointTcp {
                             sock: SocketAddr::V4(SocketAddrV4::new(
                                 Ipv4Addr::new(0, 0, 0, 0),
                                 1600
                             ))
                         },
-                        ServerEndpointTls {
+                        EndpointTls {
                             sock: SocketAddr::V4(SocketAddrV4::new(
                                 Ipv4Addr::new(127, 0, 0, 1),
                                 2002
@@ -617,6 +668,37 @@ mod tests {
                             pass: "".into(),
                         }
                     ))
+                )
+            },
+        )
+    }
+    #[test]
+    fn t_ep_serde_de() {
+        test_utils::with_files(
+            [
+                "t_ep_serde_de_key",
+                "t_ep_serde_de_cert",
+                "t_ep_serde_de_pass",
+            ],
+            |[certfile, keyfile, passfile]| {
+                let x = format!("endpoint: tls:[{certfile},{keyfile},{passfile}]@127.0.0.1:2002");
+                #[derive(Debug, PartialEq, serde::Deserialize)]
+                struct Ep {
+                    endpoint: Endpoint,
+                }
+                assert_eq!(
+                    serde_yaml::from_str::<Ep>(&x).unwrap(),
+                    Ep {
+                        endpoint: Endpoint::Secure(EndpointTls {
+                            sock: SocketAddr::V4(SocketAddrV4::new(
+                                Ipv4Addr::new(127, 0, 0, 1),
+                                2002
+                            )),
+                            cert: "".into(),
+                            key: "".into(),
+                            pass: "".into(),
+                        })
+                    }
                 )
             },
         )
