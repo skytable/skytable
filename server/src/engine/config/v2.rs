@@ -65,7 +65,8 @@ sky_macros::config_group! {
         /// client-server settings
         pub server: #[derive(Debug, PartialEq)] pub struct ServerConfig {
             /// (reqd) client-server comm endpoint (--server-endpoint and/or --server-endpoint-tls)
-            override impl pub endpoint: ServerEndpoint,
+            #[config_group(override_input_fields = [endpoint, endpoint_tls])]
+            pub endpoint: ServerEndpoint,
             /// maximum number of live connections until queuing begins
             pub max_connections: usize = 10000,
         }
@@ -307,6 +308,24 @@ pub enum ServerEndpoint {
     Multi(EndpointTcp, EndpointTls),
 }
 impl ServerEndpoint {
+    fn __override_config_load(
+        ep_tcp: Option<EndpointTcp>,
+        ep_tls: Option<EndpointTls>,
+    ) -> ConfigResult<ConfigReturn<Self>> {
+        Ok(match ep_tcp {
+            Some(tcp) => match ep_tls {
+                Some(tls) => ConfigReturn::Modified(Self::Multi(tcp, tls)),
+                None => ConfigReturn::Modified(Self::Insecure(tcp)),
+            },
+            None => match ep_tls {
+                Some(tls) => ConfigReturn::Modified(Self::Secure(tls)),
+                None => ConfigReturn::Unmodified(Self::Insecure(EndpointTcp {
+                    sock: DEFAULT_SERVER_EP_INSECURE,
+                })),
+            },
+        })
+    }
+    #[cfg(test)]
     fn decode<T, U>(ep_tcp: Option<T>, ep_tls: Option<U>) -> ConfigResult<ConfigReturn<Self>>
     where
         T: AsRef<str>,
@@ -320,41 +339,7 @@ impl ServerEndpoint {
             Some(ep) => EndpointTls::parse(ep.as_ref()).map(Some)?,
             None => None,
         };
-        Ok(match tcp {
-            Some(tcp) => match tls {
-                Some(tls) => ConfigReturn::Modified(Self::Multi(tcp, tls)),
-                None => ConfigReturn::Modified(Self::Insecure(tcp)),
-            },
-            None => match tls {
-                Some(tls) => ConfigReturn::Modified(Self::Secure(tls)),
-                None => ConfigReturn::Unmodified(Self::Insecure(EndpointTcp {
-                    sock: DEFAULT_SERVER_EP_INSECURE,
-                })),
-            },
-        })
-    }
-}
-impl ConfigGroupOverride for ServerEndpoint {
-    fn from_cli(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
-        let ep_tcp_key = format!("{cpath}-endpoint");
-        let ep_tls_key = format!("{cpath}-endpoint-tls");
-        let ep_tcp = args.take_opt::<String>(&ep_tcp_key)?;
-        let ep_tls = args.take_opt::<String>(&ep_tls_key)?;
-        Self::decode(ep_tcp, ep_tls)
-    }
-    fn from_env(cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
-        let ep_tcp_key = format!("{cpath}_ENDPOINT");
-        let ep_tls_key = format!("{cpath}_ENDPOINT_TLS");
-        let ep_tcp = get_var(&ep_tcp_key)?;
-        let ep_tls = get_var(&ep_tls_key)?;
-        Self::decode(ep_tcp, ep_tls)
-    }
-    fn from_env_test(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
-        let ep_tcp_key = format!("{cpath}_ENDPOINT");
-        let ep_tls_key = format!("{cpath}_ENDPOINT_TLS");
-        let ep_tcp = args.take_opt::<String>(&ep_tcp_key)?;
-        let ep_tls = args.take_opt::<String>(&ep_tls_key)?;
-        Self::decode(ep_tcp, ep_tls)
+        Self::__override_config_load(tcp, tls)
     }
 }
 
@@ -397,6 +382,12 @@ impl<'de> de::Deserialize<'de> for EndpointTcp {
             }
         }
         deserializer.deserialize_str(ServerEndpointTcpVisitor)
+    }
+}
+impl FromStr for EndpointTcp {
+    type Err = ConfigError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        EndpointTcp::parse(s)
     }
 }
 
@@ -466,6 +457,12 @@ impl<'de> de::Deserialize<'de> for EndpointTls {
             }
         }
         deserializer.deserialize_str(ServerEndpointTlsVisitor)
+    }
+}
+impl FromStr for EndpointTls {
+    type Err = ConfigError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        EndpointTls::parse(s)
     }
 }
 
@@ -577,6 +574,24 @@ impl fmt::Display for ConfigError {
     utils
 */
 
+fn get_var2<T: FromStr>(v: &str) -> ConfigResult<Option<T>>
+where
+    T::Err: fmt::Display,
+{
+    match env::var(v) {
+        Ok(v) => match v.parse() {
+            Ok(v) => Ok(Some(v)),
+            Err(e) => Err(ConfigError::ParseError(format!(
+                "failed to parse value for env var `{v}` - {e}"
+            ))),
+        },
+        Err(VarError::NotPresent) => Ok(None),
+        Err(VarError::NotUnicode(e)) => Err(ConfigError::ParseError(format!(
+            "failed to parse value for env var `{v}` - {e}",
+            e = e.to_string_lossy()
+        ))),
+    }
+}
 fn get_var(v: &str) -> ConfigResult<Option<String>> {
     Ok(match env::var(v) {
         Ok(v) => Some(v),
