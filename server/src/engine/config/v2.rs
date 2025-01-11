@@ -27,6 +27,7 @@
 
 use {
     crate::{engine::mem::AStr, util::os::SysIOError},
+    serde::de,
     std::{
         collections::HashMap,
         env::{self, VarError},
@@ -116,13 +117,38 @@ impl FromStr for ClusterSeedPeers {
         Ok(Self(seed_peer_list))
     }
 }
+impl<'de> de::Deserialize<'de> for ClusterSeedPeers {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct ClusterSeedPeerVisitor;
+        impl<'de> de::Visitor<'de> for ClusterSeedPeerVisitor {
+            type Value = ClusterSeedPeers;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a list of socket addresses")
+            }
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let mut peers = vec![];
+                while let Some(peer) = seq.next_element::<SocketAddr>()? {
+                    peers.push(peer);
+                }
+                Ok(ClusterSeedPeers(peers))
+            }
+        }
+        deserializer.deserialize_seq(ClusterSeedPeerVisitor)
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct ClusterSecret(AStr<128>);
 impl FromStr for ClusterSecret {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() == sizeof!(Self) {
+        if s.len() == 128 {
             let astr = unsafe {
                 // UNSAFE(@ohsayan): verified length above
                 AStr::from_len_unchecked(s)
@@ -134,6 +160,38 @@ impl FromStr for ClusterSecret {
                 s.len()
             ))
         }
+    }
+}
+impl<'de> de::Deserialize<'de> for ClusterSecret {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ClusterSecretVisitor;
+        impl<'de> de::Visitor<'de> for ClusterSecretVisitor {
+            type Value = ClusterSecret;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("cluster secret of length 128 bytes")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                if v.len() == 128 {
+                    Ok(ClusterSecret(unsafe {
+                        // UNSAFE(@ohsayan): verified length above
+                        AStr::from_len_unchecked(v)
+                    }))
+                } else {
+                    Err(serde::de::Error::invalid_length(
+                        v.len(),
+                        &"expected a string of length 128",
+                    ))
+                }
+            }
+        }
+        let d = deserializer.deserialize_str(ClusterSecretVisitor)?;
+        Ok(d)
     }
 }
 
@@ -151,85 +209,20 @@ pub enum ServerEndpoint {
     /// multi (TCP+TLS)
     Multi(ServerEndpointTcp, ServerEndpointTls),
 }
-
-#[derive(Debug, PartialEq)]
-/// tcp server endpoint
-pub struct ServerEndpointTcp {
-    pub sock: SocketAddr,
-}
-
-#[derive(Debug, PartialEq)]
-/// tls server endpoint
-pub struct ServerEndpointTls {
-    pub sock: SocketAddr,
-    pub cert: Box<str>,
-    pub key: Box<str>,
-    pub pass: Box<str>,
-}
-
 impl ServerEndpoint {
-    fn decode(ep_tcp: Option<String>, ep_tls: Option<String>) -> ConfigResult<ConfigReturn<Self>> {
-        let tls_dec_err = || {
-            Err(ConfigError::ParseError(format!(
-                "invalid protocol definition for TLS socket"
-            )))
+    fn decode<T, U>(ep_tcp: Option<T>, ep_tls: Option<U>) -> ConfigResult<ConfigReturn<Self>>
+    where
+        T: AsRef<str>,
+        U: AsRef<str>,
+    {
+        let tcp = match ep_tcp {
+            Some(ep) => ServerEndpointTcp::parse(ep.as_ref()).map(Some)?,
+            None => None,
         };
-        let tcp;
-        match ep_tcp {
-            Some(ep) => {
-                // tcp@sockaddr
-                if !ep.starts_with("tcp@") {
-                    return Err(ConfigError::ParseError(format!(
-                        "invalid protocol definition for TCP socket"
-                    )));
-                }
-                tcp = Some(ServerEndpointTcp {
-                    sock: (&ep[4..]).parse().map_err(|e| {
-                        ConfigError::ParseError(format!("invalid address for TCP socket - {e}"))
-                    })?,
-                });
-            }
-            None => tcp = None,
-        }
-        let tls;
-        match ep_tls {
-            Some(ep) => {
-                if !ep.starts_with("tls:[") {
-                    return tls_dec_err();
-                }
-                let ep = &ep[5..];
-                let Some((tls_settings, tls_sockaddr)) = ep.split_once('@') else {
-                    return tls_dec_err();
-                };
-                if !tls_settings.ends_with("]") {
-                    return tls_dec_err();
-                }
-                let tls_settings = &tls_settings[..tls_settings.len() - 1];
-                // now tls_settings should look like cert,key,pass and tls_sockaddr should just have the socket address
-                let tls_settings: Vec<_> = tls_settings.split(',').collect();
-                if tls_settings.len() != 3 {
-                    return tls_dec_err();
-                }
-                let (cert, key, pass) = (tls_settings[0], tls_settings[1], tls_settings[2]);
-                let cert = fs::read_to_string(cert)
-                    .map_err(|e| ConfigError::io_error(e, "TLS certificate"))?;
-                let key =
-                    fs::read_to_string(key).map_err(|e| ConfigError::io_error(e, "TLS key"))?;
-                let pass = fs::read_to_string(pass)
-                    .map_err(|e| ConfigError::io_error(e, "TLS key passphrase"))?;
-                tls = Some(ServerEndpointTls {
-                    sock: tls_sockaddr.parse().map_err(|e| {
-                        ConfigError::ParseError(format!("invalid address for TLS socket - {e}"))
-                    })?,
-                    cert: cert.into_boxed_str(),
-                    key: key.into_boxed_str(),
-                    pass: pass.into_boxed_str(),
-                });
-            }
-            None => {
-                tls = None;
-            }
-        }
+        let tls = match ep_tls {
+            Some(ep) => ServerEndpointTls::parse(ep.as_ref()).map(Some)?,
+            None => None,
+        };
         Ok(match tcp {
             Some(tcp) => match tls {
                 Some(tls) => ConfigReturn::Modified(Self::Multi(tcp, tls)),
@@ -244,13 +237,12 @@ impl ServerEndpoint {
         })
     }
 }
-
 impl ConfigGroupOverride for ServerEndpoint {
     fn from_cli(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
         let ep_tcp_key = format!("{cpath}-endpoint");
         let ep_tls_key = format!("{cpath}-endpoint-tls");
-        let ep_tcp = args.take_opt(&ep_tcp_key)?;
-        let ep_tls = args.take_opt(&ep_tls_key)?;
+        let ep_tcp = args.take_opt::<String>(&ep_tcp_key)?;
+        let ep_tls = args.take_opt::<String>(&ep_tls_key)?;
         Self::decode(ep_tcp, ep_tls)
     }
     fn from_env(cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
@@ -263,9 +255,120 @@ impl ConfigGroupOverride for ServerEndpoint {
     fn from_env_test(args: &mut ConfigMap, cpath: &str) -> ConfigResult<ConfigReturn<Self>> {
         let ep_tcp_key = format!("{cpath}_ENDPOINT");
         let ep_tls_key = format!("{cpath}_ENDPOINT_TLS");
-        let ep_tcp = args.take_opt(&ep_tcp_key)?;
-        let ep_tls = args.take_opt(&ep_tls_key)?;
+        let ep_tcp = args.take_opt::<String>(&ep_tcp_key)?;
+        let ep_tls = args.take_opt::<String>(&ep_tls_key)?;
         Self::decode(ep_tcp, ep_tls)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// tcp server endpoint
+pub struct ServerEndpointTcp {
+    pub sock: SocketAddr,
+}
+impl ServerEndpointTcp {
+    fn parse(ep: &str) -> ConfigResult<Self> {
+        // tcp@sockaddr
+        if !ep.starts_with("tcp@") {
+            return Err(ConfigError::ParseError(format!(
+                "invalid protocol definition for TCP socket"
+            )));
+        }
+        Ok(ServerEndpointTcp {
+            sock: (&ep[4..]).parse().map_err(|e| {
+                ConfigError::ParseError(format!("invalid address for TCP socket - {e}"))
+            })?,
+        })
+    }
+}
+impl<'de> de::Deserialize<'de> for ServerEndpointTcp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct ServerEndpointTcpVisitor;
+        impl<'de> de::Visitor<'de> for ServerEndpointTcpVisitor {
+            type Value = ServerEndpointTcp;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "socket address")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                ServerEndpointTcp::parse(v).map_err(de::Error::custom)
+            }
+        }
+        deserializer.deserialize_str(ServerEndpointTcpVisitor)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// tls server endpoint
+pub struct ServerEndpointTls {
+    pub sock: SocketAddr,
+    pub cert: Box<str>,
+    pub key: Box<str>,
+    pub pass: Box<str>,
+}
+impl ServerEndpointTls {
+    fn tls_dec_err<T>() -> ConfigResult<T> {
+        Err(ConfigError::ParseError(format!(
+            "invalid protocol definition for TLS socket"
+        )))
+    }
+    fn parse(ep: &str) -> ConfigResult<Self> {
+        if !ep.starts_with("tls:[") {
+            return Self::tls_dec_err();
+        }
+        let ep = &ep[5..];
+        let Some((tls_settings, tls_sockaddr)) = ep.split_once('@') else {
+            return Self::tls_dec_err();
+        };
+        if !tls_settings.ends_with("]") {
+            return Self::tls_dec_err();
+        }
+        let tls_settings = &tls_settings[..tls_settings.len() - 1];
+        // now tls_settings should look like cert,key,pass and tls_sockaddr should just have the socket address
+        let tls_settings: Vec<_> = tls_settings.split(',').collect();
+        if tls_settings.len() != 3 {
+            return Self::tls_dec_err();
+        }
+        let (cert, key, pass) = (tls_settings[0], tls_settings[1], tls_settings[2]);
+        let cert =
+            fs::read_to_string(cert).map_err(|e| ConfigError::io_error(e, "TLS certificate"))?;
+        let key = fs::read_to_string(key).map_err(|e| ConfigError::io_error(e, "TLS key"))?;
+        let pass =
+            fs::read_to_string(pass).map_err(|e| ConfigError::io_error(e, "TLS key passphrase"))?;
+        Ok(ServerEndpointTls {
+            sock: tls_sockaddr.parse().map_err(|e| {
+                ConfigError::ParseError(format!("invalid address for TLS socket - {e}"))
+            })?,
+            cert: cert.into_boxed_str(),
+            key: key.into_boxed_str(),
+            pass: pass.into_boxed_str(),
+        })
+    }
+}
+impl<'de> de::Deserialize<'de> for ServerEndpointTls {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct ServerEndpointTlsVisitor;
+        impl<'de> de::Visitor<'de> for ServerEndpointTlsVisitor {
+            type Value = ServerEndpointTls;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "socket address")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                ServerEndpointTls::parse(v).map_err(de::Error::custom)
+            }
+        }
+        deserializer.deserialize_str(ServerEndpointTlsVisitor)
     }
 }
 
@@ -407,7 +510,13 @@ enum ConfigReturn<T> {
     Modified(T),
     Unmodified(T),
 }
-
+impl<T> ConfigReturn<T> {
+    fn into_inner(self) -> T {
+        match self {
+            Self::Modified(m) | Self::Unmodified(m) => m,
+        }
+    }
+}
 impl<T> ops::Deref for ConfigReturn<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -432,7 +541,7 @@ mod tests {
     #[test]
     fn server_ep_decode_default() {
         assert_eq!(
-            ServerEndpoint::decode(None, None).unwrap(),
+            ServerEndpoint::decode(None::<&str>, None::<&str>).unwrap(),
             ConfigReturn::Unmodified(ServerEndpoint::Insecure(ServerEndpointTcp {
                 sock: DEFAULT_EP
             }))
@@ -441,7 +550,7 @@ mod tests {
     #[test]
     fn server_ep_decode_insecure() {
         assert_eq!(
-            ServerEndpoint::decode(Some("tcp@0.0.0.0:1600".to_owned()), None).unwrap(),
+            ServerEndpoint::decode(Some("tcp@0.0.0.0:1600"), None::<&str>).unwrap(),
             ConfigReturn::Modified(ServerEndpoint::Insecure(ServerEndpointTcp {
                 sock: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 1600))
             }))
@@ -458,7 +567,7 @@ mod tests {
             |[cert_file, key_file, pass_file]| {
                 assert_eq!(
                     ServerEndpoint::decode(
-                        None,
+                        None::<&str>,
                         Some(format!(
                             "tls:[{cert_file},{key_file},{pass_file}]@127.0.0.1:2002"
                         ))
