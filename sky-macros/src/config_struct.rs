@@ -86,6 +86,18 @@ impl DeclarationPaths {
     }
 }
 
+struct AdvancedOptions {
+    override_input_fields: Option<Vec<Ident>>,
+}
+
+impl AdvancedOptions {
+    fn new() -> Self {
+        Self {
+            override_input_fields: None,
+        }
+    }
+}
+
 impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
     fn expand_structs(
         mut main_tree: proc_macro2::TokenStream,
@@ -140,7 +152,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                     return Err(Error::new(field_attrs[attr_idx].span(), "invalid argument"));
                 }
             } else {
-                ConfigGroupAdvancedOptions::None
+                AdvancedOptions::new()
             };
             token_tree.base(|decl_tree| quote! { #decl_tree #(#field_attrs)* });
             // see if field is pub
@@ -340,14 +352,14 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
         paths: &DeclarationPaths,
         default_decl: Option<proc_macro2::TokenStream>,
         token_tree: &mut StructTokenTree,
-        field_custom_options: &ConfigGroupAdvancedOptions,
+        field_custom_options: &AdvancedOptions,
     ) {
         let DeclarationPaths {
             env_path: __var,
             cli_path: __cli,
         } = paths.step(&field_name);
-        match field_custom_options {
-            ConfigGroupAdvancedOptions::None => {
+        match &field_custom_options.override_input_fields {
+            None => {
                 if let Some(default_decl) = default_decl {
                     // env
                     token_tree.impl_env(|env_impl_tree| {
@@ -398,7 +410,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                     });
                 }
             }
-            ConfigGroupAdvancedOptions::OverrideInputKeys(override_keys) => {
+            Some(override_keys) => {
                 assert!(
                     default_decl.is_none(),
                     "can't use both override and default decl"
@@ -472,14 +484,9 @@ impl<const DERIVE: bool> Parse for NestedStructDefinition<DERIVE> {
     }
 }
 
-#[derive(Debug)]
-enum ConfigGroupAdvancedOptions {
-    None,
-    OverrideInputKeys(Vec<Ident>),
-}
-
-impl Parse for ConfigGroupAdvancedOptions {
+impl Parse for AdvancedOptions {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut adv_opts = AdvancedOptions::new();
         // get parenthesized
         let input_;
         let _ = parenthesized!(input_ in input);
@@ -498,11 +505,12 @@ impl Parse for ConfigGroupAdvancedOptions {
         // get square bracketed list of idents
         let items;
         let _ = bracketed!(items in input);
-        Ok(Self::OverrideInputKeys(
+        adv_opts.override_input_fields = Some(
             items
                 .parse_terminated::<_, Token![,]>(Ident::parse)?
                 .into_iter()
                 .collect(),
-        ))
+        );
+        Ok(adv_opts)
     }
 }
