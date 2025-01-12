@@ -35,214 +35,63 @@ use {
 
 pub struct NestedStructDefinition<const DERIVE: bool>(pub proc_macro2::TokenStream);
 
+struct StructTokenTree {
+    struct_tree: proc_macro2::TokenStream,
+    impl_tree_cli: proc_macro2::TokenStream,
+    impl_tree_env: proc_macro2::TokenStream,
+    impl_tree_env_test: proc_macro2::TokenStream,
+}
+
+impl StructTokenTree {
+    fn new() -> Self {
+        Self {
+            struct_tree: quote! {},
+            impl_tree_cli: quote! {},
+            impl_tree_env: quote! {},
+            impl_tree_env_test: quote! {},
+        }
+    }
+    fn base(&mut self, f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream) {
+        self.struct_tree = f(&self.struct_tree)
+    }
+    fn impl_cli(&mut self, f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream) {
+        self.impl_tree_cli = f(&self.impl_tree_cli)
+    }
+    fn impl_env(&mut self, f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream) {
+        self.impl_tree_env = f(&self.impl_tree_env)
+    }
+    fn impl_env_test(&mut self, f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream) {
+        self.impl_tree_env_test = f(&self.impl_tree_env_test)
+    }
+}
+
+struct DeclarationPaths {
+    env_path: String,
+    cli_path: String,
+}
+
+impl DeclarationPaths {
+    fn init() -> Self {
+        Self {
+            env_path: "SKYD".to_owned(),
+            cli_path: "-".to_owned(),
+        }
+    }
+    fn step(&self, name: &Ident) -> Self {
+        let name = name.to_string();
+        Self {
+            env_path: format!("{}_{}", self.env_path, name.to_uppercase()),
+            cli_path: format!("{}-{}", self.cli_path, name.replace('_', "-")),
+        }
+    }
+}
+
 impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
-    /// for values that return from structs / custom impls, use this to gather information on whether the value was modified or not
-    fn apply_return_validation(
-        lhs: proc_macro2::TokenStream,
-        rhs: proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        quote! {
-            #lhs = match #rhs {
-                ConfigReturn::Modified(v) => { modified = true; v },
-                ConfigReturn::Unmodified(v) => v,
-            };
-        }
-    }
-    /// see if there is a default declaration
-    fn get_default_decl(stream: ParseStream) -> syn::Result<Option<proc_macro2::TokenStream>> {
-        Ok(if stream.peek(Token![=]) {
-            stream.parse::<Token![=]>()?;
-            let default_decl: syn::Expr = stream.parse()?;
-            Some(quote! { #default_decl })
-        } else {
-            None
-        })
-    }
-    /// for a given non-nested field:
-    /// - if there is a default impl:
-    ///     - if there is an override: error
-    ///     - if no override, fetch the value and if absent, use the default
-    /// - if there is no defualt impl:
-    ///     - if there is an override, then let the override impl do what needs to be done (apply return validation)
-    ///     - if no override, fetch the value and parse; otherwise return missing err
-    fn add_cli_impl_for_field(
-        field_name: Ident,
-        field_type: impl ToTokens,
-        current_cli_path: &str,
-        default_decl: Option<&proc_macro2::TokenStream>,
-        cli_impl_tree: proc_macro2::TokenStream,
-        field_custom_options: &ConfigGroupAdvancedOptions,
-    ) -> proc_macro2::TokenStream {
-        let __cli = format!(
-            "{current_cli_path}-{}",
-            field_name.to_string().replace('_', "-")
-        );
-        match field_custom_options {
-            ConfigGroupAdvancedOptions::None => {
-                if let Some(default_decl) = default_decl {
-                    // check if modified (i.e some(..))
-                    quote! {
-                        #cli_impl_tree let #field_name: #field_type = match args.take_opt(#__cli)? {
-                            Some(v) => {modified = true; v},
-                            None => { #default_decl },
-                        };
-                    }
-                } else {
-                    // definitely modified as reqd. key
-                    quote! {
-                        #cli_impl_tree let #field_name: #field_type = args.take(#__cli)?;
-                        modified = true;
-                    }
-                }
-            }
-            ConfigGroupAdvancedOptions::OverrideInputKeys(override_keys) => {
-                assert!(
-                    default_decl.is_none(),
-                    "can't use both override and default decl"
-                );
-                let cli_args: Vec<String> = override_keys
-                    .iter()
-                    .map(|key| format!("{current_cli_path}-{}", key.to_string().replace('_', "-")))
-                    .collect();
-                Self::apply_return_validation(
-                    quote! { #cli_impl_tree let #field_name },
-                    quote! {
-                        {
-                            #(
-                                let #override_keys = args.take_opt(#cli_args)?;
-                                modified |= ::core::option::Option::is_some(&#override_keys);
-                            )*
-                            #field_type::__override_config_load(#(#override_keys),*)?
-                        }
-                    },
-                )
-            }
-        }
-    }
-    fn add_env_impl_for_field(
-        field_name: Ident,
-        field_type: impl ToTokens,
-        current_env_path: &str,
-        default_decl: Option<proc_macro2::TokenStream>,
-        env_impl_tree: proc_macro2::TokenStream,
-        env_test_impl_tree: proc_macro2::TokenStream,
-        field_custom_options: &ConfigGroupAdvancedOptions,
-    ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
-        let __var = format!(
-            "{current_env_path}_{}",
-            field_name.to_string().to_uppercase()
-        );
-        let (env_tt, env_test_tt);
-        match field_custom_options {
-            ConfigGroupAdvancedOptions::None => {
-                if let Some(default_decl) = default_decl {
-                    // check if modified (i.e some(..))
-                    env_tt = quote! {
-                        #env_impl_tree let #field_name: #field_type = match crate::engine::config::v2::get_var2(#__var)? {
-                            Some(v) => {modified = true; v},
-                            None => #default_decl,
-                        };
-                    };
-                    env_test_tt = quote! {
-                        #env_impl_tree let #field_name: #field_type = match args.take_opt(#__var)? {
-                            Some(v) => {modified = true; v},
-                            None => { #default_decl },
-                        };
-                    };
-                } else {
-                    // TODO(@ohsayan): nullable or reqd.
-                    // definitely modified
-                    env_tt = quote! {
-                        #env_impl_tree let #field_name: #field_type = crate::engine::config::v2::get_var2(#__var)?
-                            .ok_or_else(|| crate::engine::config::v2::ConfigError::Required(#__var.to_owned()))?;
-                        modified = true;
-                    };
-                    env_test_tt = quote! { #env_test_impl_tree let #field_name: #field_type = args.take(#__var)?; modified = true; };
-                }
-            }
-            ConfigGroupAdvancedOptions::OverrideInputKeys(override_keys) => {
-                assert!(
-                    default_decl.is_none(),
-                    "can't use both override and default decl"
-                );
-                let env_args: Vec<String> = override_keys
-                    .iter()
-                    .map(|key| format!("{current_env_path}_{}", key.to_string().to_uppercase()))
-                    .collect();
-                env_test_tt = Self::apply_return_validation(
-                    quote! { #env_test_impl_tree let #field_name },
-                    quote! {
-                        {
-                            #(
-                                let #override_keys = args.take_opt(#env_args)?;
-                                modified |= ::core::option::Option::is_some(&#override_keys);
-                            )*
-                            #field_type::__override_config_load(#(#override_keys),*)?
-                        }
-                    },
-                );
-                env_tt = Self::apply_return_validation(
-                    quote! { #env_impl_tree let #field_name },
-                    quote! {
-                        {
-                            #(
-                                let #override_keys = crate::engine::config::v2::get_var2(#env_args)?;
-                                modified |= ::core::option::Option::is_some(&#override_keys);
-                            )*
-                            #field_type::__override_config_load(#(#override_keys),*)?
-                        }
-                    },
-                );
-            }
-        }
-        (env_tt, env_test_tt)
-    }
-    fn add_impls_for_field(
-        field_name: Ident,
-        field_type: impl ToTokens,
-        current_cli_path: &str,
-        current_env_path: &str,
-        default_decl: Option<proc_macro2::TokenStream>,
-        cli_impl_tree: proc_macro2::TokenStream,
-        env_impl_tree: proc_macro2::TokenStream,
-        env_test_impl_tree: proc_macro2::TokenStream,
-        field_custom_options: &ConfigGroupAdvancedOptions,
-    ) -> (
-        proc_macro2::TokenStream,
-        proc_macro2::TokenStream,
-        proc_macro2::TokenStream,
-    ) {
-        let cli_impls = Self::add_cli_impl_for_field(
-            field_name.clone(),
-            &field_type,
-            current_cli_path,
-            default_decl.as_ref(),
-            cli_impl_tree,
-            field_custom_options,
-        );
-        let (env_impl, env_test_impl) = Self::add_env_impl_for_field(
-            field_name,
-            field_type,
-            current_env_path,
-            default_decl,
-            env_impl_tree,
-            env_test_impl_tree,
-            field_custom_options,
-        );
-        (cli_impls, env_impl, env_test_impl)
-    }
-    fn skip_comma(pb: &ParseBuffer) -> syn::Result<()> {
-        if pb.peek(Token![,]) {
-            pb.parse::<Token![,]>()?;
-        }
-        Ok(())
-    }
     fn expand_structs(
         mut main_tree: proc_macro2::TokenStream,
         stream: ParseStream,
         attributes: Option<Vec<Attribute>>,
-        c_cli_path: String,
-        c_env_path: String,
+        paths: DeclarationPaths,
     ) -> syn::Result<proc_macro2::TokenStream> {
         /*
             prepare various token trees:
@@ -250,10 +99,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
             (2) env var impl tree
             (3) cli impl tree
         */
-        let mut decl_tree = quote! {};
-        let mut cli_impl_tree = quote! {};
-        let mut env_impl_tree = quote! {};
-        let mut env_test_impl_tree = quote! {};
+        let mut token_tree = StructTokenTree::new();
         let mut fields = vec![];
         // struct attributes
         let attrs = match attributes {
@@ -296,7 +142,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
             } else {
                 ConfigGroupAdvancedOptions::None
             };
-            decl_tree = quote! { #decl_tree #(#field_attrs)* };
+            token_tree.base(|decl_tree| quote! { #decl_tree #(#field_attrs)* });
             // see if field is pub
             let field_vis = if stream.peek(Token![pub]) {
                 stream.parse()?
@@ -318,18 +164,15 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                 // add enum definition to main tree
                 main_tree = quote! { #main_tree #(#field_item_attrs)* #enumeration };
                 // add field definition to local struct tree
-                decl_tree = quote! { #decl_tree #field_name: #enumeration_id, };
+                token_tree.base(|decl_tree| quote! { #decl_tree #field_name: #enumeration_id, });
                 if DERIVE {
                     // add impls to tree
-                    (cli_impl_tree, env_impl_tree, env_test_impl_tree) = Self::add_impls_for_field(
+                    Self::add_impls_for_field(
                         field_name,
                         enumeration_id,
-                        &c_cli_path,
-                        &c_env_path,
+                        &paths,
                         Self::get_default_decl(&stream)?,
-                        cli_impl_tree,
-                        env_impl_tree,
-                        env_test_impl_tree,
+                        &mut token_tree,
                         &field_custom_options,
                     );
                 }
@@ -349,25 +192,30 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                     main_tree,
                     &stream,
                     Some(field_item_attrs),
-                    format!("{c_cli_path}-{}", field_name.to_string().replace('_', "-")),
-                    format!("{c_env_path}_{}", field_name.to_string().to_uppercase()),
+                    paths.step(&field_name),
                 )?;
                 // add field to local struct tree
-                decl_tree = quote! { #decl_tree #field_name: #struct_name, };
+                token_tree.base(|decl_tree| quote! { #decl_tree #field_name: #struct_name, });
                 if DERIVE {
                     // add impls to tree
-                    cli_impl_tree = Self::apply_return_validation(
-                        quote! { #cli_impl_tree let #field_name },
-                        quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_cli(args)? },
-                    );
-                    env_impl_tree = Self::apply_return_validation(
-                        quote! { #env_impl_tree let #field_name },
-                        quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env()? },
-                    );
-                    env_test_impl_tree = Self::apply_return_validation(
-                        quote! { #env_test_impl_tree let #field_name },
-                        quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env_test(args)? },
-                    );
+                    token_tree.impl_cli(|cli_impl_tree| {
+                        Self::apply_return_validation(
+                            quote! { #cli_impl_tree let #field_name },
+                            quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_cli(args)? },
+                        )
+                    });
+                    token_tree.impl_env(|env_impl_tree| {
+                        Self::apply_return_validation(
+                            quote! { #env_impl_tree let #field_name },
+                            quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env()? },
+                        )
+                    });
+                    token_tree.impl_env_test(|env_test_impl_tree| {
+                        Self::apply_return_validation(
+                            quote! { #env_test_impl_tree let #field_name },
+                            quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env_test(args)? },
+                        )
+                    });
                 }
             } else {
                 if stream.peek(Ident) {
@@ -377,21 +225,19 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                     // this is the field type
                     let field_type: syn::TypePath = stream.parse()?;
                     // add field definition to local struct tree
-                    decl_tree = quote! { #decl_tree #field_vis #field_name: #field_type, };
+                    token_tree.base(
+                        |decl_tree| quote! { #decl_tree #field_vis #field_name: #field_type, },
+                    );
                     if DERIVE {
                         // add impls to tree
-                        (cli_impl_tree, env_impl_tree, env_test_impl_tree) =
-                            Self::add_impls_for_field(
-                                field_name,
-                                field_type,
-                                &c_cli_path,
-                                &c_env_path,
-                                Self::get_default_decl(&stream)?,
-                                cli_impl_tree,
-                                env_impl_tree,
-                                env_test_impl_tree,
-                                &field_custom_options,
-                            );
+                        Self::add_impls_for_field(
+                            field_name,
+                            field_type,
+                            &paths,
+                            Self::get_default_decl(&stream)?,
+                            &mut token_tree,
+                            &field_custom_options,
+                        );
                     }
                 }
             }
@@ -399,6 +245,12 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
         }
 
         // prepare final output token trees
+        let StructTokenTree {
+            struct_tree,
+            impl_tree_cli,
+            impl_tree_env,
+            impl_tree_env_test,
+        } = token_tree;
         if stream.is_empty() {
             // prep impl code
             let impl_code = if DERIVE {
@@ -407,7 +259,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                     impl crate::engine::config::v2::ConfigGroup for #struct_name {
                         fn from_cli(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
                             let mut modified = false;
-                            #cli_impl_tree
+                            #impl_tree_cli
                             Ok(if modified {
                                 ConfigReturn::Modified(Self { #(#fields),* })
                             } else {
@@ -416,7 +268,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                         }
                         fn from_env() -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
                             let mut modified = false;
-                            #env_impl_tree
+                            #impl_tree_env
                             Ok(if modified {
                                 ConfigReturn::Modified(Self { #(#fields),* })
                             } else {
@@ -425,7 +277,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                         }
                         fn from_env_test(args: &mut crate::engine::config::v2::ConfigMap) -> crate::engine::config::v2::ConfigResult<crate::engine::config::v2::ConfigReturn<Self>> {
                             let mut modified = false;
-                            #env_test_impl_tree
+                            #impl_tree_env_test
                             Ok(if modified {
                                 ConfigReturn::Modified(Self { #(#fields),* })
                             } else {
@@ -439,7 +291,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
             };
             // add struct code and impl code
             let this_struct = quote! {
-                #(#attrs)* #struct_vis struct #struct_name { #decl_tree } #impl_code
+                #(#attrs)* #struct_vis struct #struct_name { #struct_tree } #impl_code
             };
             // merge with full tree
             let final_tree = quote! {
@@ -452,9 +304,170 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
     }
 }
 
+impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
+    /// for values that return from structs / custom impls, use this to gather information on whether the value was modified or not
+    fn apply_return_validation(
+        lhs: proc_macro2::TokenStream,
+        rhs: proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        quote! {
+            #lhs = match #rhs {
+                ConfigReturn::Modified(v) => { modified = true; v },
+                ConfigReturn::Unmodified(v) => v,
+            };
+        }
+    }
+    /// see if there is a default declaration
+    fn get_default_decl(stream: ParseStream) -> syn::Result<Option<proc_macro2::TokenStream>> {
+        Ok(if stream.peek(Token![=]) {
+            stream.parse::<Token![=]>()?;
+            let default_decl: syn::Expr = stream.parse()?;
+            Some(quote! { #default_decl })
+        } else {
+            None
+        })
+    }
+    /// for a given non-nested field:
+    /// - if there is a default impl:
+    ///     - if there is an override: error
+    ///     - if no override, fetch the value and if absent, use the default
+    /// - if there is no defualt impl:
+    ///     - if there is an override, then let the override impl do what needs to be done (apply return validation)
+    ///     - if no override, fetch the value and parse; otherwise return missing err
+    fn add_impls_for_field(
+        field_name: Ident,
+        field_type: impl ToTokens,
+        paths: &DeclarationPaths,
+        default_decl: Option<proc_macro2::TokenStream>,
+        token_tree: &mut StructTokenTree,
+        field_custom_options: &ConfigGroupAdvancedOptions,
+    ) {
+        let DeclarationPaths {
+            env_path: __var,
+            cli_path: __cli,
+        } = paths.step(&field_name);
+        match field_custom_options {
+            ConfigGroupAdvancedOptions::None => {
+                if let Some(default_decl) = default_decl {
+                    // env
+                    token_tree.impl_env(|env_impl_tree| {
+                        quote! {
+                            #env_impl_tree let #field_name: #field_type = match crate::engine::config::v2::get_var(#__var)? {
+                                Some(v) => {modified = true; v},
+                                None => #default_decl,
+                            };
+                        }
+                    });
+                    // env test
+                    token_tree.impl_env_test(|env_test_impl_tree| {
+                        quote! {
+                            #env_test_impl_tree let #field_name: #field_type = match args.take_opt(#__var)? {
+                                Some(v) => {modified = true; v},
+                                None => { #default_decl },
+                            };
+                        }
+                    });
+                    // cli
+                    token_tree.impl_cli(|cli_impl_tree| {
+                        quote! {
+                            #cli_impl_tree let #field_name: #field_type = match args.take_opt(#__cli)? {
+                                Some(v) => {modified = true; v},
+                                None => { #default_decl },
+                            };
+                        }
+                    });
+                } else {
+                    // env
+                    token_tree.impl_env(|env_impl_tree| {
+                        quote! {
+                            #env_impl_tree let #field_name: #field_type = crate::engine::config::v2::get_var(#__var)?
+                                .ok_or_else(|| crate::engine::config::v2::ConfigError::Required(#__var.to_owned()))?;
+                            modified = true;
+                        }
+                    });
+                    // env test
+                    token_tree.impl_env_test(|env_test_impl_tree| {
+                        quote! { #env_test_impl_tree let #field_name: #field_type = args.take(#__var)?; modified = true; }
+                    });
+                    // cli
+                    token_tree.impl_cli(|cli_impl_tree| {
+                        quote! {
+                            #cli_impl_tree let #field_name: #field_type = args.take(#__cli)?;
+                            modified = true;
+                        }
+                    });
+                }
+            }
+            ConfigGroupAdvancedOptions::OverrideInputKeys(override_keys) => {
+                assert!(
+                    default_decl.is_none(),
+                    "can't use both override and default decl"
+                );
+                let env_args: Vec<String> = override_keys
+                    .iter()
+                    .map(|key| format!("{}_{}", paths.env_path, key.to_string().to_uppercase()))
+                    .collect();
+                let cli_args: Vec<String> = override_keys
+                    .iter()
+                    .map(|key| format!("{}-{}", paths.cli_path, key.to_string().replace('_', "-")))
+                    .collect();
+                // env
+                token_tree.impl_env(|env_impl_tree| Self::apply_return_validation(
+                    quote! { #env_impl_tree let #field_name },
+                    quote! {
+                        {
+                            #(
+                                let #override_keys = crate::engine::config::v2::get_var(#env_args)?;
+                                modified |= ::core::option::Option::is_some(&#override_keys);
+                            )*
+                            #field_type::__override_config_load(#(#override_keys),*)?
+                        }
+                    },
+                ));
+                // env test
+                token_tree.impl_env_test(|env_test_impl_tree| {
+                    Self::apply_return_validation(
+                        quote! { #env_test_impl_tree let #field_name },
+                        quote! {
+                            {
+                                #(
+                                    let #override_keys = args.take_opt(#env_args)?;
+                                    modified |= ::core::option::Option::is_some(&#override_keys);
+                                )*
+                                #field_type::__override_config_load(#(#override_keys),*)?
+                            }
+                        },
+                    )
+                });
+                // cli
+                token_tree.impl_cli(|cli_impl_tree| {
+                    Self::apply_return_validation(
+                        quote! { #cli_impl_tree let #field_name },
+                        quote! {
+                            {
+                                #(
+                                    let #override_keys = args.take_opt(#cli_args)?;
+                                    modified |= ::core::option::Option::is_some(&#override_keys);
+                                )*
+                                #field_type::__override_config_load(#(#override_keys),*)?
+                            }
+                        },
+                    )
+                });
+            }
+        }
+    }
+    fn skip_comma(pb: &ParseBuffer) -> syn::Result<()> {
+        if pb.peek(Token![,]) {
+            pb.parse::<Token![,]>()?;
+        }
+        Ok(())
+    }
+}
+
 impl<const DERIVE: bool> Parse for NestedStructDefinition<DERIVE> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let tt = Self::expand_structs(quote! {}, input, None, "-".to_owned(), "SKYD".to_owned())?;
+        let tt = Self::expand_structs(quote! {}, input, None, DeclarationPaths::init())?;
         Ok(Self(tt))
     }
 }

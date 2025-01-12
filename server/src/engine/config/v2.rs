@@ -574,7 +574,7 @@ impl fmt::Display for ConfigError {
     utils
 */
 
-fn get_var2<T: FromStr>(v: &str) -> ConfigResult<Option<T>>
+fn get_var<T: FromStr>(v: &str) -> ConfigResult<Option<T>>
 where
     T::Err: fmt::Display,
 {
@@ -591,18 +591,6 @@ where
             e = e.to_string_lossy()
         ))),
     }
-}
-fn get_var(v: &str) -> ConfigResult<Option<String>> {
-    Ok(match env::var(v) {
-        Ok(v) => Some(v),
-        Err(VarError::NotPresent) => None,
-        Err(VarError::NotUnicode(e)) => {
-            return Err(ConfigError::ParseError(format!(
-                "failed to parse value for env var `{v}` - {e}",
-                e = e.to_string_lossy()
-            )))
-        }
-    })
 }
 
 #[derive(Debug, PartialEq)]
