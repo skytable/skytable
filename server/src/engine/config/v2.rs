@@ -42,6 +42,8 @@ pub type ConfigResult<T> = Result<T, ConfigError>;
 
 const DEFAULT_SERVER_EP_INSECURE: SocketAddr =
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2003));
+const DEFAULT_CLUSTER_EP_INSECURE: SocketAddr =
+    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 2005));
 
 /*
     configuration group
@@ -68,12 +70,12 @@ sky_macros::config_group! {
             #[config_group(override_input_fields = [endpoint, endpoint_tls])]
             pub endpoint: ServerEndpoint,
             /// maximum number of live connections until queuing begins
-            pub max_connections: usize = 10000,
+            pub max_connections: usize = 10_000,
         }
         /// cluster settings
-        pub cluster: #[derive(Debug, PartialEq, serde::Deserialize)] pub struct ClusterConfig {
+        pub cluster: #[derive(Debug, PartialEq)] pub struct ClusterConfig {
             /// (reqd) the cluster communication port (--cluster-endpoint)
-            pub endpoint: Endpoint,
+            pub endpoint: Endpoint = Endpoint::Insecure(EndpointTcp { sock: DEFAULT_CLUSTER_EP_INSECURE }),
             /// (reqd) the shared cluster secret (--cluster-shared-secret)
             pub shared_secret: ClusterSecret,
             /// (reqd) cluster seed peers (only used during initial bootstrap) (--cluster-seed-peers)
@@ -613,6 +615,13 @@ impl<T> ops::Deref for ConfigReturn<T> {
             Self::Modified(m) | Self::Unmodified(m) => m,
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+enum ConfigItemState<T> {
+    None,
+    Default(T),
+    Custom(T),
 }
 
 #[cfg(test)]

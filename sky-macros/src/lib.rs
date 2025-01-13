@@ -67,10 +67,23 @@ pub fn dbtest(attrs: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+/// a ridiculously complicated macro that recursively expands "nested structs" into an unified configuration block (without flattening)
+///
+/// ## options
+/// - `config_group(override_input_fields = [..]`:
+///     - use this when this field requires multiple inputs
+///     - for env, this will load each ident as an env
+///     - for cli, this will load each ident as an option
+///     - for config file, this will read each key from the config file map and return `Option<T>` The handling is left to the implementor
+///       via `__override_config_load`
 pub fn config_group(ts: TokenStream) -> TokenStream {
-    parse_macro_input!(ts as config_struct::NestedStructDefinition::<true>)
-        .0
-        .into()
+    let ret = parse_macro_input!(ts as config_struct::NestedStructDefinition::<true>).0;
+    {
+        use std::io::Write;
+        let mut file = std::fs::File::create("target/generated.rs").unwrap();
+        file.write_all(&ret.to_string().as_bytes()).unwrap();
+    }
+    ret.into()
 }
 
 #[proc_macro_derive(Wrapper)]

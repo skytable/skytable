@@ -24,7 +24,7 @@
 */
 
 use {
-    quote::{quote, ToTokens},
+    quote::{format_ident, quote, ToTokens},
     syn::{
         braced, bracketed, parenthesized,
         parse::{Parse, ParseBuffer, ParseStream},
@@ -36,20 +36,59 @@ use {
 pub struct NestedStructDefinition<const DERIVE: bool>(pub proc_macro2::TokenStream);
 
 struct StructTokenTree {
+    fields: Vec<Ident>,
     struct_tree: proc_macro2::TokenStream,
     impl_tree_cli: proc_macro2::TokenStream,
     impl_tree_env: proc_macro2::TokenStream,
     impl_tree_env_test: proc_macro2::TokenStream,
+    impl_serde_variant_list: Vec<Ident>,
+    impl_serde_full_fields_list: Vec<Ident>,
+    impl_serde_variable_decl: proc_macro2::TokenStream,
+    impl_serde_match_decl: proc_macro2::TokenStream,
+    impl_serde_finalize_decl: proc_macro2::TokenStream,
 }
 
 impl StructTokenTree {
     fn new() -> Self {
         Self {
+            fields: vec![],
             struct_tree: quote! {},
             impl_tree_cli: quote! {},
             impl_tree_env: quote! {},
             impl_tree_env_test: quote! {},
+            impl_serde_variant_list: vec![],
+            impl_serde_full_fields_list: vec![],
+            impl_serde_variable_decl: quote! {},
+            impl_serde_match_decl: quote! {},
+            impl_serde_finalize_decl: quote! {},
         }
+    }
+    fn add_field(&mut self, field_name: Ident) {
+        self.fields.push(field_name)
+    }
+    fn impl_serde_add_field_variant(&mut self, field_name: Ident) {
+        self.impl_serde_variant_list.push(field_name);
+    }
+    fn impl_serde_add_field(&mut self, field_name: Ident) {
+        self.impl_serde_full_fields_list.push(field_name);
+    }
+    fn impl_serde_declare_variable(
+        &mut self,
+        f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream,
+    ) {
+        self.impl_serde_variable_decl = f(&self.impl_serde_variable_decl);
+    }
+    fn impl_serde_add_match_decl(
+        &mut self,
+        f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream,
+    ) {
+        self.impl_serde_match_decl = f(&self.impl_serde_match_decl);
+    }
+    fn impl_serde_add_finalize_decl(
+        &mut self,
+        f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream,
+    ) {
+        self.impl_serde_finalize_decl = f(&self.impl_serde_finalize_decl);
     }
     fn base(&mut self, f: impl Fn(&proc_macro2::TokenStream) -> proc_macro2::TokenStream) {
         self.struct_tree = f(&self.struct_tree)
@@ -112,7 +151,6 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
             (3) cli impl tree
         */
         let mut token_tree = StructTokenTree::new();
-        let mut fields = vec![];
         // struct attributes
         let attrs = match attributes {
             Some(att) => att,
@@ -163,7 +201,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
             };
             // field name
             let field_name: Ident = stream.parse()?;
-            fields.push(field_name.clone());
+            token_tree.add_field(field_name.clone());
             // :
             stream.parse::<Token![:]>()?;
             // parse item attributes
@@ -228,6 +266,32 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                             quote! { <#struct_name as crate::engine::config::v2::ConfigGroup>::from_env_test(args)? },
                         )
                     });
+                    // add serde impls
+                    token_tree.impl_serde_add_field_variant(struct_name.clone());
+                    token_tree.impl_serde_add_field(field_name.clone());
+                    token_tree.impl_serde_declare_variable(|var_decls| {
+                        quote! {
+                           #var_decls
+                           let mut #field_name = None;
+                        }
+                    });
+                    token_tree.impl_serde_add_match_decl(|match_decls| {
+                        quote! {
+                            #match_decls
+                            Field::#struct_name => {
+                                if #field_name.is_some() {
+                                    return Err(::serde::de::Error::duplicate_field(stringify!(#field_name)));
+                                }
+                                #field_name = Some(map.next_value()?);
+                            }
+                        }
+                    });
+                    token_tree.impl_serde_add_finalize_decl(|fin_decls| {
+                        quote! {
+                            #fin_decls
+                            let #field_name = #field_name.ok_or_else(|| ::serde::de::Error::missing_field(stringify!(#field_name)))?;
+                        }
+                    });
                 }
             } else {
                 if stream.peek(Ident) {
@@ -258,13 +322,23 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
 
         // prepare final output token trees
         let StructTokenTree {
+            fields,
             struct_tree,
             impl_tree_cli,
             impl_tree_env,
             impl_tree_env_test,
+            impl_serde_variant_list,
+            impl_serde_full_fields_list,
+            impl_serde_variable_decl,
+            impl_serde_match_decl,
+            impl_serde_finalize_decl,
         } = token_tree;
         if stream.is_empty() {
             // prep impl code
+            let field_as_str: Vec<_> = impl_serde_full_fields_list
+                .iter()
+                .map(|f| f.to_string())
+                .collect();
             let impl_code = if DERIVE {
                 quote! {
                     #[automatically_derived]
@@ -297,6 +371,46 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                             })
                         }
                     }
+                    impl<'de> serde::de::Deserialize<'de> for #struct_name {
+                        fn deserialize<D>(deserializer: D) -> Result<#struct_name, D::Error> where D: serde::de::Deserializer<'de> {
+                            // define field
+                            #[derive(Debug)] enum Field { #(#impl_serde_variant_list),* }
+                            impl<'de> serde::de::Deserialize<'de> for Field {
+                                fn deserialize<D>(deserializer: D) -> Result<Field, D::Error> where D: serde::de::Deserializer<'de> {
+                                    struct FieldVisitor;
+                                    impl<'de> serde::de::Visitor<'de> for FieldVisitor {
+                                        type Value = Field;
+                                        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "configuration options") }
+                                        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: serde::de::Error {
+                                            match value {
+                                                #(#field_as_str => Ok(Field::#impl_serde_variant_list)),*,
+                                                unknown => return Err(E::custom(format!("found unknown field {unknown}"))),
+                                            }
+                                        }
+                                    }
+                                    deserializer.deserialize_str(FieldVisitor)
+                                }
+                            }
+                            struct ConfigVisitor;
+                            impl<'de> serde::de::Visitor<'de> for ConfigVisitor {
+                                type Value = #struct_name;
+                                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result { formatter.write_str("struct Config") }
+                                fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error> where V: serde::de::MapAccess<'de> {
+                                    #impl_serde_variable_decl
+                                    while let Some(key) = map.next_key::<Field>()? {
+                                        match key {
+                                            #impl_serde_match_decl
+                                        }
+                                    }
+                                    // now that we've done all matching (and eliminated errors)
+                                    #impl_serde_finalize_decl
+                                    // great, now do it all
+                                    Ok(#struct_name { #(#fields),*})
+                                }
+                            }
+                            deserializer.deserialize_struct(::core::stringify!(#struct_name), &[#(#field_as_str),*], ConfigVisitor)
+                        }
+                    }
                 }
             } else {
                 quote!()
@@ -306,10 +420,7 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                 #(#attrs)* #struct_vis struct #struct_name { #struct_tree } #impl_code
             };
             // merge with full tree
-            let final_tree = quote! {
-                #this_struct #main_tree
-            };
-            Ok(final_tree.into())
+            Ok(quote! { #this_struct #main_tree })
         } else {
             Err(Error::new(stream.span(), "unexpected trailing syntax"))
         }
@@ -339,6 +450,13 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
             None
         })
     }
+    fn make_field_variant(field: &Ident) -> Ident {
+        let field_str = field.to_string();
+        let field_str = field_str.as_str();
+        let c1 = field_str[0..1].to_uppercase();
+        let c2 = field_str[1..].replace("_", "");
+        format_ident!("{c1}{c2}", span = field.span())
+    }
     /// for a given non-nested field:
     /// - if there is a default impl:
     ///     - if there is an override: error
@@ -360,7 +478,39 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
         } = paths.step(&field_name);
         match &field_custom_options.override_input_fields {
             None => {
+                let variant_ident = Self::make_field_variant(&field_name);
+                token_tree.impl_serde_add_field_variant(variant_ident.clone());
+                token_tree.impl_serde_add_field(field_name.clone());
+                token_tree.impl_serde_add_match_decl(|match_decl| {
+                    quote! {
+                        #match_decl
+                        Field::#variant_ident => {
+                            match #field_name {
+                                ConfigItemState::Default(_) | ConfigItemState::None => {
+                                    #field_name = ConfigItemState::Custom(map.next_value()?);
+                                }
+                                ConfigItemState::Custom(_) => return Err(::serde::de::Error::duplicate_field(::core::stringify!(#field_name)))
+                            }
+                        },
+                    }
+                });
+                token_tree.impl_serde_add_finalize_decl(|finalize_decls| {
+                    quote! {
+                        #finalize_decls
+                        let #field_name = match #field_name {
+                            ConfigItemState::Default(val) | ConfigItemState::Custom(val) => val,
+                            ConfigItemState::None => return Err(de::Error::missing_field(::core::stringify!(#field_name))),
+                        };
+                    }
+                });
                 if let Some(default_decl) = default_decl {
+                    // add serde decl
+                    token_tree.impl_serde_declare_variable(|var_decls| {
+                        quote! {
+                            #var_decls
+                            let mut #field_name = ConfigItemState::Default(#default_decl);
+                        }
+                    });
                     // env
                     token_tree.impl_env(|env_impl_tree| {
                         quote! {
@@ -389,6 +539,13 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                         }
                     });
                 } else {
+                    // add serde decl
+                    token_tree.impl_serde_declare_variable(|var_decls| {
+                        quote! {
+                            #var_decls
+                            let mut #field_name = ConfigItemState::None;
+                        }
+                    });
                     // env
                     token_tree.impl_env(|env_impl_tree| {
                         quote! {
@@ -411,6 +568,55 @@ impl<const DERIVE: bool> NestedStructDefinition<DERIVE> {
                 }
             }
             Some(override_keys) => {
+                // prepare and addvariants
+                let variant_idents: Vec<Ident> = override_keys
+                    .iter()
+                    .map(|field| Self::make_field_variant(field))
+                    .collect();
+                variant_idents
+                    .iter()
+                    .for_each(|ident| token_tree.impl_serde_add_field_variant(ident.clone()));
+                // add all fields to list
+                override_keys
+                    .iter()
+                    .for_each(|field_name| token_tree.impl_serde_add_field(field_name.clone()));
+                // add serde var decl
+                token_tree.impl_serde_declare_variable(|var_decls| {
+                    quote! {
+                        #var_decls
+                        #(let mut #override_keys = ConfigItemState::None;)*
+                    }
+                });
+                // add serde match decl
+                token_tree.impl_serde_add_match_decl(|match_decl| {
+                    quote! {
+                        #match_decl
+                        #(
+                            Field::#variant_idents => {
+                                match #field_name {
+                                    ConfigItemState::Default(_) | ConfigItemState::None => {
+                                        #override_keys = ConfigItemState::Custom(map.next_value()?);
+                                    }
+                                    ConfigItemState::Custom(_) => return Err(::serde::de::Error::duplicate_field(::core::stringify!(#field_name)))
+                                }
+                            },
+                        )*
+                    }
+                });
+                // add serde finalize decl
+                token_tree.impl_serde_add_finalize_decl(|finalize_decls| {
+                    quote! {
+                        #finalize_decls
+                        #(
+                            let #override_keys = match #override_keys {
+                                ConfigItemState::Custom(val) => Some(val),
+                                ConfigItemState::None => None,
+                                ConfigItemState::Default(val) => unreachable!(),
+                            };
+                        )*
+                        let #field_name = #field_type::__override_config_load(#(#override_keys),*).map_err(serde::de::Error::custom)?.into_inner();
+                    }
+                });
                 assert!(
                     default_decl.is_none(),
                     "can't use both override and default decl"
