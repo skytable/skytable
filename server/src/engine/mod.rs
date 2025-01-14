@@ -26,6 +26,7 @@
 
 #[macro_use]
 mod macros;
+mod cluster;
 pub mod config;
 mod control_flow;
 mod core;
