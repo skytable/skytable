@@ -5,50 +5,109 @@ on:
     branches:
       - next
     tags:
-      - v*
-
-env:
-  IMAGE_NAME: skytable
-  BUILD: "false"
+      - "v*.*.*"
 
 jobs:
-  test:
+  build-x86:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-      - name: Setup environment
-        run: |
-          chmod +x ci/buildvars.sh
-          ci/buildvars.sh
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
-      - name: Build image
-        run: docker build . --file Dockerfile --tag $IMAGE_NAME:${{ github.ref == 'refs/heads/next' && 'next' || github.ref_name }}
-        if: github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/tags/v')
-      - name: Set Tags
-        id: set_tags
-        run: |
-          TAGS=""
-          if [ "${{ github.ref }}" == "refs/heads/next" ]; then
-            TAGS="next"
-          fi
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAGS="${TAGS:+$TAGS,}${GITHUB_REF#refs/tags/}"
-            TAGS="${TAGS:+$TAGS,}latest"
-          fi
-          echo "::set-output name=tags::$TAGS"
-      - name: Push to Docker Hub
-        uses: docker/build-push-action@v1
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: skytable/skytable
-          tags: ${{ steps.set_tags.outputs.tags }}
-        if: github.ref == 'refs/heads/next' || startsWith(github.ref, 'refs/tags/v')
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ ${{ github.ref }} =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?)$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push x86 Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            skytable/skytable:latest-amd64
+            skytable/skytable:${{ github.sha }}-amd64
+            skytable/skytable:v${{ steps.version.outputs.version }}-amd64
+
+  build-arm64:
+    runs-on: [self-hosted, ARM64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ ${{ github.ref }} =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?)$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push ARM64 Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            skytable/skytable:latest-arm64
+            skytable/skytable:${{ github.sha }}-arm64
+            skytable/skytable:v${{ steps.version.outputs.version }}-arm64
+
+  manifest:
+    needs: [build-x86, build-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ ${{ github.ref }} =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?)$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push manifest
+        run: |
+          docker manifest create skytable/skytable:latest \
+            --amend skytable/skytable:latest-amd64 \
+            --amend skytable/skytable:latest-arm64
+          docker manifest create skytable/skytable:${{ github.sha }} \
+            --amend skytable/skytable:${{ github.sha }}-amd64 \
+            --amend skytable/skytable:${{ github.sha }}-arm64
+          docker manifest create skytable/skytable:v${{ steps.version.outputs.version }} \
+            --amend skytable/skytable:v${{ steps.version.outputs.version }}-amd64 \
+            --amend skytable/skytable:v${{ steps.version.outputs.version }}-arm64
+          docker manifest push skytable/skytable:latest
+          docker manifest push skytable/skytable:${{ github.sha }}
+          docker manifest push skytable/skytable:v${{ steps.version.outputs.version }}
