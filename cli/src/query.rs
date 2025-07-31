@@ -327,7 +327,7 @@ impl Parameterizer {
             self.i += 1;
             if b == b'`' {
                 self.params
-                    .push(Item::Bin(self.buf[start..self.i].to_vec()));
+                    .push(Item::Bin(self.buf[start..self.i-1].to_vec()));
                 return Ok(());
             }
         }
