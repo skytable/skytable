@@ -122,7 +122,7 @@ fn run_test_inner() -> HarnessResult<()> {
     util::handle_child("build skyd", build_cmd)?;
 
     // run standard test suite
-    svc::run_with_servers(&target_folder, true, move || {
+    svc::run_with_servers(target_folder, true, move || {
         info!("Running standard test suite ...");
         util::handle_child("standard test suite", standard_test_suite)?;
         Ok(())

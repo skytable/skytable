@@ -96,14 +96,14 @@ pub fn parse() -> CliResult<Task> {
         None => EndpointConfig::Tcp("127.0.0.1".to_string(), 2003),
         Some(ep) => {
             // should be in the format protocol@host:port
-            let proto_host_port: Vec<&str> = ep.split("@").collect();
+            let proto_host_port: Vec<&str> = ep.split('@').collect();
             if proto_host_port.len() != 2 {
                 return Err(CliError::ArgsErr(
                     "invalid value for --endpoint".to_string(),
                 ));
             }
             let (protocol, host_port) = (proto_host_port[0], proto_host_port[1]);
-            let host_port: Vec<&str> = host_port.split(":").collect();
+            let host_port: Vec<&str> = host_port.split(':').collect();
             if host_port.len() != 2 {
                 return Err(CliError::ArgsErr(
                     "invalid value for --endpoint".to_string(),
@@ -132,9 +132,9 @@ pub fn parse() -> CliResult<Task> {
                             EndpointConfig::Tls(host.to_string(), port, cert)
                         }
                         None => {
-                            return Err(CliError::ArgsErr(format!(
-                                "must provide TLS cert when using TLS endpoint"
-                            )))
+                            return Err(CliError::ArgsErr(
+                                "must provide TLS cert when using TLS endpoint".to_string(),
+                            ))
                         }
                     }
                 }
@@ -177,9 +177,9 @@ pub fn parse() -> CliResult<Task> {
 
 fn check_password(p: String, source: &str) -> CliResult<String> {
     if p.is_empty() {
-        return Err(CliError::ArgsErr(format!(
+        Err(CliError::ArgsErr(format!(
             "password value cannot be empty (currently set via {source})"
-        )));
+        )))
     } else {
         Ok(p)
     }

@@ -20,11 +20,11 @@ fn fmt_help_text<'a>(
     help_text_path: impl AsRef<Path>,
 ) -> Result<(), io::Error> {
     let help_msg = fs::read_to_string(help_text_path)?;
-    let content = super::utils::format(&help_msg, &arguments, true);
+    let content = super::utils::format(&help_msg, arguments, true);
     // write
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join(binary_name);
-    let mut f = File::create(&dest_path)?;
+    let mut f = File::create(dest_path)?;
     f.write_all(content.as_bytes())?;
     Ok(())
 }

@@ -97,7 +97,7 @@ impl SQParam for Item {
             Item::SInt(s) => s.append_param(buf),
             Item::Float(f) => f.append_param(buf),
             Item::String(s) => s.append_param(buf),
-            Item::Bin(b) => SQParam::append_param(&*b, buf),
+            Item::Bin(b) => SQParam::append_param(b, buf),
         }
     }
 }
@@ -228,7 +228,7 @@ impl Parameterizer {
             }
             Ok(())
         } else {
-            return Err(CliError::QueryError("string not terminated".into()));
+            Err(CliError::QueryError("string not terminated".into()))
         }
     }
     fn read_ident(&mut self) -> CliResult<()> {

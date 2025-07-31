@@ -198,29 +198,27 @@ fn decode_args<C: CliArgsDecode, const HAS_BINARY_NAME: bool>(
             return C::yield_help(cli_data);
         } else if arg == "-v" || arg == "--version" {
             return C::yield_version(cli_data);
-        } else {
-            if arg.starts_with("--") {
-                // option or flag
-                &arg[2..]
-            } else if arg.starts_with("-") {
-                if arg.len() != 2 {
-                    // invalid shorthand
-                    return Err(CliArgsError::Other(format!(
-                        "the argument `{arg}` is formatted incorrectly"
-                    )));
-                }
-                // option or flag
-                &arg[1..]
-            } else {
-                // this is subcommand
-                return C::yield_subcommand(cli_data, arg.boxed_str(), args);
+        } else if arg.starts_with("--") {
+            // option or flag
+            &arg[2..]
+        } else if arg.starts_with('-') {
+            if arg.len() != 2 {
+                // invalid shorthand
+                return Err(CliArgsError::Other(format!(
+                    "the argument `{arg}` is formatted incorrectly"
+                )));
             }
+            // option or flag
+            &arg[1..]
+        } else {
+            // this is subcommand
+            return C::yield_subcommand(cli_data, arg.boxed_str(), args);
         };
         if arg.is_empty() {
-            return Err(CliArgsError::ArgFmtError(format!("invalid argument")));
+            return Err(CliArgsError::ArgFmtError("invalid argument".to_string()));
         }
         // is this arg in the --x=y format?
-        let mut arg_split = arg.split("=");
+        let mut arg_split = arg.split('=');
         let (arg_split_name_, arg_split_value_) = (arg_split.next(), arg_split.next());
         match (arg_split_name_, arg_split_value_) {
             (Some(name_), Some(value_)) => {
@@ -237,7 +235,7 @@ fn decode_args<C: CliArgsDecode, const HAS_BINARY_NAME: bool>(
         // no, probably in the --x y format
         match args.peek() {
             Some(arg_) => {
-                if arg_.as_str().starts_with("--") || arg_.as_str().starts_with("-") {
+                if arg_.as_str().starts_with("--") || arg_.as_str().starts_with('-') {
                     // flag
                     C::push_flag(&mut cli_data, arg.boxed_str())?;
                 } else {
@@ -279,23 +277,21 @@ impl<Opt: CliArgsOptions> CliCommandData<Opt> {
     pub fn take_flag(&mut self, flag: &str) -> CliResult<bool> {
         if self.flags.remove(flag) {
             Ok(true)
+        } else if self.options.contains(flag) {
+            Err(CliArgsError::Other(format!(
+                "expected `--{flag}` to be a flag but found an option"
+            )))
         } else {
-            if self.options.contains(flag) {
-                Err(CliArgsError::Other(format!(
-                    "expected `--{flag}` to be a flag but found an option"
-                )))
-            } else {
-                Ok(false)
-            }
+            Ok(false)
         }
     }
     pub fn into_options_only(self) -> CliResult<Opt> {
         if self.flags.is_empty() {
             Ok(self.options)
         } else {
-            Err(CliArgsError::Other(format!(
-                "no flags were expected in this context"
-            )))
+            Err(CliArgsError::Other(
+                "no flags were expected in this context".to_string(),
+            ))
         }
     }
     pub fn is_empty(&self) -> bool {
@@ -305,9 +301,9 @@ impl<Opt: CliArgsOptions> CliCommandData<Opt> {
         if self.is_empty() {
             Ok(())
         } else {
-            Err(CliArgsError::Other(format!(
-                "found unknown flags or options",
-            )))
+            Err(CliArgsError::Other(
+                "found unknown flags or options".to_string(),
+            ))
         }
     }
     pub fn take_option(&mut self, option: &str) -> CliResult<Option<Opt::Value>> {
@@ -377,7 +373,7 @@ impl<Opt: CliArgsOptions> CliArgsDecode for CliCommand<Opt> {
         _: String,
         _: impl IntoIterator<Item = impl ArgItem>,
     ) -> CliResult<Self> {
-        return Err(CliArgsError::SubcommandDisallowed);
+        Err(CliArgsError::SubcommandDisallowed)
     }
     fn yield_command(data: Self::Data) -> CliResult<Self> {
         Ok(CliCommand::Run(data))
@@ -527,7 +523,7 @@ fn command_multi() {
                 ("endpoint", &["tcp@localhost:2003", "tls@localhost:2004"])
             ]
             .into_iter()
-            .map(|(x, y)| (x.to_owned(), y.into_iter().map(|x| x.to_string()).collect()))
+            .map(|(x, y)| (x.to_owned(), y.iter().map(|x| x.to_string()).collect()))
             .collect(),
             flags: ["tls-only", "verify-cluster-seed-membership"]
                 .into_iter()
