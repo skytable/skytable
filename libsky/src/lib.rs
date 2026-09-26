@@ -40,3 +40,10 @@ pub mod variables;
 pub fn version_msg(binary: &str) -> String {
     format!("{binary} v{}", variables::VERSION)
 }
+
+#[macro_export]
+macro_rules! take_many_options {
+    ($from:expr => $($name:expr),* $(,)?) => {
+        ($($crate::cli_utils::CliCommandData::take_option(&mut $from, $name)),*)
+    }
+}
