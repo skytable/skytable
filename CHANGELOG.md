@@ -9,6 +9,7 @@ All changes in this project will be noted in this file.
 - CLI:
   - Fix args handling
   - Fix backtick issue in binary input
+  - Fix password handling
 
 ## Version 0.8.4
 

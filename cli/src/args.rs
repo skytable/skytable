@@ -27,7 +27,7 @@
 use {
     crate::error::{CliError, CliResult},
     crossterm::{
-        event::{self, Event, KeyCode, KeyEvent},
+        event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
         terminal,
     },
     libsky::{
@@ -187,40 +187,39 @@ fn check_password(p: String, source: &str) -> CliResult<String> {
     }
 }
 
-fn read_password(prompt: &str) -> Result<String, std::io::Error> {
+pub fn read_password(prompt: &str) -> Result<String, io::Error> {
     print!("{prompt}");
     io::stdout().flush()?;
-    let mut password = String::new();
     terminal::enable_raw_mode()?;
-    loop {
-        match event::read()? {
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('c'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press,
-                ..
-            }) => {
-                terminal::disable_raw_mode()?;
-                println!();
-                exit(0x00)
-            }
-            Event::Key(KeyEvent {
-                code,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press,
-                ..
-            }) => match code {
-                KeyCode::Backspace => {
-                    let _ = password.pop();
+    let mut password = String::new();
+    let result = (|| {
+        loop {
+            if let Event::Key(key_event) = event::read()? {
+                if key_event.kind != KeyEventKind::Press {
+                    continue;
                 }
-                KeyCode::Char(c) => password.push(c),
-                KeyCode::Enter => break,
-                _ => {}
-            },
-            _ => {}
+                if key_event.code == KeyCode::Char('c')
+                    && key_event.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    terminal::disable_raw_mode()?;
+                    println!();
+                    exit(0x00)
+                }
+                match key_event.code {
+                    KeyCode::Enter => break,
+                    KeyCode::Backspace => {
+                        password.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        password.push(c);
+                    }
+                    _ => {}
+                }
+            }
         }
-    }
+        Ok(password)
+    })();
     terminal::disable_raw_mode()?;
     println!();
-    Ok(password)
+    result
 }
