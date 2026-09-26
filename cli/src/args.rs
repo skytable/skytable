@@ -27,7 +27,7 @@
 use {
     crate::error::{CliError, CliResult},
     crossterm::{
-        event::{self, Event, KeyCode, KeyEvent},
+        event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
         terminal,
     },
     libsky::{
@@ -92,7 +92,9 @@ pub fn parse() -> CliResult<Task> {
         TaskInner::HelpMsg(msg) => return Ok(Task::HelpMessage(msg)),
         TaskInner::OpenShell(args) => args,
     };
-    let endpoint = match args.take_option("endpoint")? {
+    let (endpoint, tls_cert, user, password, eval, e) =
+        libsky::take_many_options!(args => "endpoint", "tls-cert", "user", "password", "eval", "e");
+    let endpoint = match endpoint? {
         None => EndpointConfig::Tcp("127.0.0.1".to_string(), 2003),
         Some(ep) => {
             // should be in the format protocol@host:port
@@ -118,13 +120,13 @@ pub fn parse() -> CliResult<Task> {
                     )))
                 }
             };
-            let tls_cert = args.take_option("tls-cert")?;
             match protocol {
                 "tcp" => {
                     // TODO(@ohsayan): warn!
                     EndpointConfig::Tcp(host.to_string(), port)
                 }
                 "tls" => {
+                    let tls_cert = tls_cert?;
                     // we need a TLS cert
                     match tls_cert {
                         Some(path) => {
@@ -146,14 +148,14 @@ pub fn parse() -> CliResult<Task> {
             }
         }
     };
-    let username = match args.take_option("user")? {
+    let username = match user? {
         Some(u) => u,
         None => {
             // default
             "root".to_string()
         }
     };
-    let password = match args.take_option("password")? {
+    let password = match password? {
         Some(p) => check_password(p, "cli arguments")?,
         None => {
             // let us check the environment variable to see if anything was set
@@ -163,9 +165,9 @@ pub fn parse() -> CliResult<Task> {
             }
         }
     };
-    let eval = match args.take_option("eval")? {
+    let eval = match eval? {
         Some(v) => Some(v),
-        None => args.take_option("e")?,
+        None => e?,
     };
     args.ensure_empty()?;
     let client = ClientConfig::new(endpoint, username, password);
@@ -185,40 +187,39 @@ fn check_password(p: String, source: &str) -> CliResult<String> {
     }
 }
 
-fn read_password(prompt: &str) -> Result<String, std::io::Error> {
+pub fn read_password(prompt: &str) -> Result<String, io::Error> {
     print!("{prompt}");
     io::stdout().flush()?;
-    let mut password = String::new();
     terminal::enable_raw_mode()?;
-    loop {
-        match event::read()? {
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('c'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press,
-                ..
-            }) => {
-                terminal::disable_raw_mode()?;
-                println!();
-                exit(0x00)
-            }
-            Event::Key(KeyEvent {
-                code,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press,
-                ..
-            }) => match code {
-                KeyCode::Backspace => {
-                    let _ = password.pop();
+    let mut password = String::new();
+    let result = (|| {
+        loop {
+            if let Event::Key(key_event) = event::read()? {
+                if key_event.kind != KeyEventKind::Press {
+                    continue;
                 }
-                KeyCode::Char(c) => password.push(c),
-                KeyCode::Enter => break,
-                _ => {}
-            },
-            _ => {}
+                if key_event.code == KeyCode::Char('c')
+                    && key_event.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    terminal::disable_raw_mode()?;
+                    println!();
+                    exit(0x00)
+                }
+                match key_event.code {
+                    KeyCode::Enter => break,
+                    KeyCode::Backspace => {
+                        password.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        password.push(c);
+                    }
+                    _ => {}
+                }
+            }
         }
-    }
+        Ok(password)
+    })();
     terminal::disable_raw_mode()?;
     println!();
-    Ok(password)
+    result
 }

@@ -16,5 +16,5 @@ libsky = { path = "../libsky" }
 libsky = { path = "../libsky" }
 skytable = { git = "https://github.com/skytable/client-rust.git", branch = "devel" }
 # external deps
-crossterm = "0.28"
-rustyline = "14"
+crossterm = "0.29"
+rustyline = "18"

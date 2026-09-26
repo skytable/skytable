@@ -103,7 +103,7 @@ impl NullableDictEntry for crate::engine::data::DictGeneric {
 fn fuzz_tokens(src: &[u8], fuzzverify: impl Fn(bool, &[Token]) -> bool) {
     let src_tokens = lex_insecure(src).unwrap();
     static FUZZ_TARGETS: [Token; 2] = [Token::Symbol(Symbol::SymComma), Token::IgnorableComma];
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     #[inline(always)]
     fn inject(new_src: &mut Vec<Token>, rng: &mut impl Rng) -> usize {
         let start = new_src.len();

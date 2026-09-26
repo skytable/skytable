@@ -26,10 +26,10 @@
 
 use {
     rand::{
-        distributions::{uniform::SampleUniform, Alphanumeric},
+        distr::{uniform::SampleUniform, Alphanumeric, SampleString},
         rngs::ThreadRng,
         seq::SliceRandom,
-        Rng,
+        Rng, RngExt,
     },
     std::{
         collections::hash_map::RandomState,
@@ -39,7 +39,7 @@ use {
 };
 
 pub fn rng() -> ThreadRng {
-    rand::thread_rng()
+    rand::rng()
 }
 
 pub fn multi_run(count: usize, f: impl Fn()) {
@@ -84,18 +84,15 @@ pub fn wait_for_key(msg: &str) {
 
 /// Generates a random boolean based on Bernoulli distributions
 pub fn random_bool(rng: &mut impl Rng) -> bool {
-    rng.gen_bool(0.5)
+    rng.random_bool(0.5)
 }
 /// Generate a random number within the given range
 pub fn random_number<T: SampleUniform + PartialOrd>(min: T, max: T, rng: &mut impl Rng) -> T {
-    rng.gen_range(min..max)
+    rng.random_range(min..max)
 }
 
 pub fn random_string(rng: &mut impl Rng, l: usize) -> String {
-    rng.sample_iter(Alphanumeric)
-        .take(l)
-        .map(char::from)
-        .collect()
+    Alphanumeric.sample_string(rng, l)
 }
 
 pub fn random_string_checked(rng: &mut impl Rng, l: usize, ck: impl Fn(&str) -> bool) -> String {
@@ -149,5 +146,5 @@ pub fn hash_rs<T: Hash + ?Sized>(rs: &RandomState, item: &T) -> u64 {
 }
 
 pub fn randomizer() -> ThreadRng {
-    rand::thread_rng()
+    rand::rng()
 }

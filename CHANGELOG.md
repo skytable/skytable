@@ -2,6 +2,15 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.8.5
+
+### Fixes
+
+- CLI:
+  - Fix args handling
+  - Fix backtick issue in binary input
+  - Fix password handling
+
 ## Version 0.8.4
 
 ### Additions

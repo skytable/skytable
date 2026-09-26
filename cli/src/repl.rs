@@ -140,7 +140,6 @@ fn repl<C: IsConnection>(mut con: C) -> CliResult<()> {
                     // done
                     break;
                 }
-                ReadlineError::WindowResized => {}
                 e => fatal!("error: failed to read line REPL. {e}"),
             },
         }

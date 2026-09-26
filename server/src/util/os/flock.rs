@@ -63,7 +63,7 @@ impl FileLock {
                 LockFileEx(
                     HANDLE(handle),
                     LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
-                    0,
+                    Some(0),
                     u32::MAX as u32,
                     u32::MAX as u32,
                     &mut overlapped,
@@ -97,7 +97,7 @@ impl FileLock {
             unsafe {
                 UnlockFileEx(
                     self.handle,
-                    0,
+                    Some(0),
                     u32::MAX as u32,
                     u32::MAX as u32,
                     &mut overlapped,

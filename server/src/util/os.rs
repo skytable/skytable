@@ -445,7 +445,7 @@ mod hostname_impl {
             // UNSAFE(@ohsayan): correct call to the windows API
             GetComputerNameExA(
                 ComputerNamePhysicalDnsHostname,
-                PSTR(buf.as_mut_ptr()),
+                Some(PSTR(buf.as_mut_ptr())),
                 &mut size as *mut u32,
             )
             .unwrap();

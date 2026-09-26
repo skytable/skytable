@@ -209,7 +209,7 @@ impl VFile {
                     match rng {
                         Some(ref mut rng) => test_utils::random_number(0, bytes.len(), rng),
                         None => {
-                            let mut rng_ = rand::thread_rng();
+                            let mut rng_ = rand::rng();
                             let r = test_utils::random_number(0, bytes.len(), &mut rng_);
                             *rng = Some(rng_);
                             r
