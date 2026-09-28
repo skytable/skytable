@@ -101,7 +101,7 @@ jobs:
 
       - name: Install 32-bit tools (Linux)
         run: sudo apt update && sudo apt install gcc-multilib -y
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && runner.environment != 'self-hosted'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
