@@ -135,7 +135,7 @@ fn print_value(v: Value, print_special: bool, in_repl: bool) {
 }
 
 fn print_binary(b: &[u8], escape: bool) {
-    let mut it = b.into_iter().peekable();
+    let mut it = b.iter().peekable();
     if escape {
         print!("\"[");
     } else {

@@ -46,7 +46,7 @@ pub fn format(body: &str, arguments: &HashMap<&str, &str>, auto: bool) -> String
             "further_assistance" if auto => "For further assistance, refer to the official documentation here: https://docs.skytable.org".to_owned(),
             arbitrary => arguments
                 .get(arbitrary)
-                .expect(&format!("could not find value for argument {}", arbitrary))
+                .unwrap_or_else(|| panic!("could not find value for argument {}", arbitrary))
                 .to_string(),
         }
     })

@@ -128,7 +128,7 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
         "--config".to_owned(),
         format!("{WORKSPACE_ROOT}ci/{server_id}.yaml"),
     ];
-    let mut cmd = util::assemble_command_from_slice(&args);
+    let mut cmd = util::assemble_command_from_slice(args);
     cmd.current_dir(server_id);
     cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::piped());

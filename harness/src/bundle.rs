@@ -64,7 +64,7 @@ fn package_binaries(target_folder: PathBuf, mode: BuildMode) -> HarnessResult<()
     // get the bundle file name
     let bundle_file_name = get_bundle_name();
     // create the bundle file
-    let bundle_file = fs::File::create(&bundle_file_name)
+    let bundle_file = fs::File::create(bundle_file_name)
         .map_err(|e| HarnessError::Other(format!("Failed to create ZIP file with error: {e}")))?;
     // init zip writer
     let mut zip = ZipWriter::new(bundle_file);

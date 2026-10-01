@@ -110,7 +110,7 @@ fn parse_attrs(attrs: AttributeArgs) -> TestSetup {
                 assert!(
                     collected_attrs.insert(k.to_string(), v).is_none(),
                     "duplicate key: {}",
-                    k.to_string()
+                    k
                 );
                 continue;
             }
